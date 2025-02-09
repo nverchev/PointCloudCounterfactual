@@ -1,0 +1,12 @@
+study_name:
+  learning_scheme
+
+n_trials: 10
+
+params:
+  train.learn.learning_rate:
+    suggest: suggest_float
+    settings:
+      low: 1e-05
+      high: 1e-02
+      log: true

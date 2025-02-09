@@ -1,0 +1,9 @@
+defaults:
+  - tune: learn
+  - _self_
+db_location: "optimization_db"
+db_name: autoencoder_optimization
+renderer: firefox
+storage: "sqlite:///${db_location}/${db_name}.db"
+overrides:
+  - train.load_checkpoint=0

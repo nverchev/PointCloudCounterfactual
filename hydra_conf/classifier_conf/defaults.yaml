@@ -1,0 +1,10 @@
+defaults:
+  - config_classifier
+  - classifier: default_classifier
+  - exp: default_exp
+  - data: default_data
+  - train: default_train
+  - user: default_settings
+  - _self_
+
+

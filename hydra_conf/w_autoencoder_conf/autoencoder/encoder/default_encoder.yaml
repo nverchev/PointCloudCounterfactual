@@ -1,0 +1,6 @@
+defaults:
+  - w_encoder: default_w_encoder
+architecture: LDGCNN
+k: ${data.k}
+hidden_dims: [64, 64, 128, 256]
+act_name: ''

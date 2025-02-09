@@ -1,0 +1,226 @@
+import abc
+from typing import Optional, Type
+
+import numpy as np
+import torch
+import torch.nn as nn
+
+from src.data_structures import Inputs, Outputs
+from src.encoders import get_encoder, get_w_encoder
+from src.decoders import get_decoder, get_w_decoder
+from src.neighbour_ops import pykeops_square_distance
+from src.layers import TransferGrad
+from src.utils import UsuallyFalse
+from src.config_options import ExperimentAE, ModelHead
+
+
+class WAutoEncoder(nn.Module):
+
+    def __init__(self, codebook: torch.Tensor) -> None:
+
+        super().__init__()
+        cfg_ae = ExperimentAE.get_config().autoencoder
+        self.z_dim = cfg_ae.z_dim
+        self.codebook = codebook
+        self.dim_codes, self.book_size, self.embedding_dim = codebook.data.size()
+        self.n_pseudo_input = cfg_ae.encoder.w_encoder.n_pseudo_inputs
+        self.encoder = get_w_encoder()
+        self.decoder = get_w_decoder()
+        dim_codes = cfg_ae.w_dim // cfg_ae.embedding_dim
+        self.init_pseudo = nn.init.normal_
+        self.pseudo_inputs = nn.Parameter(torch.empty(self.n_pseudo_input, cfg_ae.embedding_dim, dim_codes))
+        self.init_pseudo(self.pseudo_inputs)
+        self.pseudo_mu = nn.Parameter(torch.empty(self.n_pseudo_input, cfg_ae.z_dim))
+        self.pseudo_log_var = nn.Parameter(torch.empty(self.n_pseudo_input, cfg_ae.z_dim))
+        self.updated: bool = False
+
+    def update_pseudo_latent(self) -> None:
+        pseudo_data = self.encode(None)
+        self.pseudo_mu = nn.Parameter(pseudo_data.pseudo_mu)
+        self.pseudo_log_var = nn.Parameter(pseudo_data.pseudo_log_var)
+
+    def forward(self, x: torch.Tensor) -> Outputs:
+        data = self.encode(x)
+        return self.decode(data)
+
+    @staticmethod
+    def gaussian_sample(mu: torch.Tensor, log_var: torch.Tensor) -> torch.Tensor:
+        std = torch.exp(0.5 * log_var)
+        eps = torch.randn_like(std)
+        return eps.mul(std).add_(mu)
+
+    def encode(self, opt_x: Optional[torch.Tensor]) -> Outputs:
+        if opt_x is None:
+            x: torch.Tensor = self.pseudo_inputs
+        else:
+            x = opt_x.view(-1, self.dim_codes, self.embedding_dim).transpose(2, 1)
+            x = torch.cat([x, self.pseudo_inputs], dim=0)
+        data = Outputs()
+        x = self.encoder(x)
+        data.mu, data.log_var = x[:-self.n_pseudo_input].chunk(2, 1)
+        data.pseudo_mu, data.pseudo_log_var = x[-self.n_pseudo_input:].chunk(2, 1)
+        data.z = self.gaussian_sample(data.mu, data.log_var)
+        return data
+
+    def decode(self, data: Outputs) -> Outputs:
+        data.w_recon = self.decoder(data.z)
+        data.w_dist, data.idx = self.dist(data.w_recon)
+        return data
+
+    def recursive_reset_parameters(self) -> None:
+        self.init_pseudo(self.pseudo_inputs)
+        self.apply(lambda x: x.reset_parameters() if (hasattr(x, 'reset_parameters') or x is self.codebook) else x)
+
+    def dist(self, x: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor]:
+        batch, _ = x.shape
+        x = x.view(batch * self.dim_codes, 1, self.embedding_dim)
+        book = self.codebook.detach().repeat(batch, 1, 1)
+        dist = pykeops_square_distance(x, book)
+        # Lazy vector need aggregation like sum(1) to yield tensor (|dim 1| = 1)
+        idx = dist.argmin(axis=2)
+        return dist.sum(1).view(batch, self.dim_codes, self.book_size), idx.view(batch, self.dim_codes, 1)
+
+
+class AutoEncoder(nn.Module, metaclass=abc.ABCMeta):
+
+    def __init__(self):
+        super().__init__()
+        cfg = ExperimentAE.get_config()
+        self.m = cfg.autoencoder.output_points
+
+    @abc.abstractmethod
+    def forward(self, inputs: Inputs) -> Outputs:
+        ...
+
+    def recursive_reset_parameters(self) -> None:
+        self.apply(lambda x: x.reset_parameters() if hasattr(x, 'reset_parameters') else x)
+
+
+class Oracle(AutoEncoder):
+
+    def forward(self, inputs: Inputs) -> Outputs:
+        data = Outputs()
+        data.recon = inputs.cloud[:, :self.m, :]
+        return data
+
+
+class AE(AutoEncoder):
+
+    def __init__(self) -> None:
+        super().__init__()
+        self.encoder = get_encoder()
+        self.decoder = get_decoder()
+
+    def forward(self, inputs: Inputs) -> Outputs:
+        data = self.encode(inputs.cloud, inputs.indices)
+        return self.decode(data, inputs.initial_sampling, inputs.viz_att, inputs.viz_components)
+
+    def encode(self, x: torch.Tensor, indices: torch.Tensor) -> Outputs:
+        data = Outputs()
+        data.w = self.encoder(x, indices)
+        return data
+
+    def decode(self,
+               data: Outputs,
+               initial_sampling: torch.Tensor = torch.empty(0),
+               viz_att: torch.Tensor = torch.empty(0),
+               viz_components: torch.Tensor = torch.empty(0)) -> Outputs:
+        x = self.decoder(data.w, self.m, initial_sampling, viz_att, viz_components)
+        data.recon = x.transpose(2, 1).contiguous()
+        return data
+
+
+class VQVAE(AE):
+
+    def __init__(self) -> None:
+        # encoder gives vector quantised codes, therefore the cw dim must be multiplied by the embed dim
+        super().__init__()
+        cfg_ae = ExperimentAE.get_config().autoencoder
+        self.double_encoding = UsuallyFalse()
+        self.num_codes = cfg_ae.num_codes
+        self.book_size = cfg_ae.book_size
+        self.embedding_dim = cfg_ae.embedding_dim
+        self.vq_ema_update = cfg_ae.vq_ema_update
+        self.codebook = torch.nn.Parameter(
+            torch.randn(self.num_codes, self.book_size, self.embedding_dim, requires_grad=not cfg_ae.vq_ema_update)
+        )
+        if cfg_ae.vq_ema_update:
+            self.decay = .999
+            self.gain = 1 - self.decay
+            self.ema_counts = torch.nn.Parameter(torch.ones(self.num_codes, self.book_size, dtype=torch.float))
+
+        self.w_encoder = WAutoEncoder(self.codebook)
+        self.transfer = TransferGrad()
+
+    def quantise(self, x: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor]:
+        batch, embed = x.size()
+        x = x.view(batch * self.num_codes, 1, self.embedding_dim)
+        book = self.codebook.repeat(batch, 1, 1)
+        dist = pykeops_square_distance(x, book)
+        idx = dist.argmin(axis=2).view(-1, 1, 1)
+        cw_embed = self.get_quantised_code(idx, book)
+        one_hot_idx = torch.zeros(batch, self.num_codes, self.book_size, device=x.device)
+        one_hot_idx = one_hot_idx.scatter_(2, idx.view(batch, self.num_codes, 1), 1)
+        # EMA update
+        if self.training and self.vq_ema_update:
+            x = x.view(batch, self.num_codes, self.embedding_dim).transpose(0, 1)
+            idx = idx.view(batch, self.num_codes, 1).transpose(0, 1).expand(-1, -1, self.embedding_dim)
+            update_dict = torch.zeros_like(self.codebook).scatter_(index=idx, src=x, dim=1, reduce='sum')
+            normalize = self.ema_counts.unsqueeze(2).expand(-1, -1, self.embedding_dim)
+            self.codebook.data = self.codebook * self.decay + self.gain * update_dict / (normalize + 1e-6)
+            self.ema_counts.data = self.decay * self.ema_counts + self.gain * one_hot_idx.sum(0)
+
+        return cw_embed, one_hot_idx
+
+    def encode(self, x: torch.Tensor, indices: torch.Tensor) -> Outputs:
+        data = Outputs()
+        data.w_q = self.encoder(x, indices)
+        if self.double_encoding:
+            data.update(self.w_encoder.encode(data.w_q.detach()))
+        return data
+
+    def decode(self,
+               data: Outputs,
+               initial_sampling: torch.Tensor = torch.empty(0),
+               viz_att: torch.Tensor = torch.empty(0),
+               viz_components: torch.Tensor = torch.empty(0)) -> Outputs:
+        if self.double_encoding:
+            self.w_encoder.decode(data)  # looks for the z keyword
+            idx = data.idx
+            batch = idx.shape[0]
+            book = self.codebook.repeat(batch, 1, 1)
+            data.w_e = data.w = self.get_quantised_code(idx.view(batch * idx.shape[1], 1, 1), book)
+        else:
+            data.w_e, data.one_hot_idx = self.quantise(data.w_q)
+            data.w = self.transfer.apply(data.w_e, data.w_q)
+        return super().decode(data, initial_sampling, viz_att, viz_components)
+
+    @torch.inference_mode()
+    def random_sampling(self,
+                        batch_size: int,
+                        initial_sampling: torch.Tensor = torch.empty(0),
+                        viz_att: torch.Tensor = torch.empty(0),
+                        viz_components: torch.Tensor = torch.empty(0),
+                        z_bias: int = 0) -> Outputs:
+        self.eval()
+        pseudo_mu = self.w_encoder.pseudo_mu
+        pseudo_log_var = self.w_encoder.pseudo_log_var
+        pseudo_z_list: list[torch.Tensor] = []
+        for _ in range(batch_size):
+            i = np.random.randint(self.w_encoder.n_pseudo_input)
+            pseudo_z_list.append(self.w_encoder.gaussian_sample(pseudo_mu[i], pseudo_log_var[i]))
+        pseudo_z = torch.stack(pseudo_z_list).contiguous()
+        data = Outputs()
+        data.z = pseudo_z + z_bias
+        with self.double_encoding:
+            out = self.decode(data, initial_sampling, viz_att, viz_components)
+        return out
+
+    def get_quantised_code(self, idx: torch.Tensor, book: torch.Tensor) -> torch.Tensor:
+        idx = idx.expand(-1, -1, self.embedding_dim)
+        return book.gather(1, idx).view(-1, self.num_codes * self.embedding_dim)
+
+
+def get_module() -> AutoEncoder:
+    model_map: dict[ModelHead, Type[AutoEncoder]] = {ModelHead.AE: AE, ModelHead.VQVAE: VQVAE}
+    return model_map[ExperimentAE.get_config().autoencoder.head]()

@@ -1,0 +1,11 @@
+defaults:
+  - config_wae
+  - exp: default_exp
+  - data: default_data
+  - autoencoder: default_autoencoder
+  - objective: default_objective
+  - train: default_train
+  - user: default_settings
+  - _self_
+
+

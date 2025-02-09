@@ -1,0 +1,2 @@
+recon_loss: ChamferEMD
+c_embedding: 2.

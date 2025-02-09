@@ -1,0 +1,10 @@
+defaults:
+  - learn: default_learn
+  - early_stopping: default_early_stopping
+
+batch_size : 16
+diagnose_every: 10
+epochs: 1000
+load_checkpoint: 0
+early_stopping:
+  patience: 10

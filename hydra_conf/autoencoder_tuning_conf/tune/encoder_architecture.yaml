@@ -1,0 +1,22 @@
+study_name:
+  encoder_architecture
+
+n_trials: 100
+
+params:
+
+  autoencoder.encoder.k:
+    suggest: suggest_int
+    settings:
+      high: 20
+      low: 8
+
+  autoencoder.encoder.hidden_dims:
+    suggest: suggest_list
+    settings:
+      min_length: 1
+      max_length: 4
+      suggest: suggest_categorical
+      settings:
+        choices: [ 16, 32, 64, 128, 256, 512 ]
+

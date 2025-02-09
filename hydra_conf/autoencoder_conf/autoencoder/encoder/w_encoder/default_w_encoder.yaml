@@ -1,0 +1,6 @@
+architecture: Convolution
+n_pseudo_inputs: 400
+hidden_dims_conv: [8]
+hidden_dims_lin: [256]
+dropout:  [0.]
+act_name: ''

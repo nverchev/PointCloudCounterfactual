@@ -1,0 +1,36 @@
+study_name:
+  decoder_architecture
+
+n_trials: 500
+
+params:
+
+  autoencoder.decoder.sample_dim:
+    suggest: suggest_categorical
+    settings:
+      choices: [8, 16, 32]
+
+  autoencoder.decoder.hidden_dims_map:
+    suggest: suggest_list
+    settings:
+      min_length: 1
+      max_length: 2
+      suggest: suggest_categorical
+      settings:
+        choices: [ 16, 32, 64, 128, 256, 512 ]
+
+  autoencoder.decoder.n_components:
+    suggest: suggest_int
+    settings:
+      low: 1
+      high: 4
+
+  autoencoder.decoder.hidden_dims_conv:
+    suggest: suggest_list
+    settings:
+      min_length: 1
+      max_length: 4
+      suggest: suggest_categorical
+      settings:
+        choices: [16, 32, 64, 128, 256, 512]
+
