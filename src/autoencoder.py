@@ -1,17 +1,19 @@
 import abc
+import functools
 from typing import Optional, Type
 
 import numpy as np
 import torch
 import torch.nn as nn
+from sympy.physics.units import temperature
 
-from src.data_structures import Inputs, Outputs
-from src.encoders import get_encoder, get_w_encoder
+from src.data_structures import Inputs, Outputs, W_Inputs
+from src.encoders import get_encoder, get_w_encoder, WEncoderConvolution, BaseWEncoder
 from src.decoders import get_decoder, get_w_decoder
 from src.neighbour_ops import pykeops_square_distance
 from src.layers import TransferGrad
 from src.utils import UsuallyFalse
-from src.config_options import ExperimentAE, ModelHead
+from src.config_options import MainExperiment, ExperimentAE, ModelHead
 
 
 class WAutoEncoder(nn.Module):
@@ -19,19 +21,22 @@ class WAutoEncoder(nn.Module):
     def __init__(self, codebook: torch.Tensor) -> None:
 
         super().__init__()
-        cfg_ae = ExperimentAE.get_config().autoencoder
-        self.z_dim = cfg_ae.z_dim
+        cfg = MainExperiment.get_config()
+        cfg_ae = cfg.autoencoder
+        cfg_model = cfg_ae.model
+        self.num_classes = cfg.data.dataset.n_classes
+        self.z_dim = cfg_model.z_dim
         self.codebook = codebook
         self.dim_codes, self.book_size, self.embedding_dim = codebook.data.size()
-        self.n_pseudo_input = cfg_ae.encoder.w_encoder.n_pseudo_inputs
-        self.encoder = get_w_encoder()
+        self.n_pseudo_input = cfg_model.n_pseudo_inputs
+        self.encoder: BaseWEncoder = WEncoderConvolution()
         self.decoder = get_w_decoder()
-        dim_codes = cfg_ae.w_dim // cfg_ae.embedding_dim
+        dim_codes = cfg_model.w_dim // cfg_model.embedding_dim
         self.init_pseudo = nn.init.normal_
-        self.pseudo_inputs = nn.Parameter(torch.empty(self.n_pseudo_input, cfg_ae.embedding_dim, dim_codes))
+        self.pseudo_inputs = nn.Parameter(torch.empty(self.n_pseudo_input, cfg_model.embedding_dim, dim_codes))
         self.init_pseudo(self.pseudo_inputs)
-        self.pseudo_mu = nn.Parameter(torch.empty(self.n_pseudo_input, cfg_ae.z_dim))
-        self.pseudo_log_var = nn.Parameter(torch.empty(self.n_pseudo_input, cfg_ae.z_dim))
+        self.pseudo_mu = nn.Parameter(torch.empty(self.n_pseudo_input, cfg_model.z_dim))
+        self.pseudo_log_var = nn.Parameter(torch.empty(self.n_pseudo_input, cfg_model.z_dim))
         self.updated: bool = False
 
     def update_pseudo_latent(self) -> None:
@@ -39,26 +44,29 @@ class WAutoEncoder(nn.Module):
         self.pseudo_mu = nn.Parameter(pseudo_data.pseudo_mu)
         self.pseudo_log_var = nn.Parameter(pseudo_data.pseudo_log_var)
 
-    def forward(self, x: torch.Tensor) -> Outputs:
-        data = self.encode(x)
+    def forward(self, x: W_Inputs) -> Outputs:
+        data = self.encode(x.w_q)
         return self.decode(data)
 
-    @staticmethod
-    def gaussian_sample(mu: torch.Tensor, log_var: torch.Tensor) -> torch.Tensor:
+    def gaussian_sample(self, mu: torch.Tensor, log_var: torch.Tensor) -> torch.Tensor:
         std = torch.exp(0.5 * log_var)
         eps = torch.randn_like(std)
-        return eps.mul(std).add_(mu)
+        return eps.mul(std).add_(mu) if self.training else mu
 
     def encode(self, opt_x: Optional[torch.Tensor]) -> Outputs:
         if opt_x is None:
             x: torch.Tensor = self.pseudo_inputs
         else:
             x = opt_x.view(-1, self.dim_codes, self.embedding_dim).transpose(2, 1)
-            x = torch.cat([x, self.pseudo_inputs], dim=0)
+            x = torch.cat((x, self.pseudo_inputs), dim=0)
         data = Outputs()
         x = self.encoder(x)
-        data.mu, data.log_var = x[:-self.n_pseudo_input].chunk(2, 1)
-        data.pseudo_mu, data.pseudo_log_var = x[-self.n_pseudo_input:].chunk(2, 1)
+        batch = x[:-self.n_pseudo_input or None]
+        data.mu, data.log_var = batch.chunk(2, 1)
+        data.p_mu, data.p_log_var = torch.zeros_like(data.mu), torch.zeros_like(data.log_var)
+        if self.n_pseudo_input:
+            data.pseudo_mu, data.pseudo_log_var = x[-self.n_pseudo_input:].chunk(2, 1)
+
         data.z = self.gaussian_sample(data.mu, data.log_var)
         return data
 
@@ -81,12 +89,58 @@ class WAutoEncoder(nn.Module):
         return dist.sum(1).view(batch, self.dim_codes, self.book_size), idx.view(batch, self.dim_codes, 1)
 
 
+class CounterfactualWAutoEncoder(WAutoEncoder):
+
+    def __init__(self, codebook: torch.Tensor) -> None:
+        super().__init__(codebook)
+        cfg = MainExperiment.get_config()
+        cfg_wae = cfg.autoencoder.model.encoder.w_encoder
+        self.temperature = torch.tensor(cfg_wae.cf_temperature, dtype=torch.float)
+        self.gumbel = cfg_wae.gumbel
+        self.softmax = torch.nn.Softmax(dim=1)
+        self.gumbel_softmax = functools.partial(nn.functional.gumbel_softmax, tau=self.temperature, hard=False)
+        self.relaxed_softmax = lambda x: self.softmax(x / self.temperature)
+        self.encoder = get_w_encoder()
+
+    def encode(self, opt_x: torch.Tensor | None) -> Outputs:
+        if opt_x is None:
+            x: torch.Tensor = self.pseudo_inputs
+        else:
+            x = opt_x.view(-1, self.dim_codes, self.embedding_dim).transpose(2, 1)
+            x = torch.cat((x, self.pseudo_inputs), dim=0)
+        data = Outputs()
+        encoded, prediction = self.encoder(x)
+        data.y = self.softmax(prediction[:-self.n_pseudo_input or None])
+        data.mu, data.log_var = encoded[:-self.n_pseudo_input or None].chunk(2, 1)
+        return data
+
+    def decode(self, data: Outputs, logits: Optional[torch.Tensor] = None) -> Outputs:
+        if logits is not None:
+            data.z_c = self.gumbel_softmax(logits) if self.gumbel and self.training else self.relaxed_softmax(logits)
+        if self.n_pseudo_input:
+            data.pseudo_mu, data.pseudo_log_var = data.h[-self.n_pseudo_input:].chunk(2, 1)
+        data.z = self.gaussian_sample(data.mu, data.log_var)
+        data.w_recon = self.decoder(torch.cat((data.z, data.z_c), dim=1))
+        data.w_dist, data.idx = self.dist(data.w_recon)
+        return data
+
+    def forward(self, x: W_Inputs) -> Outputs:
+        data = self.encode(x.w_q)
+        return self.decode(data, x.logits)
+
+
 class AutoEncoder(nn.Module, metaclass=abc.ABCMeta):
 
     def __init__(self):
         super().__init__()
-        cfg = ExperimentAE.get_config()
-        self.m = cfg.autoencoder.output_points
+        cfg = MainExperiment.get_config()
+        cfg_ae = cfg.autoencoder
+        self.m_training = cfg_ae.model.training_output_points
+        self.m_test = cfg_ae.objective.n_inference_output_points
+
+    @property
+    def m(self) -> int:
+        return self.m_test if torch.is_inference_mode_enabled() else self.m_training
 
     @abc.abstractmethod
     def forward(self, inputs: Inputs) -> Outputs:
@@ -135,9 +189,9 @@ class VQVAE(AE):
     def __init__(self) -> None:
         # encoder gives vector quantised codes, therefore the cw dim must be multiplied by the embed dim
         super().__init__()
-        cfg_ae = ExperimentAE.get_config().autoencoder
+        cfg_ae = ExperimentAE.get_config().model
         self.double_encoding = UsuallyFalse()
-        self.num_codes = cfg_ae.num_codes
+        self.num_codes = cfg_ae.n_codes
         self.book_size = cfg_ae.book_size
         self.embedding_dim = cfg_ae.embedding_dim
         self.vq_ema_update = cfg_ae.vq_ema_update
@@ -149,7 +203,7 @@ class VQVAE(AE):
             self.gain = 1 - self.decay
             self.ema_counts = torch.nn.Parameter(torch.ones(self.num_codes, self.book_size, dtype=torch.float))
 
-        self.w_encoder = WAutoEncoder(self.codebook)
+        self.w_autoencoder = CounterfactualWAutoEncoder(self.codebook)
         self.transfer = TransferGrad()
 
     def quantise(self, x: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor]:
@@ -176,7 +230,7 @@ class VQVAE(AE):
         data = Outputs()
         data.w_q = self.encoder(x, indices)
         if self.double_encoding:
-            data.update(self.w_encoder.encode(data.w_q.detach()))
+            data.update(self.w_autoencoder.encode(data.w_q.detach()))
         return data
 
     def decode(self,
@@ -185,7 +239,7 @@ class VQVAE(AE):
                viz_att: torch.Tensor = torch.empty(0),
                viz_components: torch.Tensor = torch.empty(0)) -> Outputs:
         if self.double_encoding:
-            self.w_encoder.decode(data)  # looks for the z keyword
+            self.w_autoencoder.decode(data)  # looks for the z keyword
             idx = data.idx
             batch = idx.shape[0]
             book = self.codebook.repeat(batch, 1, 1)
@@ -203,12 +257,12 @@ class VQVAE(AE):
                         viz_components: torch.Tensor = torch.empty(0),
                         z_bias: int = 0) -> Outputs:
         self.eval()
-        pseudo_mu = self.w_encoder.pseudo_mu
-        pseudo_log_var = self.w_encoder.pseudo_log_var
+        pseudo_mu = self.w_autoencoder.pseudo_mu
+        pseudo_log_var = self.w_autoencoder.pseudo_log_var
         pseudo_z_list: list[torch.Tensor] = []
         for _ in range(batch_size):
-            i = np.random.randint(self.w_encoder.n_pseudo_input)
-            pseudo_z_list.append(self.w_encoder.gaussian_sample(pseudo_mu[i], pseudo_log_var[i]))
+            i = np.random.randint(self.w_autoencoder.n_pseudo_input)
+            pseudo_z_list.append(self.w_autoencoder.gaussian_sample(pseudo_mu[i], pseudo_log_var[i]))
         pseudo_z = torch.stack(pseudo_z_list).contiguous()
         data = Outputs()
         data.z = pseudo_z + z_bias
@@ -223,4 +277,4 @@ class VQVAE(AE):
 
 def get_module() -> AutoEncoder:
     model_map: dict[ModelHead, Type[AutoEncoder]] = {ModelHead.AE: AE, ModelHead.VQVAE: VQVAE}
-    return model_map[ExperimentAE.get_config().autoencoder.head]()
+    return model_map[ExperimentAE.get_config().model.head]()

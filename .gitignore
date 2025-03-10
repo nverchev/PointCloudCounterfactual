@@ -6,3 +6,5 @@
 /.env
 /experiments/
 */.idea
+/images/
+/optimization_db/

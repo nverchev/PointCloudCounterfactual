@@ -1,5 +1,0 @@
-architecture: Convolution
-expand: 16
-hidden_dims: [64, 64]
-dropout: [0., 0.]
-act_name: ''

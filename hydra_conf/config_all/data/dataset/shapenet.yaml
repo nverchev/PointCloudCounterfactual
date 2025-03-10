@@ -1,0 +1,4 @@
+name: ShapenetFlow
+n_classes: 2
+settings:
+  select_classes: [bench, sofa]

@@ -7,21 +7,23 @@ import torch.nn.functional as F
 
 from src.layers import PointsConvLayer, LinearLayer
 from src.neighbour_ops import graph_filtering
-from src.config_options import ExperimentAE, Decoders, WDecoders
+from src.config_options import ExperimentAE, Decoders, WDecoders, MainExperiment
 from src.data_structures import OUT_CHAN
 
 
 class BaseWDecoder(nn.Module, metaclass=abc.ABCMeta):
     def __init__(self) -> None:
         super().__init__()
-        cfg = ExperimentAE.get_config()
+        cfg = MainExperiment.get_config()
         cfg_ae = cfg.autoencoder
-        cfg_w_decoder = cfg_ae.decoder.w_decoder
-        self.w_dim = cfg_ae.w_dim
-        self.embedding_dim = cfg_ae.embedding_dim
-        self.num_codes = cfg_ae.num_codes
-        self.book_size = cfg_ae.book_size
-        self.z_dim = cfg_ae.z_dim
+        self.num_classes = cfg.data.dataset.n_classes
+        cfg_model = cfg_ae.model
+        cfg_w_decoder = cfg_model.decoder.w_decoder
+        self.w_dim = cfg_model.w_dim
+        self.embedding_dim = cfg_model.embedding_dim
+        self.num_codes = cfg_model.n_codes
+        self.book_size = cfg_model.book_size
+        self.z_dim = cfg_model.z_dim
         self.expand = cfg_w_decoder.expand
         self.h_dims = cfg_w_decoder.hidden_dims
         self.dropout = cfg_w_decoder.dropout
@@ -37,18 +39,21 @@ class WDecoderLinear(BaseWDecoder):
     def __init__(self) -> None:
         super().__init__()
         modules: list[nn.Module] = []
-        in_dims = [self.z_dim] + self.h_dim
+        self.dropout = [0.] + self.dropout
+        in_dims = [self.z_dim + self.num_classes] + self.h_dims
         out_dims = self.h_dims + [self.w_dim * self.expand]
         for in_dim, out_dim, do in zip(in_dims, out_dims, self.dropout):
             modules.append(LinearLayer(in_dim, out_dim, act_cls=self.act_cls))
             modules.append(nn.Dropout(do))
         self.decode = nn.Sequential(*modules)
         self.conv = nn.Sequential(
-            PointsConvLayer(self.expand * self.embedding_dim, self.embedding_dim, groups=self.num_codes,
+            PointsConvLayer(self.expand * self.embedding_dim,
+                            self.embedding_dim,
+                            groups=self.embedding_dim,
                             batch_norm=False))
 
     def forward(self, x):
-        x = self.decode(x).view(-1, self.expand * self.embedding_dim, self.w_dim // self.embedding_dim)
+        x = self.decode(x).view(-1, self.expand * self.embedding_dim, self.num_codes)
         x = self.conv(x).transpose(2, 1).reshape(-1, self.w_dim)
         return x
 
@@ -59,7 +64,7 @@ class WDecoderConvolution(BaseWDecoder):
         super().__init__()
         modules: list[nn.Module] = []
         total_h_dims = [h_dim * self.num_codes for h_dim in self.h_dims]
-        in_dims = [self.z_dim * self.num_codes] + total_h_dims
+        in_dims = [(self.z_dim + self.num_classes) * self.num_codes] + total_h_dims
         out_dims = total_h_dims
         for in_dim, out_dim, do in zip(in_dims, out_dims, self.dropout):
             modules.append(PointsConvLayer(in_dim, out_dim, groups=self.num_codes, act_cls=self.act_cls))
@@ -77,7 +82,7 @@ class WDecoderConvolution(BaseWDecoder):
 class BasePointDecoder(nn.Module, metaclass=abc.ABCMeta):
     def __init__(self) -> None:
         super().__init__()
-        cfg_ae = ExperimentAE.get_config().autoencoder
+        cfg_ae = ExperimentAE.get_config().model
         cfg_decoder = cfg_ae.decoder
         self.h_dims_map = cfg_decoder.hidden_dims_map
         self.h_dims_conv = cfg_decoder.hidden_dims_conv
@@ -108,7 +113,7 @@ class PCGen(BasePointDecoder):
         in_dims = [self.sample_dim] + self.h_dims_map
         out_dims = self.h_dims_map
         for in_dim, out_dim in zip(in_dims, out_dims):
-            modules.append(PointsConvLayer(in_dim, out_dim, batch_norm=False, act_cls=self.act_cls))
+            modules.append(PointsConvLayer(in_dim, out_dim, batch_norm=False, act_cls=torch.nn.ReLU))
         modules.append(PointsConvLayer(self.h_dims_map[-1], self.w_dim, batch_norm=False, act_cls=nn.Hardtanh))
         self.map_sample = nn.Sequential(*modules)
 
@@ -120,7 +125,7 @@ class PCGen(BasePointDecoder):
         for _ in range(self.n_components):
             modules = []
             for in_dim, out_dim in zip(in_dims, out_dims):
-                modules.append(PointsConvLayer(in_dim, out_dim, act_cls=self.act_cls))
+                modules.append(PointsConvLayer(in_dim, out_dim, act_cls=self.act_cls, residual=True))
             self.group_conv.append(nn.Sequential(*modules))
             self.group_final.append(
                 PointsConvLayer(self.h_dims_conv[-1], OUT_CHAN, batch_norm=False, act_cls=torch.nn.Identity)
@@ -153,7 +158,14 @@ class PCGen(BasePointDecoder):
             xs_list.append(x_group)
         xs = torch.stack(xs_list, dim=3)
         if self.n_components > 1:
-            x_att = F.gumbel_softmax(self.att(torch.cat(group_atts, dim=1).contiguous()), tau=self.tau, dim=1)
+            x_att = self.att(torch.cat(group_atts, dim=1).contiguous())
+
+            if self.training:
+                x_att = F.gumbel_softmax(x_att, tau=self.tau, dim=1)
+            else:
+                # good approximation of the expected weights
+                x_att = torch.softmax(x_att / self.tau, dim=1)
+
             x_att = x_att.transpose(2, 1)
             x = (xs * x_att.unsqueeze(1)).sum(3)
             if viz_att.numel():  # accessory information for visualization
@@ -181,7 +193,7 @@ def get_decoder() -> BasePointDecoder:
     decoder_dict: dict[Decoders, Type[BasePointDecoder]] = {
         Decoders.PCGen: PCGen,
     }
-    return decoder_dict[ExperimentAE.get_config().autoencoder.decoder.architecture]()
+    return decoder_dict[ExperimentAE.get_config().model.decoder.architecture]()
 
 
 def get_w_decoder() -> BaseWDecoder:
@@ -189,4 +201,4 @@ def get_w_decoder() -> BaseWDecoder:
         WDecoders.Convolution: WDecoderConvolution,
         WDecoders.Linear: WDecoderLinear,
     }
-    return decoder_dict[ExperimentAE.get_config().autoencoder.decoder.w_decoder.architecture]()
+    return decoder_dict[ExperimentAE.get_config().model.decoder.w_decoder.architecture]()

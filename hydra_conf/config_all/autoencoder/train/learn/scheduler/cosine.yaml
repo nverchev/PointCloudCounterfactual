@@ -1,0 +1,6 @@
+function: Cosine
+settings:
+  min_decay: 0.01
+  decay_steps:  100
+  restart: true
+  restart_factor: 1

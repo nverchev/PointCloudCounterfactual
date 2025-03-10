@@ -1,0 +1,11 @@
+defaults:
+  - config_all
+  - autoencoder: default_autoencoder
+  - classifier: default_classifier
+  - user: user_settings
+  - w_autoencoder: default_w_autoencoder
+  - data: default_data
+  - _self_
+
+base_name: main
+final: false

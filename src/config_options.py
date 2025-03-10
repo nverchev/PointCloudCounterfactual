@@ -1,14 +1,18 @@
 """Defines and registers the configuration for the experiment."""
+
 import enum
 import functools
 import pathlib
 import os
-from typing import Optional, Self, Type, Annotated, Callable, TypeAlias
+from typing import Optional, Self, Type, Annotated, Callable, TypeAlias, cast
 
 import dotenv
 import dry_torch
 import hydra
 import numpy as np
+from hydra.core.global_hydra import GlobalHydra
+from hydra.core.hydra_config import HydraConfig
+from omegaconf import OmegaConf, DictConfig
 from pydantic import model_validator, Field
 from pydantic.dataclasses import dataclass
 import torch
@@ -25,6 +29,27 @@ PositiveFloat = Annotated[float, Field(ge=0)]
 ActClass: TypeAlias = Callable[[], torch.nn.Module]
 
 ACT: ActClass = functools.partial(torch.nn.LeakyReLU, negative_slope=0.2)
+
+
+class ConfigPath(enum.StrEnum):
+    """Configuration paths relative to project root."""
+    CONFIG_ALL = 'config_all'
+    TUNE_AUTOENCODER = 'tune_autoencoder'
+    TUNE_W_AUTOENCODER = 'tune_w_autoencoder'
+
+    @classmethod
+    def get_folder(cls) -> str:
+        """Return folder_name."""
+        return 'hydra_conf'
+
+    def absolute(self) -> str:
+        """Absolute path to folder"""
+        path = pathlib.Path(__file__).parent.parent / self.get_folder() / self
+        return str(path.absolute())
+
+    def relative(self) -> str:
+        """Relative path to folder"""
+        return f'../{self.get_folder()}/{self}'
 
 
 def _get_activation_cls(act_name: str) -> ActClass:
@@ -44,7 +69,7 @@ def _get_optim_cls(optimizer_name: str) -> Type[torch.optim.Optimizer]:
 class Datasets(enum.StrEnum):
     """Dataset names."""
     ModelNet = enum.auto()
-    ShapenetAtlas = enum.auto()
+    ShapenetFlow = enum.auto()
 
 
 class Encoders(enum.StrEnum):
@@ -89,41 +114,13 @@ class ReconLosses(enum.StrEnum):
 
 
 @dataclass
-class ExperimentSettings:
-    """Global settings for the experiment."""
-    main_name: str
-    """Name of the main experiment"""
-    child_name: str
-    """Name of the child experiment"""
-    final: bool
-    """uses val dataset for training and test dataset for testing, otherwise test on val"""
-    seed: Optional[int]
-    """torch/numpy seed. Default: no seed"""
-
-    @property
-    def name(self) -> str:
-        """The name of the experiment."""
-        return f"{self.child_name}{'_final' if self.final else ''}"
-
-    def __post_init__(self):
-        self._set_seed()
-
-    def _set_seed(self) -> None:
-        if self.seed is not None:
-            torch.manual_seed(self.seed)
-            torch.cuda.manual_seed(self.seed)
-            torch.backends.cudnn.deterministic = True
-            torch.backends.cudnn.benchmark = False
-            np.random.seed(self.seed)
-        return
-
-
-@dataclass
 class DatasetConfig:
     """Config for the dataset."""
 
     name: Datasets
     """dataset name"""
+    n_classes: PositiveInt
+    """Number of classes, 0 if no class information is available"""
     settings: dict
     """settings specific for the dataset"""
 
@@ -134,12 +131,18 @@ class DataConfig:
 
     dataset: DatasetConfig
     """dataset configuration"""
-    input_points: StrictlyPositiveInt
+    n_input_points: StrictlyPositiveInt
     """(maximum) input points"""
+    n_target_points: StrictlyPositiveInt
+    """(maximum) target points"""
     translation: bool
-    """random translating training inputs"""
+    """random translating training inputs and reference"""
     rotation: bool
-    """random rotating training inputs"""
+    """random rotating training inputs and reference"""
+    jitter_sigma: PositiveFloat
+    """variance for random perturbation of training inputs"""
+    jitter_clip: PositiveFloat
+    """Threshold value for random perturbation of training inputs"""
     resample: bool
     """two different samplings for input and reference"""
     k: StrictlyPositiveInt
@@ -156,19 +159,21 @@ class WEncoderConfig:
     """hidden dimensions for the convolution part of the WEncoder"""
     hidden_dims_lin: list[StrictlyPositiveInt]
     """hidden dimensions for the linear part of the WEncoder"""
-    n_pseudo_inputs: StrictlyPositiveInt
-    """number of pseudo_inputs for the VAMP loss"""
     dropout: list[PositiveFloat]
     """dropout probability"""
+    cf_temperature: int
+    """Temperature for the probabilities (the closer to zero the more close to samplings)"""
     act_name: str = ''
     """name of the Pytorch activation (see https://pytorch.org/docs/stable/nn.html)"""
+    gumbel: bool = True
+    # TODO: add doc
 
     def __post_init__(self):
         self.act_cls = _get_activation_cls(self.act_name) if self.act_name else ACT
 
     @model_validator(mode='after')
     def _check_length_dropout(self) -> Self:
-        if len(self.hidden_dims_lin) != len(self.dropout):
+        if len(self.hidden_dims_lin) > len(self.dropout):
             msg = 'Number of hidden dimensions {} and dropouts {} not compatible.'
             raise ValueError(msg.format(len(self.hidden_dims_lin), len(self.dropout)))
         return self
@@ -213,7 +218,7 @@ class WDecoderConfig:
 
     @model_validator(mode='after')
     def _check_length_dropout(self) -> Self:
-        if len(self.hidden_dims) + int(self.architecture == WDecoders.Linear) != len(self.dropout):
+        if len(self.hidden_dims) > len(self.dropout):
             msg = 'Number of hidden dimensions {} and dropouts {} not compatible.'
             raise ValueError(msg.format(len(self.hidden_dims), len(self.dropout)))
         return self
@@ -268,15 +273,16 @@ class AEConfig:
     """EMA update on quantized codes"""
     vq_noise: PositiveFloat
     """noise when redistributing the codes"""
-    double_encoding: bool
-    """reconstructs samples based on the retrieved codes"""
     name: str
     """name of the model"""
-    output_points: StrictlyPositiveInt
+    training_output_points: StrictlyPositiveInt
     """points generated in training, 0 for input number of points"""
 
+    n_pseudo_inputs: PositiveInt
+    """number of pseudo_inputs for the VAMP loss"""
+
     @property
-    def num_codes(self) -> int:
+    def n_codes(self) -> int:
         """Number of codes"""
         return self.w_dim // self.embedding_dim
 
@@ -295,6 +301,8 @@ class ClassifierConfig:
     """dimensions for the MLP layers."""
     dropout: list[PositiveFloat]
     """dimensions for the MLP layers."""
+    out_classes: StrictlyPositiveInt
+    """number of classes in the classifier"""
     act_name: str = ''
     """name of the Pytorch activation (see https://pytorch.org/docs/stable/nn.html)."""
     name: str = ''
@@ -305,7 +313,7 @@ class ClassifierConfig:
 
     @model_validator(mode='after')
     def _check_length_dropout(self) -> Self:
-        if len(self.mlp_dims) != len(self.dropout):
+        if len(self.mlp_dims) > len(self.dropout):
             msg = 'Number of hidden dimensions {} and dropouts {} not compatible.'
             raise ValueError(msg.format(len(self.hidden_dims), len(self.dropout)))
         return self
@@ -333,6 +341,8 @@ class LearningConfig:
     """default settings for the optimizer"""
     scheduler: SchedulerConfig
     """scheduler configuration for the learning rate decay"""
+    warm_up: int
+    """Number of initial epochs with linearly increasing learning rate"""
 
     def __post_init__(self):
         self.optimizer_cls = _get_optim_cls(self.optimizer_name)
@@ -342,9 +352,10 @@ class LearningConfig:
 class EarlyStoppingConfig:
     """Configuration for early stopping."""
 
-    metric_name: str = 'Criterion'
-    """name of the metric to monitor"""
-
+    active: bool
+    """whether to use early stopping"""
+    window: int = 1
+    """number of last metrics to average"""
     patience: int = 10
     """number of epochs to wait before stopping"""
 
@@ -352,25 +363,21 @@ class EarlyStoppingConfig:
 @dataclass
 class TrainingConfig:
     """Configuration for the training."""
-
     batch_size: StrictlyPositiveInt
     """batch size"""
-    diagnose_every: StrictlyPositiveInt
-    """number of points between diagnostics (PCGen rearranges the discrete space)"""
     learn: LearningConfig
     """learning config for the training"""
     epochs: StrictlyPositiveInt
     """number of epochs for the training"""
-    load_checkpoint: int = -1
-    """load checkpoint if available. Default: last one"""
-    early_stopping: Optional[EarlyStoppingConfig] = None
+    early_stopping: EarlyStoppingConfig
     """Configuration for early stopping"""
 
 
 @dataclass
 class ObjectiveAEConfig:
     """Configuration for the loss and the metrics."""
-
+    n_inference_output_points: StrictlyPositiveInt
+    """number of inference points for the evaluation"""
     recon_loss: ReconLosses
     """reconstruction loss denomination"""
     c_embedding: PositiveFloat
@@ -380,22 +387,24 @@ class ObjectiveAEConfig:
 @dataclass
 class ObjectiveWAEConfig:
     """Configuration for the loss and the metrics."""
+    vamp: bool
+    """Whether to use the Variational Mixture of Posteriors"""
     c_kld: PositiveFloat
     """Kullback-Leibler Divergence coefficient"""
+    c_counterfactual: PositiveFloat
+    """Coefficient for the Counterfactual loss """
 
 
 @dataclass
 class PlottingOptions:
     """Options for plotting and visualization."""
 
-    training: bool
-    """visualize learning curves"""
     interactive: bool
     """3D plot when using pyvista plotting"""
-    refresh: StrictlyPositiveInt
-    """epochs before refreshing the learning curves"""
     indices_to_reconstruct: list[PositiveInt]
     """indices of the evaluation test to reconstruct"""
+    double_encoding: bool
+    """reconstructs samples based on the retrieved codes"""
 
 
 @dataclass
@@ -425,8 +434,6 @@ class GenerationOptions:
 @dataclass
 class UserSettings:
     """Options relative to the user preferences."""
-    checkpoint_every: StrictlyPositiveInt
-    """number of epochs between checkpoints"""
     cuda: bool
     """run on cuda:0"""
     generate: GenerationOptions
@@ -435,8 +442,28 @@ class UserSettings:
     """specifications for paths that override .env settings"""
     plot: PlottingOptions
     """options for plotting and visualization"""
-    validate: StrictlyPositiveInt
-    """epochs before validation"""
+    seed: Optional[int]
+    """torch/numpy seed. Default: no seed"""
+    checkpoint_every: PositiveInt
+    """number of epochs between checkpoints"""
+    n_generated_output_points: int
+    """number of points to generate during inference"""
+    load_checkpoint: int = -1
+    """load checkpoint if available. Default: last one"""
+    counterfactual_value: PositiveFloat = 1.
+    """value for counterfactual strength"""
+
+    def __post_init__(self):
+        self._set_seed()
+
+    def _set_seed(self) -> None:
+        if self.seed is not None:
+            torch.manual_seed(self.seed)
+            torch.cuda.manual_seed(self.seed)
+            torch.backends.cudnn.deterministic = True
+            torch.backends.cudnn.benchmark = False
+            np.random.seed(self.seed)
+        return
 
     @property
     def device(self) -> torch.device:
@@ -448,20 +475,53 @@ class UserSettings:
 class Config:
     """Shared options for training, evaluating and random generation."""
 
-    exp: ExperimentSettings
-    data: DataConfig
     train: TrainingConfig
-    user: UserSettings
-
-
-class ParentExperiment(dry_torch.ParentExperiment[None, Config]):
-    pass
+    name: str
+    """Name of the child experiment"""
 
 
 @dataclass
 class ConfigTrainClassifier(Config):
     """Options for training the classifier."""
-    classifier: ClassifierConfig
+    model: ClassifierConfig
+
+
+@dataclass
+class ConfigTrainAE(Config):
+    """Options for training the autoencoder."""
+    model: AEConfig
+    objective: ObjectiveAEConfig
+    diagnose_every: StrictlyPositiveInt
+    """number of points between diagnostics (PCGen rearranges the discrete space)"""
+
+
+@dataclass
+class ConfigTrainWAE(Config):
+    """Options for training the autoencoder."""
+    objective: ObjectiveWAEConfig
+
+
+@dataclass
+class ConfigAll:
+    """Configuration root."""
+    base_name: str
+    """Name of the experiment."""
+    final: bool
+    """uses val dataset for training and test dataset for testing, otherwise test on val."""
+    classifier: ConfigTrainClassifier
+    autoencoder: ConfigTrainAE
+    w_autoencoder: ConfigTrainWAE
+    user: UserSettings
+    data: DataConfig
+
+    @property
+    def name(self):
+        """Name of the experiment that clarifies whether metrics are calculated on the test dataset."""
+        return f'{self.base_name}_final' if self.final else self.base_name
+
+
+class MainExperiment(dry_torch.ParentExperiment[ConfigAll, Config]):
+    pass
 
 
 class ExperimentClassifier(dry_torch.ChildExperiment[ConfigTrainClassifier]):
@@ -469,23 +529,9 @@ class ExperimentClassifier(dry_torch.ChildExperiment[ConfigTrainClassifier]):
     pass
 
 
-@dataclass
-class ConfigTrainAE(Config):
-    """Options for training the autoencoder."""
-    autoencoder: AEConfig
-    objective: ObjectiveAEConfig
-
-
 class ExperimentAE(dry_torch.ChildExperiment[ConfigTrainAE]):
     """Subclass for current config."""
     pass
-
-
-@dataclass
-class ConfigTrainWAE(Config):
-    """Options for training the autoencoder."""
-    autoencoder: AEConfig
-    objective = ObjectiveWAEConfig
 
 
 class ExperimentWAE(dry_torch.ChildExperiment[ConfigTrainWAE]):
@@ -493,7 +539,62 @@ class ExperimentWAE(dry_torch.ChildExperiment[ConfigTrainWAE]):
     pass
 
 
+def get_config_all(overrides: Optional[list[str]] = None) -> ConfigAll:
+    """Get hydra configuration without starting a run."""
+    GlobalHydra.instance().clear()
+
+    with hydra.initialize(version_base=None, config_path=ConfigPath.CONFIG_ALL.relative()):
+        dict_cfg = hydra.compose(config_name='defaults', overrides=overrides)
+        cfg = cast(ConfigAll, OmegaConf.to_object(dict_cfg))
+        # if overrides is not None:
+        #     update_exp_name(cfg, overrides)
+        return cfg
+
+
+def hydra_main(func: Callable[[ConfigAll], None]) -> Callable[[], None]:
+    """Start hydra run and Converts dict_cfg to ConfigAll."""
+
+    @hydra.main(version_base=None, config_path=str(ConfigPath.CONFIG_ALL.absolute()), config_name='defaults')
+    @functools.wraps(func)
+    def wrapper(dict_cfg: DictConfig) -> None:
+        """Convert configuration to the stored object"""
+        cfg = cast(ConfigAll, OmegaConf.to_object(dict_cfg))
+        overrides = HydraConfig.get().overrides.task
+        update_exp_name(cfg, overrides)
+        return func(cfg)
+
+    return wrapper.__call__
+
+
+def update_exp_name(cfg: ConfigAll, overrides: list[str]) -> None:
+    main_overrides = list[str]()
+    autoencoder_overrides = list[str]()
+    classifier_overrides = list[str]()
+    for override in overrides:
+        split_override = override.split('.', maxsplit=1)
+        if len(split_override) == 1:
+            split_override = override.split('/', maxsplit=1)
+            if len(split_override) == 1:
+                continue
+
+        denomination, specification = split_override
+        specification = specification.lower()
+        if specification.startswith('name'):
+            continue
+        if denomination == 'autoencoder':
+            autoencoder_overrides.append(specification)
+        elif denomination == 'w_autoencoder':
+            autoencoder_overrides.append(specification)
+        elif denomination == 'classifier':
+            classifier_overrides.append(specification)
+        elif denomination == 'data':
+            main_overrides.append(specification)
+
+    cfg.autoencoder.name = '_'.join([cfg.autoencoder.name, *autoencoder_overrides])
+    cfg.classifier.name = '_'.join([cfg.classifier.name, *classifier_overrides])
+    cfg.base_name = '_'.join([cfg.base_name, *main_overrides])
+    return
+
+
 cs = hydra.core.config_store.ConfigStore.instance()  # type: ignore
-cs.store(name='config_classifier', node=ConfigTrainClassifier)
-cs.store(name='config_ae', node=ConfigTrainAE)
-cs.store(name='config_wae', node=ConfigTrainWAE)
+cs.store(name='config_all', node=ConfigAll)

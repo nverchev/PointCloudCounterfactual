@@ -1,28 +1,44 @@
-import hydra
 import torch
 
 from src.autoencoder import VQVAE
-from src.config_options import set_up_experiment, get_config
-from src.visualisation import infer_and_visualize
+from src.config_options import ExperimentAE, MainExperiment, hydra_main, ConfigAll
+from src.data_structures import Outputs
+from src.visualisation import render_cloud
 from dry_torch import Model
 
 
 def generate_random_samples():
-    cfg = get_config()
-    cfg_generate = cfg.user.generate
-    module = VQVAE()
-    model = Model(module, name=cfg.model.name, device=cfg.user.device)
-    model.load_state(-1)
-    module.w_encoder.update_pseudo_latent()
-    z_bias = torch.zeros(cfg_generate.batch_size, cfg.model.z_dim, device=cfg.user.device)
-    z_bias[:, cfg_generate.bias_dim] = cfg_generate.bias_value
-    infer_and_visualize(module, n_clouds=cfg_generate.batch_size, mode='gen', z_bias=z_bias)
+    cfg = MainExperiment.get_config()
+    cfg_ae = cfg.autoencoder
+    cfg_user = cfg.user
+    cfg_generate = cfg_user.generate
+    module = VQVAE().eval()
+    model = Model(module, name=cfg_ae.model.name, device=cfg_user.device)
+    model.load_state()
+    module.w_autoencoder.update_pseudo_latent()
+    z_bias = torch.zeros(cfg_generate.batch_size, cfg_ae.model.z_dim, device=cfg_user.device)
+    num_classes = cfg_ae.data.dataset.n_classes
+    for i in range(num_classes):
+        z_bias[:, :num_classes] = max((1 - cfg_user.generate.bias_value) / (num_classes - 1), 0)
+
+        z_bias[:, i] = cfg_generate.bias_value
+
+        data = Outputs()
+        data.z = z_bias
+        with torch.inference_mode():
+            with module.double_encoding:
+                clouds = module.decode(data).recon
+        for cloud in clouds:
+            np_cloud = cloud.cpu().numpy()
+            render_cloud((np_cloud,), title='generated_{i}', interactive=cfg_user.plot.interactive)
 
 
-def main() -> None:
-    with hydra.initialize(version_base=None, config_path="hydra_conf/autoencoder_conf/"):
-        dict_cfg = hydra.compose(config_name="defaults")
-        set_up_experiment(dict_cfg, output=False)
+@hydra_main
+def main(cfg: ConfigAll) -> None:
+    parent_experiment = MainExperiment(cfg.name, cfg.user.path.exp_par_dir, cfg)
+    exp_ae = ExperimentAE(cfg.autoencoder.name, config=cfg.autoencoder)
+    parent_experiment.register_child(exp_ae)
+    with exp_ae:
         generate_random_samples()
     return
 

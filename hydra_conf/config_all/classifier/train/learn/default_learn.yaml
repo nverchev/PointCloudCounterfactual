@@ -1,0 +1,9 @@
+defaults:
+    - scheduler: cosine
+    - _self_
+
+optimizer_name: SGD
+learning_rate: 0.01
+warm_up: 0
+settings:
+    weight_decay: 0.

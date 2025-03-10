@@ -1,8 +1,0 @@
-defaults:
-  - dataset: modelnet
-
-input_points: 2048
-translation: false
-rotation: false
-resample: true
-k: 16

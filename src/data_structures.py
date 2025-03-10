@@ -33,9 +33,14 @@ class Outputs:
     one_hot_idx: torch.Tensor
     mu: torch.Tensor
     log_var: torch.Tensor
+    p_mu: torch.Tensor
+    p_log_var: torch.Tensor
     pseudo_mu: torch.Tensor
     pseudo_log_var: torch.Tensor
     z: torch.Tensor
+    h: torch.Tensor
+    y: torch.Tensor
+    z_c: torch.Tensor
 
     def update(self, other: Self) -> None:
         for attribute in other.__slots__:
@@ -43,3 +48,13 @@ class Outputs:
                 setattr(self, attribute, getattr(other, attribute))
             except AttributeError:  # slot not yet initialized
                 pass
+
+
+class W_Targets(NamedTuple):
+    one_hot_idx: torch.Tensor
+    logits: torch.Tensor
+
+
+class W_Inputs(NamedTuple):
+    w_q: torch.Tensor
+    logits: torch.Tensor

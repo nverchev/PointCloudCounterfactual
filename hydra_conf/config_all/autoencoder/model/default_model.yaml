@@ -1,0 +1,15 @@
+defaults:
+  - encoder: default_encoder
+  - decoder: default_decoder
+  - _self_
+
+head: VQVAE
+book_size: 16
+embedding_dim: 4
+w_dim: 1024
+z_dim: 32
+n_pseudo_inputs: 0
+vq_ema_update: false
+vq_noise: 2
+name: 'VQVAE'
+training_output_points: ${data.n_input_points}

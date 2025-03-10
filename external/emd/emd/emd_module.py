@@ -22,7 +22,7 @@ class emdFunction(Function):
 
         if n != m:
             raise ValueError('Input point clouds should have the same number of points')
-        if not batch_size1 != batch_size2:
+        if batch_size1 != batch_size2:
             raise ValueError('Batch size must be the same')
         if n % 1024:
             raise ValueError('Only valid for clouds of a size multiple of 1024')

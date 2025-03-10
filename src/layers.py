@@ -108,7 +108,8 @@ class GeneralizedLinearLayer(nn.Module, metaclass=abc.ABCMeta):
                  int, out_dim: int,
                  act_cls: Optional[ActClass] = None,
                  batch_norm: bool = True,
-                 groups: int = 1) -> None:
+                 groups: int = 1,
+                 residual: bool = False) -> None:
         super().__init__()
         self.in_dim = in_dim
         self.out_dim = out_dim
@@ -117,6 +118,7 @@ class GeneralizedLinearLayer(nn.Module, metaclass=abc.ABCMeta):
         self.bias = False if batch_norm else True
         self.dense = self.get_dense_layer()
         self.bn = self.get_bn_layer() if batch_norm else None
+        self.resnet = residual
         if act_cls is None:
             self.act = None
         else:
@@ -162,8 +164,12 @@ class GeneralizedLinearLayer(nn.Module, metaclass=abc.ABCMeta):
         """Get the batch normalization layer"""
 
     def forward(self, x):
-        x = self.bn(self.dense(x)) if self.batch_norm else self.dense(x)
-        return x if self.act is None else self.act(x)
+        y = self.bn(self.dense(x)) if self.batch_norm else self.dense(x)
+        if self.act is not None:
+            y = self.act(y)
+        if self.resnet:
+            return y + x.repeat_interleave(self.out_dim // self.in_dim + 1, 1)[:, :y.shape[1], ...]
+        return y
 
 
 # Input (Batch, Features)
@@ -175,7 +181,7 @@ class LinearLayer(GeneralizedLinearLayer):
         return nn.Linear(self.in_dim, self.out_dim, bias=self.bias)
 
     def get_bn_layer(self):
-        return nn.BatchNorm1d(self.out_dim)
+        return nn.BatchNorm1d(self.out_dim, momentum=0.1)
 
 
 # Input (Batch, Points, Features)
@@ -185,7 +191,7 @@ class PointsConvLayer(GeneralizedLinearLayer):
         return nn.Conv1d(self.in_dim, self.out_dim, kernel_size=1, bias=self.bias, groups=self.groups)
 
     def get_bn_layer(self):
-        return nn.BatchNorm1d(self.out_dim)
+        return nn.BatchNorm1d(self.out_dim, momentum=0.1)
 
 
 class EdgeConvLayer(GeneralizedLinearLayer):
@@ -194,7 +200,7 @@ class EdgeConvLayer(GeneralizedLinearLayer):
         return nn.Conv2d(self.in_dim, self.out_dim, kernel_size=1, bias=self.bias, groups=self.groups)
 
     def get_bn_layer(self) -> nn.Module:
-        return nn.BatchNorm2d(self.out_dim)
+        return nn.BatchNorm2d(self.out_dim, momentum=0.1)
 
 
 class TransferGrad(Function):

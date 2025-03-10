@@ -1,4 +1,0 @@
-function: Cosine
-settings:
-  min_decay: 0.01
-  decay_steps:  ${train.epochs}

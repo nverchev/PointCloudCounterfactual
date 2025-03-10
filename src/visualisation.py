@@ -5,8 +5,9 @@ import numpy as np
 from numpy import typing as npt
 import torch
 import pyvista as pv
+from sklearn.decomposition import PCA  # type: ignore
 
-from src.config_options import ExperimentAE
+from src.config_options import ExperimentAE, MainExperiment
 from src.data_structures import Inputs
 from src.autoencoder import AutoEncoder
 
@@ -28,9 +29,9 @@ def render_scan(clouds: Sequence[npt.NDArray],
                          window_size=(1024, 1024),
                          notebook=False,
                          off_screen=not interactive)
-    plotter.camera_position = pv.CameraPosition((1.8, 0, 0), focal_point=(0, 0, 0), viewup=(0, 0, 1))
+    plotter.camera_position = pv.CameraPosition((-1, 1, 1.5), focal_point=(0, 0, 0), viewup=(0, 0, 1))
 
-    for light_point in ((30, -30, 2), (30, 30, 20)):
+    for light_point in ((3, -3, 2), (3, 3, 2)):
         light = pv.Light(position=light_point, focal_point=(0, 0, 0), intensity=1, positional=True)
         plotter.add_light(light)
 
@@ -56,7 +57,8 @@ def render_scan(clouds: Sequence[npt.NDArray],
                          color=color,
                          point_size=15,
                          render_points_as_spheres=True,
-                         smooth_shading=True)
+                         smooth_shading=True,
+                         show_edges=False)
     # effects
     plotter.enable_eye_dome_lighting()
     plotter.enable_shadows()
@@ -83,10 +85,10 @@ def render_cloud(clouds: Sequence[npt.NDArray],
                          window_size=(1024, 1024),
                          notebook=False,
                          off_screen=not interactive)
-    plotter.camera_position = pv.CameraPosition((0, 1, 0), focal_point=(0, 0, 0), viewup=(0, 0, 1))
+    plotter.camera_position = pv.CameraPosition((-3, 1, -2.5), focal_point=(0, 0, 0), viewup=(0, 1, 0))
 
-    # later lightning
-    for light_point in ((3, -3, 2), (3, 3, 2)):
+    # lateral lightning
+    for light_point in ((3, 3, -2), (3, 3, 2)):
         light = pv.Light(position=light_point, focal_point=(0, 0, 0), intensity=1, positional=True)
         plotter.add_light(light)
 
@@ -106,7 +108,14 @@ def render_cloud(clouds: Sequence[npt.NDArray],
         geom = pv.Sphere(theta_resolution=8, phi_resolution=8)
         cloud_pv["radius"] = .01 * np.ones(n)
         glyphs = cloud_pv.glyph(scale='radius', geom=geom, orient=False)
-        plotter.add_mesh(glyphs, color=color, point_size=15, render_points_as_spheres=True, smooth_shading=True)
+        plotter.add_mesh(glyphs,
+                         color=color,
+                         point_size=15,
+                         render_points_as_spheres=True,
+                         smooth_shading=True,
+                         show_edges=False,
+                         style='points'
+                         )
         if arrows is not None:
             geom = pv.Arrow(shaft_radius=.1, tip_radius=.2, scale=1)
             cloud_pv["vectors"] = arrows[:, [0, 2, 1]].numpy()
@@ -138,14 +147,15 @@ def infer_and_visualize(model: AutoEncoder,
                         mode: Literal['recon', 'gen'] = 'recon',
                         z_bias: Optional[torch.Tensor] = None,
                         input_pc: Optional[torch.Tensor] = None) -> None:
+    cfg_user = MainExperiment.get_config().user
     cfg = ExperimentAE.get_config()
-    cfg_ae = cfg.autoencoder
+    cfg_ae = cfg.model
     n_clouds = len(input_pc) if input_pc is not None else n_clouds
     if n_clouds is None:
         raise ValueError('Number of clouds must be provided.')
-    s = torch.randn(n_clouds, cfg_ae.decoder.sample_dim, cfg.autoencoder.output_points, device=cfg.user.device)
-    att = torch.empty(n_clouds, cfg.autoencoder.output_points, cfg_ae.decoder.n_components, device=cfg.user.device)
-    components = torch.empty(n_clouds, 3, cfg.autoencoder.output_points, cfg_ae.decoder.n_components)
+    s = torch.randn(n_clouds, cfg_ae.decoder.sample_dim, cfg.model.training_output_points, device=cfg_user.device)
+    att = torch.empty(n_clouds, cfg.model.training_output_points, cfg_ae.decoder.n_components, device=cfg_user.device)
+    components = torch.empty(n_clouds, 3, cfg.model.training_output_points, cfg_ae.decoder.n_components)
     # if cfg.add_viz == 'sampling_loop':
     #     bbox1 = torch.eye(cfg.sample_dim, device=cfg.device, dtype=torch.float32)
     #     bbox2 = -torch.eye(cfg.sample_dim, device=cfg.device, dtype=torch.float32)
@@ -172,7 +182,7 @@ def infer_and_visualize(model: AutoEncoder,
     else:
         raise ValueError('Mode can only be "recon" or "gen".')
     samples_and_loop = samples_and_loop.recon.cpu()
-    samples, *loops = samples_and_loop.split(cfg.autoencoder.output_points, dim=1)
+    samples, *loops = samples_and_loop.split(cfg.model.training_output_points, dim=1)
 
     def naming_syntax(num: int, viz_name: Optional[str] = None) -> str:
         # if mode == 'recon':
@@ -206,24 +216,25 @@ def infer_and_visualize(model: AutoEncoder,
         #     render_cloud((sample_np,), title=sample_name, arrows=filter_arrows, interactive=cfg.interactive_plot)
         # elif cfg.add_viz == 'none':
         sample_name = naming_syntax(i)
-        render_cloud((sample_np,), title=sample_name, interactive=cfg.user.plot.interactive)
+        render_cloud((sample_np,), title=sample_name, interactive=cfg_user.plot.interactive)
         pass
 
-# def show_latent(mu: npt.NDArray, pseudo_mu: npt.NDArray, model_name: str) -> None:
-#     try:
-#         import visdom
-#     except ImportError:
-#         print('visdom not installed. Please install it using pip: pip install visdom.')
-#         return
-#     pca = PCA(3)
-#     test_mu_pca = pca.fit_transform(mu)
-#     test_labels = np.ones(test_mu_pca.shape[0])
-#     pseudo_mu_pca = pca.transform(pseudo_mu)
-#     pseudo_labels = 2 * np.ones(pseudo_mu_pca.shape[0])
-#     mu_pca = np.vstack((test_mu_pca, pseudo_mu_pca))
-#     labels = np.hstack((test_labels, pseudo_labels))
-#     title = 'Continuous Latent Space'
-#     exp_name = Experiment.current().name
-#     vis = visdom.Visdom(env='_'.join((exp_name, model_name)), raise_exceptions=False)
-#     vis.scatter(X=mu_pca, Y=labels, win=title,
-#                 opts=dict(title=title, markersize=5, legend=['Validation', 'Pseudo-Inputs']))
+
+def show_latent(mu: npt.NDArray, pseudo_mu: npt.NDArray, model_name: str) -> None:
+    try:
+        import visdom
+    except ImportError:
+        print('visdom not installed. Please install it using pip: pip install visdom.')
+        return
+    pca = PCA(3)
+    test_mu_pca = pca.fit_transform(mu)
+    test_labels = np.ones(test_mu_pca.shape[0])
+    pseudo_mu_pca = pca.transform(pseudo_mu)
+    pseudo_labels = 2 * np.ones(pseudo_mu_pca.shape[0])
+    mu_pca = np.vstack((test_mu_pca, pseudo_mu_pca))
+    labels = np.hstack((test_labels, pseudo_labels))
+    title = 'Continuous Latent Space'
+    exp_name = MainExperiment.get_config().name
+    vis = visdom.Visdom(env='_'.join((exp_name, model_name)), raise_exceptions=False)
+    vis.scatter(X=mu_pca, Y=labels, win=title,
+                opts=dict(title=title, markersize=5, legend=['Validation', 'Pseudo-Inputs']))

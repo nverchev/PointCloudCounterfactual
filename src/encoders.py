@@ -6,21 +6,23 @@ import torch.nn as nn
 
 from src.layers import PointsConvLayer, LinearLayer, EdgeConvLayer
 from src.neighbour_ops import get_graph_features, graph_max_pooling
-from src.config_options import ExperimentAE, Encoders, WEncoders
+from src.config_options import MainExperiment, Encoders, WEncoders, ExperimentAE
 from src.data_structures import IN_CHAN
 
 
 class BaseWEncoder(nn.Module, metaclass=abc.ABCMeta):
     def __init__(self) -> None:
         super().__init__()
-        cfg = ExperimentAE.get_config()
+        cfg = MainExperiment.get_config()
         cfg_ae = cfg.autoencoder
-        cfg_w_encoder = cfg.autoencoder.encoder.w_encoder
-        self.w_dim = cfg_ae.w_dim
-        self.embedding_dim = cfg_ae.embedding_dim
-        self.num_codes = cfg_ae.num_codes
-        self.book_size = cfg_ae.book_size
-        self.z_dim = cfg.autoencoder.z_dim
+        self.num_classes = cfg.data.dataset.n_classes
+        cfg_model = cfg_ae.model
+        cfg_w_encoder = cfg_model.encoder.w_encoder
+        self.w_dim = cfg_model.w_dim
+        self.embedding_dim = cfg_model.embedding_dim
+        self.num_codes = cfg_model.n_codes
+        self.book_size = cfg_model.book_size
+        self.z_dim = cfg_model.z_dim
         self.h_dims_conv = cfg_w_encoder.hidden_dims_conv
         self.h_dims_lin = cfg_w_encoder.hidden_dims_lin
         self.dropout = cfg_w_encoder.dropout
@@ -39,7 +41,7 @@ class WEncoderConvolution(BaseWEncoder):
         total_h_dims = [h_dim * self.embedding_dim for h_dim in self.h_dims_conv]
         in_dims = [self.embedding_dim] + total_h_dims
         out_dims = total_h_dims
-        for in_dim, out_dim, do in zip(in_dims, out_dims, self.dropout):
+        for in_dim, out_dim in zip(in_dims, out_dims):
             modules.append(PointsConvLayer(in_dim, out_dim))
         self.conv = nn.Sequential(*modules)
         modules = []
@@ -49,7 +51,7 @@ class WEncoderConvolution(BaseWEncoder):
             modules.append(LinearLayer(in_dim, out_dim, act_cls=self.act_cls))
             modules.append(nn.Dropout(do))
         modules.append(
-            LinearLayer(self.h_dims_lin[-1], 2 * self.z_dim)
+            LinearLayer(self.h_dims_lin[-1], 2 * self.z_dim, batch_norm=False)
         )  # change to encode
         self.encode = nn.Sequential(*modules)
 
@@ -59,14 +61,42 @@ class WEncoderConvolution(BaseWEncoder):
         return x
 
 
+class ConditionalWEncoderConvolution(BaseWEncoder):
+
+    def __init__(self) -> None:
+        super().__init__()
+        modules: list[nn.Module] = []
+        total_h_dims = [h_dim * self.embedding_dim for h_dim in self.h_dims_conv]
+        in_dims = [self.embedding_dim] + total_h_dims
+        out_dims = total_h_dims
+        for in_dim, out_dim in zip(in_dims, out_dims):
+            modules.append(PointsConvLayer(in_dim, out_dim))
+        self.conv = nn.Sequential(*modules)
+        modules = []
+        in_dims = [self.w_dim * self.h_dims_conv[-1]] + self.h_dims_lin
+        out_dims = self.h_dims_lin
+        for in_dim, out_dim, do in zip(in_dims, out_dims, self.dropout):
+            modules.append(LinearLayer(in_dim, out_dim, act_cls=self.act_cls))
+            modules.append(nn.Dropout(do))
+        self.encode = nn.Sequential(*modules)
+        self.to_gaussian = LinearLayer(self.h_dims_lin[-1], 2 * self.z_dim, batch_norm=False)
+        self.to_categorical = LinearLayer(self.h_dims_lin[-1], self.num_classes, batch_norm=False)
+
+    def forward(self, x):
+        x = self.conv(x).view(-1, self.w_dim * self.h_dims_conv[-1])
+        x = self.encode(x)
+        return self.to_gaussian(x), self.to_categorical(x)
+
+
 class BasePointEncoder(nn.Module, metaclass=abc.ABCMeta):
     def __init__(self) -> None:
         super().__init__()
-        cfg = ExperimentAE.get_config()
-        self.k = cfg.autoencoder.encoder.k
-        self.h_dim = cfg.autoencoder.encoder.hidden_dims
-        self.w_dim = cfg.autoencoder.w_dim
-        self.act_cls = cfg.autoencoder.encoder.act_cls
+        cfg = MainExperiment.get_config()
+        cfg_ae = cfg.autoencoder
+        self.k = cfg_ae.model.encoder.k
+        self.h_dim = cfg_ae.model.encoder.hidden_dims
+        self.w_dim = cfg_ae.model.w_dim
+        self.act_cls = cfg_ae.model.encoder.act_cls
 
     @abc.abstractmethod
     def forward(self, x: torch.Tensor, indices: torch.Tensor) -> torch.Tensor:
@@ -134,11 +164,11 @@ def get_encoder() -> BasePointEncoder:
         Encoders.LDGCNN: LDGCNN,
         Encoders.DGCNN: DGCNN,
     }
-    return dict_encoder[ExperimentAE.get_config().autoencoder.encoder.architecture]()
+    return dict_encoder[ExperimentAE.get_config().model.encoder.architecture]()
 
 
 def get_w_encoder() -> BaseWEncoder:
     decoder_dict: dict[WEncoders, Type[BaseWEncoder]] = {
-        WEncoders.Convolution: WEncoderConvolution,
+        WEncoders.Convolution: ConditionalWEncoderConvolution,
     }
-    return decoder_dict[ExperimentAE.get_config().autoencoder.encoder.w_encoder.architecture]()
+    return decoder_dict[ExperimentAE.get_config().model.encoder.w_encoder.architecture]()

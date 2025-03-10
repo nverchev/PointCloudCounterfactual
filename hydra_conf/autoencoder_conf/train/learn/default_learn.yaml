@@ -1,6 +1,0 @@
-defaults:
-    - scheduler: cosine
-optimizer_name: Adam
-learning_rate: 0.002
-settings:
-    weight_decay: 0.
