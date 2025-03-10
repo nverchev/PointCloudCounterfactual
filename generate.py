@@ -24,7 +24,7 @@ def generate_random_samples():
         z_bias[:, i] = cfg_generate.bias_value
 
         data = Outputs()
-        data.z = z_bias
+        data.z1 = z_bias
         with torch.inference_mode():
             with module.double_encoding:
                 clouds = module.decode(data).recon

@@ -34,7 +34,7 @@ def evaluate_counterfactuals(vqvae: VQVAE) -> None:
         labels = torch.cat([data[1].label for data in test_original.loader])
 
     print('label distribution:', {'count_' + str(i): (labels == i).sum().item() for i in range(num_classes)})
-    reconstructed_dataset = ReconstructedDataset(dataset=test_dataset, autoencoder=vqvae)
+    reconstructed_dataset = ReconstructedDataset(dataset=test_dataset, autoencoder=vqvae, classifier=classifier)
     reconstructed_loader = DataLoader(dataset=reconstructed_dataset,
                                       batch_size=batch_size,
                                       pin_memory=False)
@@ -48,6 +48,7 @@ def evaluate_counterfactuals(vqvae: VQVAE) -> None:
     for j in range(num_classes):
         counterfactual_dataset = CounterfactualDataset(test_dataset,
                                                        vqvae,
+                                                       classifier=classifier,
                                                        num_classes=dgcnn.num_classes,
                                                        target_label=j,
                                                        target_value=cfg.user.counterfactual_value)
@@ -72,7 +73,9 @@ def evaluate_counterfactuals(vqvae: VQVAE) -> None:
     misclassified_bool = predictions != labels
     misclassified_dataset = Subset(test_dataset, indices=list(misclassified_bool.nonzero()))
 
-    misclassified_reconstruction = ReconstructedDataset(dataset=misclassified_dataset, autoencoder=vqvae)
+    misclassified_reconstruction = ReconstructedDataset(dataset=misclassified_dataset,
+                                                        autoencoder=vqvae,
+                                                        classifier=classifier)
     misclassified_reconstruction_loader = DataLoader(misclassified_reconstruction,
                                                      batch_size=batch_size,
                                                      pin_memory=False)
@@ -94,6 +97,7 @@ def evaluate_counterfactuals(vqvae: VQVAE) -> None:
                     i_instead_of_j_dataset = Subset(test_dataset, indices=counterfactual_indices)
                     counterfactual_dataset = CounterfactualDataset(i_instead_of_j_dataset,
                                                                    vqvae,
+                                                                   classifier=classifier,
                                                                    num_classes=dgcnn.num_classes,
                                                                    target_label='original',
                                                                    target_value=cfg.user.counterfactual_value)

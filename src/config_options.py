@@ -166,6 +166,7 @@ class WEncoderConfig:
     act_name: str = ''
     """name of the Pytorch activation (see https://pytorch.org/docs/stable/nn.html)"""
     gumbel: bool = True
+
     # TODO: add doc
 
     def __post_init__(self):
@@ -225,6 +226,28 @@ class WDecoderConfig:
 
 
 @dataclass
+class PriorDecoderConfig:
+    """Configuration for the decoder for the prior of the latent space."""
+
+    hidden_dims: list[StrictlyPositiveInt]
+    """hidden dimensions"""
+    dropout: list[PositiveFloat]
+    """dropout probability"""
+    act_name: str = ''
+    """name of the Pytorch activation (see https://pytorch.org/docs/stable/nn.html)"""
+
+    def __post_init__(self):
+        self.act_cls = _get_activation_cls(self.act_name) if self.act_name else ACT
+
+    @model_validator(mode='after')
+    def _check_length_dropout(self) -> Self:
+        if len(self.hidden_dims) > len(self.dropout):
+            msg = 'Number of hidden dimensions {} and dropouts {} not compatible.'
+            raise ValueError(msg.format(len(self.hidden_dims), len(self.dropout)))
+        return self
+
+
+@dataclass
 class DecoderConfig:
     """Configuration for the decoder."""
 
@@ -240,6 +263,8 @@ class DecoderConfig:
     """hidden channels for each component"""
     w_decoder: WDecoderConfig
     """config for the word decoder"""
+    prior_decoder: PriorDecoderConfig
+    """config for the prior decoder"""
     tau: PositiveFloat
     """coefficient for Gumbel Softmax activation"""
     filtering: bool

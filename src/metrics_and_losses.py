@@ -96,17 +96,20 @@ def gaussian_kld(mu: torch.Tensor, log_var: torch.Tensor) -> torch.Tensor:
     return 0.5 * (-1 - log_var + log_var.exp() + (mu ** 2))
 
 
-def get_kld_loss() -> LossBase[Outputs, W_Targets]:
+def differntial_gaussian_kld(d_mu: torch.Tensor, d_log_var: torch.Tensor, p_log_var: torch.Tensor) -> torch.Tensor:
+    return 0.5 * (-1 - d_log_var + d_log_var.exp() + (d_mu ** 2) / p_log_var.exp())
 
+
+def get_kld_loss() -> LossBase[Outputs, W_Targets]:
     cfg_w_ae = ExperimentWAE.get_config()
 
     def _kld_vamp(data: Outputs, targets: W_Targets) -> torch.Tensor:
         num_classes = targets.logits.shape[1]
-        z_kld = data.z[:, num_classes:]
-        mu_kld = data.mu[:, num_classes:]
-        log_var_kld = data.log_var[:, num_classes:]
-        pseudo_mu = data.pseudo_mu[:, num_classes:]
-        pseudo_log_var = data.pseudo_log_var[:, num_classes:]
+        z_kld = data.z1[:, num_classes:]
+        mu_kld = data.mu1[:, num_classes:]
+        log_var_kld = data.log_var1[:, num_classes:]
+        pseudo_mu = data.pseudo_mu1[:, num_classes:]
+        pseudo_log_var = data.pseudo_log_var1[:, num_classes:]
 
         posterior_ll = gaussian_ll(z_kld, mu_kld, log_var_kld).sum(1)  # sum dimensions
         k = pseudo_mu.shape[0]
@@ -119,7 +122,9 @@ def get_kld_loss() -> LossBase[Outputs, W_Targets]:
         return total
 
     def _kld(data: Outputs, _: W_Targets) -> torch.Tensor:
-        return gaussian_kld(mu=data.mu, log_var=data.log_var).sum(1)
+        kld1 = differntial_gaussian_kld(d_mu=data.d_mu1, d_log_var=data.d_log_var1, p_log_var=data.p_log_var1).sum(1)
+        kld2 = gaussian_kld(mu=data.mu2, log_var=data.log_var2).sum(1)
+        return kld1 + kld2
 
     return Loss(_kld_vamp if cfg_w_ae.objective.vamp else _kld, name='KLD')
 
@@ -127,7 +132,6 @@ def get_kld_loss() -> LossBase[Outputs, W_Targets]:
 def get_counterfactual_loss() -> LossBase[Outputs, W_Targets]:
     log_softmax = nn.LogSoftmax(dim=1)
     kld = nn.KLDivLoss(reduction='none', log_target=True)
-
 
     def _counterfactual(data: Outputs, targets: W_Targets) -> torch.Tensor:
         mu_counterfactual = torch.log(data.y)
@@ -198,8 +202,8 @@ def get_classification_loss() -> LossBase[torch.Tensor, Targets]:
 def get_w_encoder_loss() -> LossBase[Outputs, W_Targets]:
     c_kld = ExperimentWAE.get_config().objective.c_kld
     c_counterfactual = ExperimentWAE.get_config().objective.c_counterfactual
-    return get_nll_loss() + c_kld * get_kld_loss() + c_counterfactual * get_counterfactual_loss() | get_w_accuracy()
-
+    return get_nll_loss() + c_kld * get_kld_loss() | get_w_accuracy()
+# + c_counterfactual * get_counterfactual_loss()
 
 def get_autoencoder_loss() -> LossBase[Outputs, Targets]:
     cfg = ExperimentAE.get_config()

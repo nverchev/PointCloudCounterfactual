@@ -5,11 +5,10 @@ from typing import Optional, Type
 import numpy as np
 import torch
 import torch.nn as nn
-from sympy.physics.units import temperature
 
 from src.data_structures import Inputs, Outputs, W_Inputs
 from src.encoders import get_encoder, get_w_encoder, WEncoderConvolution, BaseWEncoder
-from src.decoders import get_decoder, get_w_decoder
+from src.decoders import PriorDecoder, get_decoder, get_w_decoder
 from src.neighbour_ops import pykeops_square_distance
 from src.layers import TransferGrad
 from src.utils import UsuallyFalse
@@ -67,11 +66,11 @@ class WAutoEncoder(nn.Module):
         if self.n_pseudo_input:
             data.pseudo_mu, data.pseudo_log_var = x[-self.n_pseudo_input:].chunk(2, 1)
 
-        data.z = self.gaussian_sample(data.mu, data.log_var)
+        data.z1 = self.gaussian_sample(data.mu, data.log_var)
         return data
 
     def decode(self, data: Outputs) -> Outputs:
-        data.w_recon = self.decoder(data.z)
+        data.w_recon = self.decoder(data.z1)
         data.w_dist, data.idx = self.dist(data.w_recon)
         return data
 
@@ -101,6 +100,8 @@ class CounterfactualWAutoEncoder(WAutoEncoder):
         self.gumbel_softmax = functools.partial(nn.functional.gumbel_softmax, tau=self.temperature, hard=False)
         self.relaxed_softmax = lambda x: self.softmax(x / self.temperature)
         self.encoder = get_w_encoder()
+        self.device = cfg.user.device
+        self.prior = PriorDecoder()
 
     def encode(self, opt_x: torch.Tensor | None) -> Outputs:
         if opt_x is None:
@@ -109,18 +110,27 @@ class CounterfactualWAutoEncoder(WAutoEncoder):
             x = opt_x.view(-1, self.dim_codes, self.embedding_dim).transpose(2, 1)
             x = torch.cat((x, self.pseudo_inputs), dim=0)
         data = Outputs()
-        encoded, prediction = self.encoder(x)
-        data.y = self.softmax(prediction[:-self.n_pseudo_input or None])
-        data.mu, data.log_var = encoded[:-self.n_pseudo_input or None].chunk(2, 1)
+        encoded = self.encoder(x)
+        data.d_mu1, data.d_log_var1, data.mu2, data.log_var2 = encoded[:-self.n_pseudo_input or None].chunk(4, 1)
+        # if self.n_pseudo_input:
+        #     data.pseudo_mu, data.pseudo_log_var = inferenced[-self.n_pseudo_input:].chunk(4, 1)
         return data
 
     def decode(self, data: Outputs, logits: Optional[torch.Tensor] = None) -> Outputs:
         if logits is not None:
-            data.z_c = self.gumbel_softmax(logits) if self.gumbel and self.training else self.relaxed_softmax(logits)
-        if self.n_pseudo_input:
-            data.pseudo_mu, data.pseudo_log_var = data.h[-self.n_pseudo_input:].chunk(2, 1)
-        data.z = self.gaussian_sample(data.mu, data.log_var)
-        data.w_recon = self.decoder(torch.cat((data.z, data.z_c), dim=1))
+            probs = self.relaxed_softmax(logits) if self.training or not self.gumbel else self.gumbel_softmax(logits)
+        else:
+            try:
+                probs = data.probs
+            except AttributeError:
+                probs = torch.ones(data.d_mu1.shape[0], self.num_classes, device=data.d_mu1.device)
+
+        data.p_mu1, data.p_log_var1 = self.prior(probs).chunk(2, 1)
+        # if self.n_pseudo_input:
+        #     data.pseudo_mu, data.pseudo_log_var = data.h[-self.n_pseudo_input:].chunk(2, 1)
+        data.z1 = self.gaussian_sample(data.d_mu1 + data.p_mu1, data.d_log_var1 + data.p_log_var1)
+        data.z2 = self.gaussian_sample(data.mu2, data.log_var2)
+        data.w_recon = self.decoder(torch.cat((data.z1, data.z2), dim=1))
         data.w_dist, data.idx = self.dist(data.w_recon)
         return data
 
@@ -265,7 +275,7 @@ class VQVAE(AE):
             pseudo_z_list.append(self.w_autoencoder.gaussian_sample(pseudo_mu[i], pseudo_log_var[i]))
         pseudo_z = torch.stack(pseudo_z_list).contiguous()
         data = Outputs()
-        data.z = pseudo_z + z_bias
+        data.z1 = pseudo_z + z_bias
         with self.double_encoding:
             out = self.decode(data, initial_sampling, viz_att, viz_components)
         return out

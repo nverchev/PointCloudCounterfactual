@@ -31,16 +31,19 @@ class Outputs:
     w_dist: torch.Tensor
     idx: torch.Tensor
     one_hot_idx: torch.Tensor
-    mu: torch.Tensor
-    log_var: torch.Tensor
-    p_mu: torch.Tensor
-    p_log_var: torch.Tensor
-    pseudo_mu: torch.Tensor
-    pseudo_log_var: torch.Tensor
-    z: torch.Tensor
-    h: torch.Tensor
-    y: torch.Tensor
-    z_c: torch.Tensor
+    d_mu1: torch.Tensor
+    d_log_var1: torch.Tensor
+    p_mu1: torch.Tensor
+    p_log_var1: torch.Tensor
+    pseudo_d_mu1: torch.Tensor
+    pseudo_d_log_var1: torch.Tensor
+    mu2: torch.Tensor
+    log_var2: torch.Tensor
+    pseudo_mu2: torch.Tensor
+    pseudo_log_var2: torch.Tensor
+    z1: torch.Tensor
+    z2: torch.Tensor
+    probs: torch.Tensor
 
     def update(self, other: Self) -> None:
         for attribute in other.__slots__:

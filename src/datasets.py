@@ -346,9 +346,9 @@ class WDatasetWithProbs(Dataset[tuple[W_Inputs, W_Targets]]):
         return list(zip(data.w_q, one_hot_idx))
 
     @torch.inference_mode()
-    def _run_classifier(self, batched_cloud: Inputs) -> list[torch.Tensor]:
-        probs = self.classifier(batched_cloud)
-        return list(probs)
+    def _run_classifier(self, batched_cloud: Inputs) -> torch.Tensor:
+        logits = self.classifier(batched_cloud)
+        return logits
 
     def __len__(self) -> int:
         return self.dataset_len
@@ -359,6 +359,8 @@ class ReconstructedDataset(Dataset[tuple[Inputs, Targets]]):
             self,
             dataset: Dataset[tuple[Inputs, Targets]],
             autoencoder: VQVAE,
+            classifier: Model[Inputs, torch.Tensor]
+
     ) -> None:
         self.dataset = dataset
         if hasattr(dataset, '__len__'):
@@ -367,25 +369,35 @@ class ReconstructedDataset(Dataset[tuple[Inputs, Targets]]):
             raise ValueError('Dataset does not have ``__len__`` method')
         self.autoencoder = autoencoder.eval()
         self.device: torch.device = next(autoencoder.parameters()).device
+        self.classifier = classifier
+        self.classifier.module = classifier.module.eval()
 
     def __getitems__(self, index_list: list[int]) -> list[tuple[Inputs, Targets]]:
         dataset_batch = [self.dataset[i] for i in index_list]
         batched_cloud = torch.stack([data[0].cloud for data in dataset_batch]).to(self.device)
         batched_indices = torch.cat([data[0].indices for data in dataset_batch]).to(self.device)
         batched_labels = torch.cat([data[1].label.unsqueeze(0) for data in dataset_batch]).to(self.device)
+        batched_inputs = Inputs(cloud=batched_cloud, indices=batched_indices)
+        batched_logits = self._run_classifier(batched_inputs)
         new_labels = self._modify_labels(batched_labels)
-        recons = self._run_autoencoder(batched_cloud, batched_indices, new_labels).recon
+        recons = self._run_autoencoder(batched_cloud, batched_indices, batched_logits, new_labels).recon
         batch = list[tuple[Inputs, Targets]]()
         for recon, label in zip(recons, new_labels):
             batch.append((Inputs(cloud=recon), Targets(ref_cloud=recon, label=label)))
         return batch
 
     @torch.inference_mode()
+    def _run_classifier(self, batched_cloud: Inputs) -> torch.Tensor:
+        logits = self.classifier(batched_cloud)
+        return logits
+
+    @torch.inference_mode()
     def _run_autoencoder(self,
                          batched_cloud: torch.Tensor,
                          batched_indices: torch.Tensor,
+                         batched_logits: torch.Tensor,
                          labels: torch.Tensor) -> Outputs:
-        _unused = labels
+        _unused = (labels, batched_logits)
         with self.autoencoder.double_encoding:
             data = self.autoencoder.encode(batched_cloud, batched_indices)
             return self.autoencoder.decode(data)
@@ -402,11 +414,12 @@ class CounterfactualDataset(ReconstructedDataset):
             self,
             dataset: Dataset[tuple[Inputs, Targets]],
             autoencoder: VQVAE,
+            classifier: Model[Inputs, torch.Tensor],
             target_label: Literal['original'] | int = 'original',
             target_value: float = 1.,
             num_classes: int = 2,
     ) -> None:
-        super().__init__(dataset, autoencoder)
+        super().__init__(dataset, autoencoder, classifier=classifier)
         self.num_classes = num_classes
         self.target_label = target_label
         self.target_value = target_value
@@ -416,13 +429,15 @@ class CounterfactualDataset(ReconstructedDataset):
     def _run_autoencoder(self,
                          batched_cloud: torch.Tensor,
                          batched_indices: torch.Tensor,
+                         batched_logits: torch.Tensor,
                          target_dim: torch.Tensor) -> Outputs:
 
         with self.autoencoder.double_encoding:
             data = self.autoencoder.encode(batched_cloud, batched_indices)
-            target = torch.zeros_like(data.z_c)
+            probs = torch.nn.functional.softmax(batched_logits, dim=1) / self.autoencoder.w_autoencoder.temperature
+            target = torch.zeros_like(probs)
             target[:, target_dim] = 1
-            data.z_c = (1 - self.target_value) * data.z_c + self.target_value * target
+            data.probs = (1 - self.target_value) * probs + self.target_value * target
             return self.autoencoder.decode(data)
 
     @override

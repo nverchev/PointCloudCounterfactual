@@ -61,32 +61,6 @@ class WEncoderConvolution(BaseWEncoder):
         return x
 
 
-class ConditionalWEncoderConvolution(BaseWEncoder):
-
-    def __init__(self) -> None:
-        super().__init__()
-        modules: list[nn.Module] = []
-        total_h_dims = [h_dim * self.embedding_dim for h_dim in self.h_dims_conv]
-        in_dims = [self.embedding_dim] + total_h_dims
-        out_dims = total_h_dims
-        for in_dim, out_dim in zip(in_dims, out_dims):
-            modules.append(PointsConvLayer(in_dim, out_dim))
-        self.conv = nn.Sequential(*modules)
-        modules = []
-        in_dims = [self.w_dim * self.h_dims_conv[-1]] + self.h_dims_lin
-        out_dims = self.h_dims_lin
-        for in_dim, out_dim, do in zip(in_dims, out_dims, self.dropout):
-            modules.append(LinearLayer(in_dim, out_dim, act_cls=self.act_cls))
-            modules.append(nn.Dropout(do))
-        self.encode = nn.Sequential(*modules)
-        self.to_gaussian = LinearLayer(self.h_dims_lin[-1], 2 * self.z_dim, batch_norm=False)
-        self.to_categorical = LinearLayer(self.h_dims_lin[-1], self.num_classes, batch_norm=False)
-
-    def forward(self, x):
-        x = self.conv(x).view(-1, self.w_dim * self.h_dims_conv[-1])
-        x = self.encode(x)
-        return self.to_gaussian(x), self.to_categorical(x)
-
 
 class BasePointEncoder(nn.Module, metaclass=abc.ABCMeta):
     def __init__(self) -> None:
@@ -169,6 +143,6 @@ def get_encoder() -> BasePointEncoder:
 
 def get_w_encoder() -> BaseWEncoder:
     decoder_dict: dict[WEncoders, Type[BaseWEncoder]] = {
-        WEncoders.Convolution: ConditionalWEncoderConvolution,
+        WEncoders.Convolution: WEncoderConvolution,
     }
     return decoder_dict[ExperimentAE.get_config().model.encoder.w_encoder.architecture]()

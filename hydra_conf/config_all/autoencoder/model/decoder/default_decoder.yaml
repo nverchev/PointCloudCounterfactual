@@ -1,5 +1,6 @@
 defaults:
   - w_decoder: default_w_decoder
+  - prior_decoder: default_prior_decoder
   - _self_
 
 architecture: PCGen

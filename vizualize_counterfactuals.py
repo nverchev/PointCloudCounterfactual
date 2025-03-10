@@ -34,37 +34,45 @@ def visualize_counterfactuals(classifier) -> None:
         input_pc = input_pc.to(model.device)
         indices = indices.to(model.device)
         with torch.inference_mode():
-            probs = torch.softmax(classifier(Inputs(cloud=input_pc.unsqueeze(0), indices=indices)), dim=1).cpu().numpy()
+            logits = classifier(Inputs(cloud=input_pc.unsqueeze(0), indices=indices))
+        np_probs = torch.softmax(logits, dim=1).cpu().numpy()
+        relaxed_probs = torch.softmax(logits / cfg.autoencoder.model.encoder.w_encoder.cf_temperature, dim=1)
         print(f'Sample {i}: (', end='')
-        for prob in probs[0]:
+        for prob in np_probs[0]:
             print(f'{prob:.2f}', end=' ')
         print(')')
 
         with model.module.double_encoding:
             data = module.encode(input_pc.unsqueeze(0), indices=indices)
-            z_c = torch.softmax(classifier(Inputs(cloud=input_pc.unsqueeze(0), indices=indices)) / 5, dim=1)
+            data.probs = relaxed_probs
+            data = module.decode(data)
 
-        # with torch.inference_mode():
-        #     probs = torch.softmax(classifier(Inputs(cloud=data.recon)), dim=1).cpu().numpy()
-        # print(f'Reconstruction {i}: (', end='')
-        # for prob in probs[0]:
-        #     print(f'{prob:.2f}', end=' ')
-        # print(')')
+        with torch.inference_mode():
+            logits = classifier(Inputs(cloud=data.recon))
+        np_recon = data.recon.detach().squeeze().cpu().numpy()
+        render_cloud((np_recon,),
+                     title=f'reconstruction_{i}',
+                     interactive=cfg_user.plot.interactive)
+        recon_probs = torch.softmax(logits, dim=1).cpu().numpy()
+        print(f'Reconstruction {i}: (', end='')
+        for prob in recon_probs[0]:
+            print(f'{prob:.2f}', end=' ')
+        print(')')
 
         np_recons = list[npt.NDArray]()
         for j in range(num_classes):
             with model.module.double_encoding:
-                target = torch.zeros_like(z_c)
+                target = torch.zeros_like(relaxed_probs)
                 target[:, j] = 1
-                data.z_c = (1 - value) * z_c + value * target
+                data.probs = (1 - value) * relaxed_probs + value * target
                 data = module.decode(data)
                 np_recon = data.recon.detach().squeeze().cpu().numpy()
-                render_cloud((np_recon, ),
+                render_cloud((np_recon,),
                              title=f'counterfactual_{i}_to_{j}',
                              interactive=cfg_user.plot.interactive)
                 np_recons.append(np_recon)
                 with torch.inference_mode():
-                    probs = torch.softmax(classifier(Inputs(cloud=data.recon)),  dim=1).cpu().numpy()
+                    probs = torch.softmax(classifier(Inputs(cloud=data.recon)), dim=1).cpu().numpy()
                 print(f'Counterfactual {i} to {j}: (', end='')
                 for prob in probs[0]:
                     print(f'{prob:.2f}', end=' ')

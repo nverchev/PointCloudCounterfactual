@@ -11,6 +11,31 @@ from src.config_options import ExperimentAE, Decoders, WDecoders, MainExperiment
 from src.data_structures import OUT_CHAN
 
 
+class PriorDecoder(nn.Module):
+
+    def __init__(self) -> None:
+        super().__init__()
+        cfg = MainExperiment.get_config()
+        cfg_model = cfg.autoencoder.model
+        cfg_prior = cfg_model.decoder.prior_decoder
+        self.num_classes = cfg.data.dataset.n_classes
+        self.z_dim = cfg_model.z_dim
+        self.h_dims = cfg_prior.hidden_dims
+        self.dropout = cfg_prior.dropout
+        self.act_cls = cfg_prior.act_cls
+        modules: list[nn.Module] = []
+        in_dims = [self.num_classes] + self.h_dims
+        out_dims = self.h_dims
+        for in_dim, out_dim, do in zip(in_dims, out_dims, self.dropout):
+            modules.append(LinearLayer(in_dim, out_dim, act_cls=self.act_cls))
+            # modules.append(nn.Dropout(do))
+        modules.append(LinearLayer(self.h_dims[-1], self.z_dim, batch_norm=False))
+        self.prior = nn.Sequential(*modules)
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        return self.prior(x)
+
+
 class BaseWDecoder(nn.Module, metaclass=abc.ABCMeta):
     def __init__(self) -> None:
         super().__init__()
@@ -40,7 +65,7 @@ class WDecoderLinear(BaseWDecoder):
         super().__init__()
         modules: list[nn.Module] = []
         self.dropout = [0.] + self.dropout
-        in_dims = [self.z_dim + self.num_classes] + self.h_dims
+        in_dims = [self.z_dim] + self.h_dims
         out_dims = self.h_dims + [self.w_dim * self.expand]
         for in_dim, out_dim, do in zip(in_dims, out_dims, self.dropout):
             modules.append(LinearLayer(in_dim, out_dim, act_cls=self.act_cls))
@@ -64,7 +89,7 @@ class WDecoderConvolution(BaseWDecoder):
         super().__init__()
         modules: list[nn.Module] = []
         total_h_dims = [h_dim * self.num_codes for h_dim in self.h_dims]
-        in_dims = [(self.z_dim + self.num_classes) * self.num_codes] + total_h_dims
+        in_dims = [self.z_dim * self.num_codes] + total_h_dims
         out_dims = total_h_dims
         for in_dim, out_dim, do in zip(in_dims, out_dims, self.dropout):
             modules.append(PointsConvLayer(in_dim, out_dim, groups=self.num_codes, act_cls=self.act_cls))
