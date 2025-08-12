@@ -1,29 +1,39 @@
+"""Train the outer encoder to learn a discrete representation."""
+
+import sys
 from typing import Optional
 
 import optuna
-from dry_torch import DataLoader, Diagnostic, Model, Test, Trainer
-from dry_torch.hooks import EarlyStoppingCallback, StaticHook, call_every, saving_hook, mean_aggregation
-from dry_torch.trackers.hydra_link import HydraLink
+import wandb
+
+from drytorch import DataLoader, Diagnostic, Model, Test, Trainer
+from drytorch.contrib.optuna import TrialCallback
+from drytorch.hooks import EarlyStoppingCallback, Hook, StaticHook, call_every, saving_hook
+from drytorch.trackers.csv import CSVDumper
+from drytorch.trackers.hydra import HydraLink
+from drytorch.trackers.wandb import Wandb
+from drytorch.utils.statistics import get_trailing_mean
 
 from src.metrics_and_losses import get_autoencoder_loss, get_recon_loss, get_emd_loss
-from src.config_options import ExperimentAE, MainExperiment, ConfigAll
+from src.config_options import Experiment, ConfigAll
 from src.config_options import hydra_main
 from src.datasets import get_dataset, Partitions
-from src.hooks import DiscreteSpaceOptimizer, TrialCallback
+from src.hooks import DiscreteSpaceOptimizer, WandbLogReconstruction
 from src.learning_scheme import get_learning_scheme
 from src.autoencoder import get_module, VQVAE
 
 
 def train_autoencoder(trial: Optional[optuna.Trial] = None) -> None:
-    cfg = MainExperiment.get_config()
+    """Set up the experiment and launch the autoencoder training."""
+    cfg = Experiment.get_config()
     cfg_ae = cfg.autoencoder
     cfg_user = cfg.user
     module = get_module()
     model = Model(module, name=cfg_ae.model.name, device=cfg_user.device)
-
     train_dataset = get_dataset(Partitions.train_val if cfg.final else Partitions.train)
     test_dataset = get_dataset(Partitions.test if cfg.final else Partitions.val)
-    learning_scheme = get_learning_scheme()
+    with cfg.focus(cfg.autoencoder):
+        learning_scheme = get_learning_scheme()
     loss = get_autoencoder_loss()
     trainer = Trainer(model,
                       loader=DataLoader(dataset=train_dataset, batch_size=cfg_ae.train.batch_size),
@@ -31,7 +41,8 @@ def train_autoencoder(trial: Optional[optuna.Trial] = None) -> None:
                       learning_scheme=learning_scheme)
     diagnostic = Diagnostic(model,
                             loader=DataLoader(dataset=train_dataset, batch_size=cfg_ae.train.batch_size),
-                            metric=loss)
+                            objective=loss
+                            )
 
     test_all_metrics = Test(model,
                             loader=DataLoader(dataset=test_dataset, batch_size=cfg_ae.train.batch_size),
@@ -48,9 +59,10 @@ def train_autoencoder(trial: Optional[optuna.Trial] = None) -> None:
         trainer.add_validation(DataLoader(dataset=val_dataset, batch_size=cfg_ae.train.batch_size))
 
     cfg_early = cfg_ae.train.early_stopping
+    # trainer.post_epoch_hooks.register(Hook(WandbLogReconstruction(train_dataset)))
     if not cfg.final and cfg_early.active:
         trainer.post_epoch_hooks.register(EarlyStoppingCallback(metric=get_recon_loss(),
-                                                                aggregate_fn=mean_aggregation(cfg_early.window),
+                                                                filter_fn=get_trailing_mean(cfg_early.window),
                                                                 patience=cfg_early.patience))
 
     if trial is None:
@@ -59,24 +71,24 @@ def train_autoencoder(trial: Optional[optuna.Trial] = None) -> None:
     else:
         prune_hook = TrialCallback(trial,
                                    metric=get_recon_loss(),
-                                   aggregate_fn=mean_aggregation(window=cfg_early.window))
+                                   filter_fn=get_trailing_mean(cfg_early.window))
 
         trainer.post_epoch_hooks.register(prune_hook)
 
     trainer.train_until(cfg_ae.train.epochs)
-    DiscreteSpaceOptimizer(diagnostic)()
-    trainer.save_checkpoint()
     test_all_metrics()
     return
 
 
 @hydra_main
 def main(cfg: ConfigAll) -> None:
-    exp = ExperimentAE(cfg.autoencoder.name, config=cfg.autoencoder)
-    exp.trackers.register(HydraLink())
-    parent = MainExperiment(cfg.name, cfg.user.path.exp_par_dir, cfg)
-    parent.register_child(exp)
-    with exp:
+    """Set up experiment and start training cycle."""
+    exp = Experiment(cfg, name=cfg.name, par_dir=cfg.user.path.exp_par_dir, tags=cfg.tags)
+    if not sys.gettrace():
+        exp.trackers.register(Wandb(settings=wandb.Settings(project='PointCloudCounterfactuals')))
+        exp.trackers.register(HydraLink())
+        exp.trackers.register(CSVDumper())
+    with exp.create_run(resume_last=True):
         train_autoencoder()
     return
 
