@@ -12,3 +12,4 @@
 */tensorboard_runs/
 */wandb
 */metrics.db
+.idea
