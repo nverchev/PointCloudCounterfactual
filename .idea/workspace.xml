@@ -4,58 +4,7 @@
     <option name="autoReloadType" value="SELECTIVE" />
   </component>
   <component name="ChangeListManager">
-    <list default="true" id="6b72b0f5-84a5-426b-8466-61536130daaf" name="Changes" comment="Compatible with the latest version of drytorch.">
-      <change afterPath="$PROJECT_DIR$/.idea/MypyPlugin.xml" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/.idea/codeStyles/Project.xml" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/.idea/csv-editor.xml" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/.idea/dbnavigator.xml" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/create_variation.py" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/optimization_db/autoencoder_optimization.db" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/optimization_db/best_params.sql" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/optimization_db/w_autoencoder_optimization.db" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/run.sh" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/.gitignore" beforeDir="false" afterPath="$PROJECT_DIR$/.gitignore" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/.idea/PointCloudCounterfactual.iml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/PointCloudCounterfactual.iml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/.idea/misc.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/misc.xml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/evaluate_counterfactuals.py" beforeDir="false" afterPath="$PROJECT_DIR$/evaluate_counterfactuals.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/explore_dataset.py" beforeDir="false" afterPath="$PROJECT_DIR$/explore_dataset.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/generate.py" beforeDir="false" afterPath="$PROJECT_DIR$/generate.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/hydra_conf/config_all/autoencoder/model/default_model.yaml" beforeDir="false" afterPath="$PROJECT_DIR$/hydra_conf/config_all/autoencoder/model/default_model.yaml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/hydra_conf/config_all/autoencoder/train/learn/default_learn.yaml" beforeDir="false" afterPath="$PROJECT_DIR$/hydra_conf/config_all/autoencoder/train/learn/default_learn.yaml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/hydra_conf/config_all/autoencoder/train/learn/scheduler/cosine.yaml" beforeDir="false" afterPath="$PROJECT_DIR$/hydra_conf/config_all/autoencoder/train/learn/scheduler/cosine.yaml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/hydra_conf/config_all/classifier/train/learn/default_learn.yaml" beforeDir="false" afterPath="$PROJECT_DIR$/hydra_conf/config_all/classifier/train/learn/default_learn.yaml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/hydra_conf/config_all/classifier/train/learn/scheduler/cosine.yaml" beforeDir="false" afterPath="$PROJECT_DIR$/hydra_conf/config_all/classifier/train/learn/scheduler/cosine.yaml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/hydra_conf/config_all/defaults.yaml" beforeDir="false" afterPath="$PROJECT_DIR$/hydra_conf/config_all/defaults.yaml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/hydra_conf/config_all/user/user_settings.yaml" beforeDir="false" afterPath="$PROJECT_DIR$/hydra_conf/config_all/user/user_settings.yaml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/hydra_conf/config_all/w_autoencoder/train/default_train.yaml" beforeDir="false" afterPath="$PROJECT_DIR$/hydra_conf/config_all/w_autoencoder/train/default_train.yaml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/hydra_conf/config_all/w_autoencoder/train/learn/default_learn.yaml" beforeDir="false" afterPath="$PROJECT_DIR$/hydra_conf/config_all/w_autoencoder/train/learn/default_learn.yaml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/hydra_conf/config_all/w_autoencoder/train/learn/scheduler/cosine.yaml" beforeDir="false" afterPath="$PROJECT_DIR$/hydra_conf/config_all/w_autoencoder/train/learn/scheduler/cosine.yaml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/hydra_conf/tune_autoencoder/tune/encoder_architecture.yaml" beforeDir="false" afterPath="$PROJECT_DIR$/hydra_conf/tune_autoencoder/tune/encoder_architecture.yaml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/readme.md" beforeDir="false" afterPath="$PROJECT_DIR$/readme.md" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/requirements.txt" beforeDir="false" afterPath="$PROJECT_DIR$/requirements.txt" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/autoencoder.py" beforeDir="false" afterPath="$PROJECT_DIR$/src/autoencoder.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/classifier.py" beforeDir="false" afterPath="$PROJECT_DIR$/src/classifier.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/config_options.py" beforeDir="false" afterPath="$PROJECT_DIR$/src/config_options.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/data_structures.py" beforeDir="false" afterPath="$PROJECT_DIR$/src/data_structures.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/datasets.py" beforeDir="false" afterPath="$PROJECT_DIR$/src/datasets.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/decoders.py" beforeDir="false" afterPath="$PROJECT_DIR$/src/decoders.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/encoders.py" beforeDir="false" afterPath="$PROJECT_DIR$/src/encoders.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/hooks.py" beforeDir="false" afterPath="$PROJECT_DIR$/src/hooks.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/layers.py" beforeDir="false" afterPath="$PROJECT_DIR$/src/layers.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/learning_scheme.py" beforeDir="false" afterPath="$PROJECT_DIR$/src/learning_scheme.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/metrics_and_losses.py" beforeDir="false" afterPath="$PROJECT_DIR$/src/metrics_and_losses.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/neighbour_ops.py" beforeDir="false" afterPath="$PROJECT_DIR$/src/neighbour_ops.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/utils.py" beforeDir="false" afterPath="$PROJECT_DIR$/src/utils.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/visualisation.py" beforeDir="false" afterPath="$PROJECT_DIR$/src/visualisation.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/train_autoencoder.py" beforeDir="false" afterPath="$PROJECT_DIR$/train_autoencoder.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/train_classifier.py" beforeDir="false" afterPath="$PROJECT_DIR$/train_classifier.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/train_w_autoencoder.py" beforeDir="false" afterPath="$PROJECT_DIR$/train_w_autoencoder.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/tune_autoencoder.py" beforeDir="false" afterPath="$PROJECT_DIR$/tune_autoencoder.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/tune_w_autoencoder.py" beforeDir="false" afterPath="$PROJECT_DIR$/tune_w_autoencoder.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/visualize_reconstructions.py" beforeDir="false" afterPath="$PROJECT_DIR$/visualize_reconstructions.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/vizualize_counterfactuals.py" beforeDir="false" afterPath="$PROJECT_DIR$/vizualize_counterfactuals.py" afterDir="false" />
-    </list>
+    <list default="true" id="6b72b0f5-84a5-426b-8466-61536130daaf" name="Changes" comment="prepare rebase" />
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
     <option name="HIGHLIGHT_NON_ACTIVE_CHANGELIST" value="false" />
@@ -95,50 +44,50 @@
     <option name="hideEmptyMiddlePackages" value="true" />
     <option name="showLibraryContents" value="true" />
   </component>
-  <component name="PropertiesComponent"><![CDATA[{
-  "keyToString": {
-    "Python.autoencoder.executor": "Run",
-    "Python.classifier.executor": "Debug",
-    "Python.convert_dataclass.executor": "Run",
-    "Python.create_autoencoder_variation.executor": "Run",
-    "Python.create_variation.executor": "Run",
-    "Python.download_h5.executor": "Run",
-    "Python.evaluate_counterfactuals.executor": "Run",
-    "Python.explore_dataset.executor": "Run",
-    "Python.generate.executor": "Debug",
-    "Python.gumbel.executor": "Run",
-    "Python.gumbel_expectation.executor": "Run",
-    "Python.hydra.executor": "Run",
-    "Python.tensorboard.executor": "Run",
-    "Python.test_discriminative_layer.executor": "Run",
-    "Python.test_freeze.executor": "Run",
-    "Python.test_plotly_update.executor": "Run",
-    "Python.test_tensorboard.executor": "Run",
-    "Python.test_train.executor": "Run",
-    "Python.train_autoencoder.executor": "Run",
-    "Python.train_classifier.executor": "Run",
-    "Python.train_w_autoencoder.executor": "Run",
-    "Python.tune_autoencoder.executor": "Run",
-    "Python.tune_w_autoencoder.executor": "Run",
-    "Python.user.counterfactual_value=1 data/dataset=modelnet_bottle_bowl_cup_vase final=True.executor": "Run",
-    "Python.user.load_checkpoint=-1.executor": "Run",
-    "Python.visualisation.executor": "Run",
-    "Python.visualize_reconstructions.executor": "Run",
-    "Python.vizualize_counterfactuals.executor": "Run",
-    "RunOnceActivity.ShowReadmeOnStart": "true",
-    "RunOnceActivity.TerminalTabsStorage.copyFrom.TerminalArrangementManager.252": "true",
-    "RunOnceActivity.git.unshallow": "true",
-    "SHARE_PROJECT_CONFIGURATION_FILES": "true",
-    "SHELLCHECK.PATH": "/home/nverchev/.local/share/JetBrains/PyCharmCE2024.3/Shell Script/shellcheck",
-    "Shell Script.run.sh.executor": "Run",
-    "git-widget-placeholder": "hierarchical",
-    "junie.onboarding.icon.badge.shown": "true",
-    "last_opened_file_path": "/home/nverchev/PycharmProjects/drytorch",
-    "run.code.analysis.last.selected.profile": "aDefault",
-    "settings.editor.selected.configurable": "preferences.pluginManager",
-    "to.speed.mode.migration.done": "true"
+  <component name="PropertiesComponent">{
+  &quot;keyToString&quot;: {
+    &quot;Python.autoencoder.executor&quot;: &quot;Run&quot;,
+    &quot;Python.classifier.executor&quot;: &quot;Debug&quot;,
+    &quot;Python.convert_dataclass.executor&quot;: &quot;Run&quot;,
+    &quot;Python.create_autoencoder_variation.executor&quot;: &quot;Run&quot;,
+    &quot;Python.create_variation.executor&quot;: &quot;Run&quot;,
+    &quot;Python.download_h5.executor&quot;: &quot;Run&quot;,
+    &quot;Python.evaluate_counterfactuals.executor&quot;: &quot;Run&quot;,
+    &quot;Python.explore_dataset.executor&quot;: &quot;Run&quot;,
+    &quot;Python.generate.executor&quot;: &quot;Debug&quot;,
+    &quot;Python.gumbel.executor&quot;: &quot;Run&quot;,
+    &quot;Python.gumbel_expectation.executor&quot;: &quot;Run&quot;,
+    &quot;Python.hydra.executor&quot;: &quot;Run&quot;,
+    &quot;Python.tensorboard.executor&quot;: &quot;Run&quot;,
+    &quot;Python.test_discriminative_layer.executor&quot;: &quot;Run&quot;,
+    &quot;Python.test_freeze.executor&quot;: &quot;Run&quot;,
+    &quot;Python.test_plotly_update.executor&quot;: &quot;Run&quot;,
+    &quot;Python.test_tensorboard.executor&quot;: &quot;Run&quot;,
+    &quot;Python.test_train.executor&quot;: &quot;Run&quot;,
+    &quot;Python.train_autoencoder.executor&quot;: &quot;Run&quot;,
+    &quot;Python.train_classifier.executor&quot;: &quot;Run&quot;,
+    &quot;Python.train_w_autoencoder.executor&quot;: &quot;Run&quot;,
+    &quot;Python.tune_autoencoder.executor&quot;: &quot;Run&quot;,
+    &quot;Python.tune_w_autoencoder.executor&quot;: &quot;Run&quot;,
+    &quot;Python.user.counterfactual_value=1 data/dataset=modelnet_bottle_bowl_cup_vase final=True.executor&quot;: &quot;Run&quot;,
+    &quot;Python.user.load_checkpoint=-1.executor&quot;: &quot;Run&quot;,
+    &quot;Python.visualisation.executor&quot;: &quot;Run&quot;,
+    &quot;Python.visualize_reconstructions.executor&quot;: &quot;Run&quot;,
+    &quot;Python.vizualize_counterfactuals.executor&quot;: &quot;Run&quot;,
+    &quot;RunOnceActivity.ShowReadmeOnStart&quot;: &quot;true&quot;,
+    &quot;RunOnceActivity.TerminalTabsStorage.copyFrom.TerminalArrangementManager.252&quot;: &quot;true&quot;,
+    &quot;RunOnceActivity.git.unshallow&quot;: &quot;true&quot;,
+    &quot;SHARE_PROJECT_CONFIGURATION_FILES&quot;: &quot;true&quot;,
+    &quot;SHELLCHECK.PATH&quot;: &quot;/home/nverchev/.local/share/JetBrains/PyCharmCE2024.3/Shell Script/shellcheck&quot;,
+    &quot;Shell Script.run.sh.executor&quot;: &quot;Run&quot;,
+    &quot;git-widget-placeholder&quot;: &quot;hierarchical&quot;,
+    &quot;junie.onboarding.icon.badge.shown&quot;: &quot;true&quot;,
+    &quot;last_opened_file_path&quot;: &quot;/home/nverchev/PycharmProjects/drytorch&quot;,
+    &quot;run.code.analysis.last.selected.profile&quot;: &quot;aDefault&quot;,
+    &quot;settings.editor.selected.configurable&quot;: &quot;preferences.pluginManager&quot;,
+    &quot;to.speed.mode.migration.done&quot;: &quot;true&quot;
   }
-}]]></component>
+}</component>
   <component name="PyDebuggerOptionsProvider">
     <option name="myRunDebuggerInServerMode" value="false" />
     <option name="myDebuggerPort" value="29782" />
