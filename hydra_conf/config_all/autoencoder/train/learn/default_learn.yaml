@@ -4,6 +4,6 @@ defaults:
 
 optimizer_name: AdamW
 learning_rate: 0.004
-warm_up: 0
-settings:
+gradient_op:
+opt_settings:
     weight_decay: 0.001

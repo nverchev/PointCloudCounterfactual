@@ -1,16 +1,15 @@
 cuda: true
 seed:
 generate:
-  batch_size: 1
+  batch_size: 16
   bias_dim: 0
-  bias_value: 1.
-path: {}
-    # exp_par_dir:
-    # metadata_dir:
-    # data_dir:
+  bias_value: 0.
+path:
+    exp_par_dir: experiments/${version}/
+
 plot:
     interactive: false
-    indices_to_reconstruct: [0, 1, 2, 3, 4]
+    indices_to_reconstruct: [0, 9, 16, 20, 25, 34, 39, 44, 46, 66, 91, 98] #, 124, 125, 130, 135, 155, 158, 170, 171, 173, 183, 184
     double_encoding: false
 counterfactual_value: 1
 

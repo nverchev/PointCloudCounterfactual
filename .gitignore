@@ -4,7 +4,11 @@
 /external/pytorch_structural_losses/structural_losses.egg-info/
 /outputs/
 /.env
-/experiments/
+/experiments*/
 */.idea
+*/.vscode
 /images/
-/optimization_db/
+*/optimization_db/
+*/tensorboard_runs/
+*/wandb
+*/metrics.db

@@ -1,3 +1,5 @@
+"""Classes containing data samples and outputs."""
+
 import dataclasses
 from typing import NamedTuple, Self
 
@@ -8,21 +10,67 @@ OUT_CHAN = 3
 
 
 class Inputs(NamedTuple):
+    """
+    Input for the outer autoencoder.
+
+    Attributes:
+        cloud: the input cloud.
+        indices: precalculated indices for the nearest neighbors (number must match architecture).
+        initial_sampling: specify the sampling for the reconstructed cloud from the initial sampling space.
+    """
     cloud: torch.Tensor
     indices: torch.Tensor = torch.empty(0)
     initial_sampling: torch.Tensor = torch.empty(0)
-    viz_att: torch.Tensor = torch.empty(0)
-    viz_components: torch.Tensor = torch.empty(0)
 
 
 class Targets(NamedTuple):
+    """
+    Targets for the outer autoencoder.
+
+    Attributes:
+        ref_cloud: the reference cloud for reconstruction.
+        scale: original scale factor for the cloud.
+        label: label of the sample.
+    """
     ref_cloud: torch.Tensor
-    scale: torch.Tensor = torch.FloatTensor([1.0])
-    label: torch.Tensor = torch.tensor(0)
+    scale: torch.Tensor = torch.empty(0)
+    label: torch.Tensor = torch.empty(0)
 
 
 @dataclasses.dataclass(init=False, slots=True)
 class Outputs:
+    """
+    Outputs of the inner and outer autoencoder.
+
+    Attributes:
+        recon: the reconstruction output.
+        w: the discrete encodings' embeddings (with straight-through gradients).
+        w_q: outer encoder approximation of the discrete encodings' embedding.
+        w_e: the discrete encodings' embeddings (no gradients).
+        w_recon: inner autoencoder approximations of the discrete encodings' embeddings.
+        w_dist: distances between w and the embeddings.
+        idx: the discrete encoding as the index for the embedding.
+        one_hot_idx: the discrete encoding as one hot encoding for the index.
+        attention_weights: torch.Tensor
+        components: torch.Tensor
+        z1: the first latent variable.
+        z2: the second latent variable.
+        mu1: the mean of the distribution for z1.
+        log_var1: the log variance of the distribution for z1.
+        pseudo_mu1: the mean of the distribution for the VAMP loss for z1.
+        pseudo_log_var1: the log variance of the distribution for the VAMP loss for z1
+        p_mu2: the mean of the prior distribution for z2.
+        p_log_var2:  the log variance of the prior distribution for z2.
+        d_mu2: the difference in mean between the prior and posterior distributions for z2.
+        d_log_var2: the difference in log variance between the prior and posterior distributions for z2.
+        p_mu2: the mean of the prior distribution for z2.
+        p_log_var2:  the log variance of the prior distribution for z2.
+        h: hidden features for the hierarchical inner autoencoder.
+        probs: optional condition value for the z2.
+        y1: output of the discriminator for the conditional inner autoencoder after detaching inputs.
+        y2: output of the evaluated discriminator for the conditional inner autoencoder discriminative loss.
+
+    """
     recon: torch.Tensor
     w: torch.Tensor
     w_q: torch.Tensor
@@ -31,21 +79,25 @@ class Outputs:
     w_dist: torch.Tensor
     idx: torch.Tensor
     one_hot_idx: torch.Tensor
-    d_mu1: torch.Tensor
-    d_log_var1: torch.Tensor
-    p_mu1: torch.Tensor
-    p_log_var1: torch.Tensor
-    pseudo_d_mu1: torch.Tensor
-    pseudo_d_log_var1: torch.Tensor
-    mu2: torch.Tensor
-    log_var2: torch.Tensor
-    pseudo_mu2: torch.Tensor
-    pseudo_log_var2: torch.Tensor
+    attention_weights: torch.Tensor
+    components: torch.Tensor
     z1: torch.Tensor
     z2: torch.Tensor
+    mu1: torch.Tensor
+    log_var1: torch.Tensor
+    pseudo_mu1: torch.Tensor
+    pseudo_log_var1: torch.Tensor
+    p_mu2: torch.Tensor
+    p_log_var2: torch.Tensor
+    d_mu2: torch.Tensor
+    d_log_var2: torch.Tensor
+    h: torch.Tensor
     probs: torch.Tensor
+    y1: torch.Tensor
+    y2: torch.Tensor
 
     def update(self, other: Self) -> None:
+        """Update the state with another instance's one."""
         for attribute in other.__slots__:
             try:
                 setattr(self, attribute, getattr(other, attribute))
@@ -53,11 +105,25 @@ class Outputs:
                 pass
 
 
-class W_Targets(NamedTuple):
-    one_hot_idx: torch.Tensor
-    logits: torch.Tensor
-
-
 class W_Inputs(NamedTuple):
+    """
+    Targets for training the inner autoencoder.
+
+    Attributes:
+        w_q: outer encoder approximation of the discrete encodings' embedding.
+        logits: optional argument for learning a conditional distribution given a classifier evaluation.
+    """
     w_q: torch.Tensor
-    logits: torch.Tensor
+    logits: torch.Tensor = torch.empty(0)
+
+
+class W_Targets(NamedTuple):
+    """
+    Targets for training the inner autoencoder.
+
+    Attributes:
+        one_hot_idx: torch.Tensor
+        logits: optional argument to get a conditional distribution given a classifier's evaluation.
+    """
+    one_hot_idx: torch.Tensor
+    logits: torch.Tensor = torch.empty(0)

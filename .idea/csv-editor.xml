@@ -1,0 +1,37 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project version="4">
+  <component name="CsvFileAttributes">
+    <option name="attributeMap">
+      <map>
+        <entry key="/experiments/1.1/csv_metrics/VAEX-PCGen/2025-09-02/17h22m49s/DGCNN/Trainer.csv">
+          <value>
+            <Attribute>
+              <option name="separator" value="," />
+            </Attribute>
+          </value>
+        </entry>
+        <entry key="/experiments/1.1/csv_metrics/VAEX-PCGen/2025-09-05/13h36m05s/VQVAE/Diagnostic.csv">
+          <value>
+            <Attribute>
+              <option name="separator" value="," />
+            </Attribute>
+          </value>
+        </entry>
+        <entry key="/experiments/1.1/csv_metrics/VAEX-PCGen/2025-09-05/13h36m05s/VQVAE/Trainer.csv">
+          <value>
+            <Attribute>
+              <option name="separator" value="," />
+            </Attribute>
+          </value>
+        </entry>
+        <entry key="/experiments/1.1/csv_metrics/VAEX-PCGen/2025-09-05/13h36m05s/VQVAE/Validation.csv">
+          <value>
+            <Attribute>
+              <option name="separator" value="," />
+            </Attribute>
+          </value>
+        </entry>
+      </map>
+    </option>
+  </component>
+</project>

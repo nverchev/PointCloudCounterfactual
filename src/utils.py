@@ -1,3 +1,5 @@
+"""A utility module providing various helper functions and classes for data processing and manipulation."""
+
 from typing import Any
 
 import logging
@@ -8,7 +10,6 @@ import numpy.typing as npt
 import torch
 import requests  # type: ignore
 import h5py  # type: ignore
-import glob2  # type: ignore
 from sklearn.neighbors import KDTree  # type: ignore
 
 try:
@@ -16,11 +17,12 @@ try:
 
     requests.packages.urllib3.disable_warnings(InsecureRequestWarning)
 except ImportError:
-    InsecureRequestWarning = None
+    InsecureRequestWarning = None  # type: ignore
     pass
 
 
 class Singleton(type):
+    """A metaclass that ensures only one instance of a class is created."""
     _instances = dict[type, Any]()
 
     def __call__(cls, *args, **kwargs):
@@ -29,8 +31,9 @@ class Singleton(type):
         return cls._instances[cls]
 
 
-# Allows a temporary change using the with statement
+# Allows a temporary change using the "with" clause
 class UsuallyFalse:
+    """A class that provides a context manager for temporarily changing a boolean value."""
     _value: bool = False
 
     def __bool__(self) -> bool:
@@ -44,33 +47,37 @@ class UsuallyFalse:
 
 
 def download_zip(target_folder: pathlib.Path, url: str) -> None:
-    # check folder already exists
+    """Downloads and extracts a zip file from a URL to a target folder."""
+    # check the folder already exists
     if not target_folder.exists():
         r = requests.get(url, verify=False)
         zip_path = target_folder.with_suffix('.zip')
         with zip_path.open('wb') as zip_file:
             zip_file.write(r.content)
-        with zipfile.ZipFile(zip_path, 'r') as zip_ref:
+        with zipfile.ZipFile(zip_path) as zip_ref:
             zip_ref.extractall(target_folder.parent)
     return
 
 
 def index_k_neighbours(pcs: list[npt.NDArray], k: int) -> npt.NDArray:
+    """Finds the k nearest neighbors for each point in a list of point clouds."""
     indices_list = []
     for pc in pcs:
         kdtree = KDTree(pc)
         indices = kdtree.query(pc, k, return_distance=False)
         indices_list.append(indices.reshape(-1, k))
-    return np.stack(indices_list, axis=0)
+    return np.stack(indices_list)
 
 
-def load_h5_modelnet(wild_path: pathlib.Path,
+def load_h5_modelnet(path: pathlib.Path,
+                     wild_str: str,
                      input_points: int,
                      k: int) -> tuple[npt.NDArray, npt.NDArray, npt.NDArray]:
+    """Loads and processes ModelNet data from H5 files, including point clouds, indices and labels."""
     pcd_list: list[npt.NDArray] = []
     indices_list: list[npt.NDArray] = []
     labels_list: list[npt.NDArray] = []
-    for h5_name in glob2.glob(str(wild_path)):
+    for h5_name in path.glob(wild_str):
         with h5py.File(h5_name, 'r+') as f:
             logging.info('Load: %s', h5_name)
             # Dataset is already normalized
@@ -94,6 +101,7 @@ def load_h5_modelnet(wild_path: pathlib.Path,
 
 
 def print_embedding_usage(one_hot_idx: torch.Tensor):
+    """Prints statistics about the usage of embeddings in a one-hot encoded tensor."""
     one_hot_idx = one_hot_idx.float().mean(0)  # average dataset values
     print_statistics('Index Usage', one_hot_idx.tolist())
     print(torch.histc(one_hot_idx))
@@ -101,6 +109,7 @@ def print_embedding_usage(one_hot_idx: torch.Tensor):
 
 
 def print_statistics(title: str, test_outcomes: list[float]):
+    """Prints various statistical measures for a list of test outcomes."""
     if not len(test_outcomes):
         print(f'No test performed for "{title}"')
         return

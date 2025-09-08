@@ -1,17 +1,20 @@
+"""Module with the classifier architecture definition."""
+
 import torch
 from torch import nn
 from torch.nn import functional as F
 
-from src.config_options import ExperimentClassifier, MainExperiment
+from src.config_options import Experiment
 from src.layers import EdgeConvLayer, PointsConvLayer, LinearLayer
 from src.data_structures import IN_CHAN, Inputs
 from src.neighbour_ops import get_graph_features
 
 
 class DGCNN(nn.Module):
+    """Standard DGCNN classifier."""
     def __init__(self) -> None:
         super().__init__()
-        cfg = MainExperiment.get_config()
+        cfg = Experiment.get_config()
         cfg_class = cfg.classifier
         self.k = cfg_class.model.k
         self.act_cls = cfg_class.model.act_cls
@@ -39,13 +42,14 @@ class DGCNN(nn.Module):
         self.mlp = nn.Sequential(*mlp_modules)
 
     def forward(self, inputs: Inputs) -> torch.Tensor:
+        """Forward Pass."""
         x = inputs.cloud
         indices = inputs.indices
         xs = []
         x = x.transpose(2, 1)
         for conv in self.edge_convs:
             indices, x = get_graph_features(x, k=self.k, indices=indices)  # [batch, features, num_points, k]
-            indices = torch.empty(0)  # finds new neighbours dynamically every iteration
+            indices = torch.empty(0)  # finds new neighbors dynamically every iteration
             x = conv(x)
             x = x.max(dim=3, keepdim=False)[0]  # [batch, features, num_points]
             xs.append(x)

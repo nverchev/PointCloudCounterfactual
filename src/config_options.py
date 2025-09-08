@@ -4,10 +4,13 @@ import enum
 import functools
 import pathlib
 import os
+from collections.abc import Iterator
+from contextlib import contextmanager
+from dataclasses import field
 from typing import Optional, Self, Type, Annotated, Callable, TypeAlias, cast
 
 import dotenv
-import dry_torch
+import drytorch
 import hydra
 import numpy as np
 from hydra.core.global_hydra import GlobalHydra
@@ -17,8 +20,8 @@ from pydantic import model_validator, Field
 from pydantic.dataclasses import dataclass
 import torch
 
-dotenv.load_dotenv()
 
+dotenv.load_dotenv()
 DATASET_DIR = pathlib.Path(os.getenv('DATASET_DIR', ''))
 EXPERIMENT_DIR = pathlib.Path(os.getenv('EXPERIMENT_DIR', './'))
 METADATA_DIR = pathlib.Path(os.getenv('METADATA_DIR', './'))
@@ -32,7 +35,7 @@ ACT: ActClass = functools.partial(torch.nn.LeakyReLU, negative_slope=0.2)
 
 
 class ConfigPath(enum.StrEnum):
-    """Configuration paths relative to project root."""
+    """Configuration paths relative to the project root."""
     CONFIG_ALL = 'config_all'
     TUNE_AUTOENCODER = 'tune_autoencoder'
     TUNE_W_AUTOENCODER = 'tune_w_autoencoder'
@@ -59,7 +62,7 @@ def _get_activation_cls(act_name: str) -> ActClass:
         raise ValueError(f'Input act_name "{act_name}" is not the name of a pytorch activation.')
 
 
-def _get_optim_cls(optimizer_name: str) -> Type[torch.optim.Optimizer]:
+def _get_optim_cls(optimizer_name: str) -> type[torch.optim.Optimizer]:
     try:
         return getattr(torch.optim, optimizer_name)
     except AttributeError:
@@ -98,6 +101,16 @@ class ModelHead(enum.StrEnum):
     """Model type."""
     AE = enum.auto()
     VQVAE = enum.auto()
+    CounterfactualVQVAE = enum.auto()
+
+class GradOp(enum.StrEnum):
+    """Scheduler names."""
+    GradNormalizer = enum.auto()
+    GradZScoreNormalizer = enum.auto()
+    GradNormClipper = enum.auto()
+    GradValueClipper = enum.auto()
+    HistClipping = enum.auto()
+    ParamHistClipping = enum.auto()
 
 
 class Schedulers(enum.StrEnum):
@@ -115,63 +128,73 @@ class ReconLosses(enum.StrEnum):
 
 @dataclass
 class DatasetConfig:
-    """Config for the dataset."""
+    """Configuration for the dataset.
+
+    Attributes:
+        name (Datasets): The name of the dataset
+        n_classes (PositiveInt): The number of classes in the dataset, 0 if no class information is available
+        settings (dict): A dictionary containing dataset-specific settings
+    """
 
     name: Datasets
-    """dataset name"""
     n_classes: PositiveInt
-    """Number of classes, 0 if no class information is available"""
     settings: dict
-    """settings specific for the dataset"""
 
 
 @dataclass
 class DataConfig:
-    """Config for pre-processing the data."""
+    """Configuration for pre-processing the data.
+
+    Attributes:
+        dataset (DatasetConfig): The dataset configuration
+        n_input_points (StrictlyPositiveInt): The (maximum) number of input points
+        n_target_points (StrictlyPositiveInt): The (maximum) number of target points
+        translation (bool): Whether to apply random translation to training inputs and reference
+        rotation (bool): Whether to apply random rotation to training inputs and reference
+        jitter_sigma (PositiveFloat): The variance for random perturbation of training inputs
+        jitter_clip (PositiveFloat): The threshold value for random perturbation of training inputs
+        resample (bool): Whether to use two different samplings for input and reference
+        k (StrictlyPositiveInt): The number of neighbors of a point (counting the point itself)
+    """
 
     dataset: DatasetConfig
-    """dataset configuration"""
     n_input_points: StrictlyPositiveInt
-    """(maximum) input points"""
     n_target_points: StrictlyPositiveInt
-    """(maximum) target points"""
     translation: bool
-    """random translating training inputs and reference"""
     rotation: bool
-    """random rotating training inputs and reference"""
     jitter_sigma: PositiveFloat
-    """variance for random perturbation of training inputs"""
     jitter_clip: PositiveFloat
-    """Threshold value for random perturbation of training inputs"""
     resample: bool
-    """two different samplings for input and reference"""
     k: StrictlyPositiveInt
-    """number of neighbours of a point (counting the point itself)"""
 
 
 @dataclass
 class WEncoderConfig:
-    """Configuration for the VAE encoder."""
+    """Configuration for the W-Autoencoder's encoder.
+
+    Attributes:
+        architecture (WEncoders): The name of the architecture
+        hidden_dims_conv (tuple[StrictlyPositiveInt]): Hidden dimensions for the convolutional part
+        hidden_dims_lin (tuple[StrictlyPositiveInt]): Hidden dimensions for the linear part
+        dropout (tuple[PositiveFloat]): Dropout probabilities for the linear layers
+        cf_temperature (int): Temperature for the probabilities (closer to zero means closer to samplings)
+        act_name (str): The name of the PyTorch activation function (e.g., 'ReLU', 'LeakyReLU')
+        gumbel (bool): Whether to use Gumbel Softmax to add noise to the codes
+    """
 
     architecture: WEncoders
-    """name of the architecture"""
-    hidden_dims_conv: list[StrictlyPositiveInt]
-    """hidden dimensions for the convolution part of the WEncoder"""
-    hidden_dims_lin: list[StrictlyPositiveInt]
-    """hidden dimensions for the linear part of the WEncoder"""
-    dropout: list[PositiveFloat]
-    """dropout probability"""
+    hidden_dims_conv: tuple[StrictlyPositiveInt, ...]
+    hidden_dims_lin: tuple[StrictlyPositiveInt, ...]
+    dropout: tuple[PositiveFloat, ...]
     cf_temperature: int
-    """Temperature for the probabilities (the closer to zero the more close to samplings)"""
     act_name: str = ''
-    """name of the Pytorch activation (see https://pytorch.org/docs/stable/nn.html)"""
     gumbel: bool = True
 
-    # TODO: add doc
-
-    def __post_init__(self):
-        self.act_cls = _get_activation_cls(self.act_name) if self.act_name else ACT
-
+    @property
+    def act_cls(self) -> ActClass:
+        """The activation class."""
+        return _get_activation_cls(self.act_name) if self.act_name else ACT
+    
     @model_validator(mode='after')
     def _check_length_dropout(self) -> Self:
         if len(self.hidden_dims_lin) > len(self.dropout):
@@ -182,40 +205,50 @@ class WEncoderConfig:
 
 @dataclass
 class EncoderConfig:
-    """Configuration for the encoder."""
+    """Configuration for the encoder.
+
+    Attributes:
+        architecture (Encoders): The name of the architecture
+        k (StrictlyPositiveInt): The number of neighbors for a point (counting the point itself)
+        hidden_dims (tuple[StrictlyPositiveInt]): Hidden dimensions for the encoder
+        w_encoder (WEncoderConfig): Configuration for the word encoder
+        act_name (str): The name of the PyTorch activation function
+    """
 
     architecture: Encoders
-    """name of the architecture"""
     k: StrictlyPositiveInt
-    """number of neighbours of a point (counting the point itself)"""
-    hidden_dims: list[StrictlyPositiveInt]
-    """hidden dimensions"""
+    hidden_dims: tuple[StrictlyPositiveInt, ...]
     w_encoder: WEncoderConfig
-    """config for the word encoder"""
     act_name: str = ''
-    """name of the Pytorch activation (see https://pytorch.org/docs/stable/nn.html)"""
 
-    def __post_init__(self):
-        self.act_cls = _get_activation_cls(self.act_name) if self.act_name else ACT
+    @property
+    def act_cls(self) -> ActClass:
+        """The activation class."""
+        return _get_activation_cls(self.act_name) if self.act_name else ACT
 
 
 @dataclass
 class WDecoderConfig:
-    """Configuration for the VAE decoder."""
+    """Configuration for the W-Autoencoder's decoder.
+
+    Attributes:
+        architecture (WDecoders): The name of the architecture
+        expand (StrictlyPositiveInt): Feature expansion before the final output
+        hidden_dims (tuple[StrictlyPositiveInt]): Hidden dimensions for the decoder
+        dropout (tuple[PositiveFloat]): Dropout probabilities
+        act_name (str): The name of the PyTorch activation function
+    """
 
     architecture: WDecoders
-    """name of the architecture"""
     expand: StrictlyPositiveInt
-    """feature expansion before final output"""
-    hidden_dims: list[StrictlyPositiveInt]
-    """hidden dimensions"""
-    dropout: list[PositiveFloat]
-    """dropout probability"""
+    hidden_dims: tuple[StrictlyPositiveInt, ...]
+    dropout: tuple[PositiveFloat, ...]
     act_name: str = ''
-    """name of the Pytorch activation (see https://pytorch.org/docs/stable/nn.html)"""
 
-    def __post_init__(self):
-        self.act_cls = _get_activation_cls(self.act_name) if self.act_name else ACT
+    @property
+    def act_cls(self):
+        """The activation class."""
+        return _get_activation_cls(self.act_name) if self.act_name else ACT
 
     @model_validator(mode='after')
     def _check_length_dropout(self) -> Self:
@@ -227,17 +260,22 @@ class WDecoderConfig:
 
 @dataclass
 class PriorDecoderConfig:
-    """Configuration for the decoder for the prior of the latent space."""
+    """Configuration for the decoder of the latent space prior.
 
-    hidden_dims: list[StrictlyPositiveInt]
-    """hidden dimensions"""
-    dropout: list[PositiveFloat]
-    """dropout probability"""
+    Attributes:
+        hidden_dims (tuple[StrictlyPositiveInt]): Hidden dimensions for the prior decoder
+        dropout (tuple[PositiveFloat]): Dropout probabilities
+        act_name (str): The name of the PyTorch activation function
+    """
+
+    hidden_dims: tuple[StrictlyPositiveInt, ...]
+    dropout: tuple[PositiveFloat, ...]
     act_name: str = ''
-    """name of the Pytorch activation (see https://pytorch.org/docs/stable/nn.html)"""
 
-    def __post_init__(self):
-        self.act_cls = _get_activation_cls(self.act_name) if self.act_name else ACT
+    @property
+    def act_cls(self):
+        """The activation class."""
+        return _get_activation_cls(self.act_name) if self.act_name else ACT
 
     @model_validator(mode='after')
     def _check_length_dropout(self) -> Self:
@@ -249,92 +287,111 @@ class PriorDecoderConfig:
 
 @dataclass
 class DecoderConfig:
-    """Configuration for the decoder."""
+    """Configuration for the decoder.
+
+    Attributes:
+        architecture (Decoders): The name of the architecture
+        sample_dim (StrictlyPositiveInt): Dimensions of the sampling sphere
+        n_components (StrictlyPositiveInt): Number of components for PCGen
+        hidden_dims_map (tuple[StrictlyPositiveInt]): Hidden dimensions for mapping the initial sampling
+        hidden_dims_conv (tuple[StrictlyPositiveInt]): Hidden channels for each component
+        w_decoder (WDecoderConfig): Configuration for the word decoder
+        prior_decoder (PriorDecoderConfig): Configuration for the prior decoder (reused by the posterior as well)
+        tau (PositiveFloat): Coefficient for Gumbel Softmax activation
+        filtering (bool): Whether to apply filtering to the output
+        act_name (str): The name of the PyTorch activation function
+    """
 
     architecture: Decoders
-    """name of the architecture"""
     sample_dim: StrictlyPositiveInt
-    """dimensions of the sampling sphere"""
     n_components: StrictlyPositiveInt
-    """number of components of PCGen"""
-    hidden_dims_map: list[StrictlyPositiveInt]
-    """ Hidden dimensions  for mapping the initial sampling"""
-    hidden_dims_conv: list[StrictlyPositiveInt]
-    """hidden channels for each component"""
+    hidden_dims_map: tuple[StrictlyPositiveInt, ...]
+    hidden_dims_conv: tuple[StrictlyPositiveInt, ...]
     w_decoder: WDecoderConfig
-    """config for the word decoder"""
     prior_decoder: PriorDecoderConfig
-    """config for the prior decoder"""
     tau: PositiveFloat
-    """coefficient for Gumbel Softmax activation"""
     filtering: bool
-    """filter applied to the output (see https://www.mdpi.com/1424-8220/24/5/1414/review_report)"""
     act_name: str = ''
-    """name of the Pytorch activation (see https://pytorch.org/docs/stable/nn.html)"""
 
-    def __post_init__(self):
-        self.act_cls = _get_activation_cls(self.act_name) if self.act_name else ACT
+    @property
+    def act_cls(self):
+        """The activation class."""
+        return _get_activation_cls(self.act_name) if self.act_name else ACT
 
 
 @dataclass
 class AEConfig:
-    """Configuration for the autoencoder."""
+    """Configuration for the autoencoder.
+
+    Attributes:
+        head (ModelHead): The type of model head (e.g., AE, VQVAE, CounterfactualVQVAE)
+        encoder (EncoderConfig): The encoder configuration
+        decoder (DecoderConfig): The decoder configuration
+        book_size (StrictlyPositiveInt): The size of the dictionary for VQ-VAE
+        embedding_dim (StrictlyPositiveInt): The length of the code embedding
+        w_dim (StrictlyPositiveInt): The codeword length
+        z1_dim (StrictlyPositiveInt): The continuous latent space dimension
+        z2_dim (StrictlyPositiveInt): The continuous latent space dimension for counterfactual manipulation
+        vq_ema_update (bool): Whether to use EMA update on quantized codes
+        vq_noise (PositiveFloat): Quantity of noise to add when redistributing the codes
+        name (str): The name of the model
+        training_output_points (StrictlyPositiveInt): The number of points generated during training (0: same as input)
+        n_pseudo_inputs (PositiveInt): The number of pseudo-inputs for the VAMP loss
+    """
 
     head: ModelHead
-    """Simple encoding AE or the VQVAE generative model"""
     encoder: EncoderConfig
-    """encoder name"""
     decoder: DecoderConfig
-    """decoder model"""
     book_size: StrictlyPositiveInt
-    """dictionary size"""
     embedding_dim: StrictlyPositiveInt
-    """code length"""
     w_dim: StrictlyPositiveInt
-    """codeword length"""
-    z_dim: StrictlyPositiveInt
-    """continuous latent space dim"""
+    z1_dim: StrictlyPositiveInt
+    z2_dim: StrictlyPositiveInt
     vq_ema_update: bool
-    """EMA update on quantized codes"""
     vq_noise: PositiveFloat
-    """noise when redistributing the codes"""
     name: str
-    """name of the model"""
     training_output_points: StrictlyPositiveInt
-    """points generated in training, 0 for input number of points"""
 
     n_pseudo_inputs: PositiveInt
-    """number of pseudo_inputs for the VAMP loss"""
 
     @property
     def n_codes(self) -> int:
-        """Number of codes"""
+        """The number of codes."""
         return self.w_dim // self.embedding_dim
 
+    @property
+    def hidden_features(self) -> int:
+        """The number of codes."""
+        return self.encoder.w_encoder.hidden_dims_conv[-1]
 
 @dataclass
 class ClassifierConfig:
-    """Configuration for the classifier."""
+    """Configuration for the classifier.
+
+    Attributes:
+        k (StrictlyPositiveInt): The number of neighbors for a point (counting the point itself)
+        hidden_dims (tuple[StrictlyPositiveInt]): Hidden dimensions for the convolutional part
+        emb_dim (StrictlyPositiveInt): The dimension of the final convolution output
+        mlp_dims (tuple[StrictlyPositiveInt]): Dimensions for the MLP layers
+        dropout (tuple[PositiveFloat]): Dropout probabilities for the MLP layers
+        out_classes (StrictlyPositiveInt): The number of output classes for the classifier
+        act_name (str): The name of the PyTorch activation function
+        name (str): The name of the model
+    """
 
     k: StrictlyPositiveInt
-    """number of neighbours of a point (counting the point itself)"""
-    hidden_dims: list[StrictlyPositiveInt]
-    """hidden dimensions"""
+    hidden_dims: tuple[StrictlyPositiveInt, ...]
     emb_dim: StrictlyPositiveInt
-    """dimension of the final convolution output dims."""
-    mlp_dims: list[StrictlyPositiveInt]
-    """dimensions for the MLP layers."""
-    dropout: list[PositiveFloat]
-    """dimensions for the MLP layers."""
+    mlp_dims: tuple[StrictlyPositiveInt, ...]
+    dropout: tuple[PositiveFloat, ...]
     out_classes: StrictlyPositiveInt
-    """number of classes in the classifier"""
     act_name: str = ''
-    """name of the Pytorch activation (see https://pytorch.org/docs/stable/nn.html)."""
     name: str = ''
-    """name of the model."""
 
-    def __post_init__(self):
-        self.act_cls = _get_activation_cls(self.act_name) if self.act_name else ACT
+    @property
+    def act_cls(self):
+        """The activation class."""
+        return _get_activation_cls(self.act_name) if self.act_name else ACT
 
     @model_validator(mode='after')
     def _check_length_dropout(self) -> Self:
@@ -346,137 +403,175 @@ class ClassifierConfig:
 
 @dataclass
 class SchedulerConfig:
-    """Configuration for the scheduler."""
+    """Configuration for the learning rate scheduler.
+
+    Attributes:
+        function (Schedulers): The name of the scheduler function
+        restart_interval (PositiveInt): The number of epochs between restarts
+        restart_fraction (PositiveInt): The fraction of the base learning rate when restarting
+        warmup_steps (int): The number of initial epochs with linearly increasing learning rate
+        settings (dict): A dictionary containing default settings for the scheduler
+    """
 
     function: Schedulers
-    """scheduler name"""
+    restart_interval: PositiveInt
+    restart_fraction: PositiveInt
+    warmup_steps: PositiveInt
     settings: dict
-    """default settings for the scheduler"""
 
 
 @dataclass
 class LearningConfig:
-    """Configuration for the learning scheme."""
+    """Configuration for the learning scheme.
+
+    Attributes:
+        optimizer_name (str): The name of the PyTorch optimizer (e.g., 'Adam', 'SGD')
+        learning_rate (PositiveFloat): The learning rate or a dictionary of learning rates for model parameters
+        opt_settings (dict): A dictionary containing default settings for the optimizer
+        scheduler (SchedulerConfig): The scheduler configuration for learning rate decay
+    """
 
     optimizer_name: str
-    """name of the Pytorch optimizer (see https://pytorch.org/docs/stable/optim.html)"""
     learning_rate: PositiveFloat
-    """learning rate or dictionary of learning rate for the model parameters"""
-    settings: dict
-    """default settings for the optimizer"""
+    gradient_op: GradOp | None
+    opt_settings: dict
     scheduler: SchedulerConfig
-    """scheduler configuration for the learning rate decay"""
-    warm_up: int
-    """Number of initial epochs with linearly increasing learning rate"""
 
-    def __post_init__(self):
-        self.optimizer_cls = _get_optim_cls(self.optimizer_name)
+    @property
+    def optimizer_cls(self) -> type[torch.optim.Optimizer]:
+        """The optimizer class."""
+        return _get_optim_cls(self.optimizer_name)
 
 
 @dataclass
 class EarlyStoppingConfig:
-    """Configuration for early stopping."""
+    """Configuration for early stopping during training.
+
+    Attributes:
+        active (bool): Whether to use the early stopping strategy
+        window (int): The number of last metrics to average
+        patience (int): The number of epochs to wait before stopping
+    """
 
     active: bool
-    """whether to use early stopping"""
     window: int = 1
-    """number of last metrics to average"""
     patience: int = 10
-    """number of epochs to wait before stopping"""
 
 
 @dataclass
 class TrainingConfig:
-    """Configuration for the training."""
+    """Configuration for the training process.
+
+    Attributes:
+        batch_size (StrictlyPositiveInt): The batch size for training
+        learn (LearningConfig): The learning configuration for training
+        epochs (StrictlyPositiveInt): The total number of epochs for training
+        early_stopping (EarlyStoppingConfig): The configuration for early stopping
+    """
     batch_size: StrictlyPositiveInt
-    """batch size"""
     learn: LearningConfig
-    """learning config for the training"""
     epochs: StrictlyPositiveInt
-    """number of epochs for the training"""
     early_stopping: EarlyStoppingConfig
-    """Configuration for early stopping"""
 
 
 @dataclass
 class ObjectiveAEConfig:
-    """Configuration for the loss and the metrics."""
+    """Configuration for the Autoencoder's loss and metrics.
+
+    Attributes:
+        n_inference_output_points (StrictlyPositiveInt): The number of inference points for evaluation
+        recon_loss (ReconLosses): The denomination of the reconstruction loss
+        c_embedding (PositiveFloat): The coefficient for the embedding loss
+    """
     n_inference_output_points: StrictlyPositiveInt
-    """number of inference points for the evaluation"""
     recon_loss: ReconLosses
-    """reconstruction loss denomination"""
     c_embedding: PositiveFloat
-    """coefficient for the embedding loss"""
 
 
 @dataclass
 class ObjectiveWAEConfig:
-    """Configuration for the loss and the metrics."""
+    """Configuration for the W-Autoencoder's loss and metrics.
+
+    Attributes:
+        vamp (bool): Whether to use the Variational Mixture of Posteriors (VAMP) loss
+        c_kld (PositiveFloat): The Kullback-Leibler Divergence coefficient
+        c_counterfactual (PositiveFloat): The coefficient for the Counterfactual loss
+    """
     vamp: bool
-    """Whether to use the Variational Mixture of Posteriors"""
     c_kld: PositiveFloat
-    """Kullback-Leibler Divergence coefficient"""
     c_counterfactual: PositiveFloat
-    """Coefficient for the Counterfactual loss """
 
 
 @dataclass
 class PlottingOptions:
-    """Options for plotting and visualization."""
+    """Options for plotting and visualization.
+
+    Attributes:
+        interactive (bool): Whether to enable 3D plotting when using pyvista
+        indices_to_reconstruct (list[PositiveInt]): A list with indices of evaluation test samples to reconstruct
+        double_encoding (bool): Whether to reconstruct samples based on the retrieved codes
+    """
 
     interactive: bool
-    """3D plot when using pyvista plotting"""
     indices_to_reconstruct: list[PositiveInt]
-    """indices of the evaluation test to reconstruct"""
     double_encoding: bool
-    """reconstructs samples based on the retrieved codes"""
 
 
 @dataclass
 class PathSpecs:
-    """Path specifications."""
+    """Path specifications for directories.
+
+    Attributes:
+        exp_par_dir (pathlib.Path): The directory for containing the experiment. Default is the path in the .env file
+        data_dir (pathlib.Path): The directory for datasets. Default is the path specified in the .env file
+        metadata_dir (pathlib.Path): The directory for dataset metadata. Default is the path specified in the .env file
+    """
 
     exp_par_dir: pathlib.Path = EXPERIMENT_DIR
-    """directory for containing the experiment. Default takes path specified in .env file"""
     data_dir: pathlib.Path = DATASET_DIR
-    """directory for models. Default takes path specified in .env file"""
     metadata_dir: pathlib.Path = METADATA_DIR
-    """directory for the metadata of the dataset. Default takes path specified in .env file"""
 
 
 @dataclass
 class GenerationOptions:
-    """Options for generation of point clouds."""
+    """Options for the generation of point clouds.
+
+    Attributes:
+        batch_size (StrictlyPositiveInt): The number of samples to generate in a batch
+        bias_dim (PositiveInt): The dimension to add a bias to in the latent space
+        bias_value (float): The value of the bias to add in the latent dimension
+    """
 
     batch_size: StrictlyPositiveInt
-    """number of samples to generate"""
     bias_dim: PositiveInt
-    """add a bias to latent dim"""
     bias_value: float
-    """value of the bias in latent dim"""
 
 
 @dataclass
 class UserSettings:
-    """Options relative to the user preferences."""
+    """User-specific options and preferences.
+
+    Attributes:
+        cuda (bool): Whether to run computations on `cuda:0`
+        generate (GenerationOptions): Options for generating a point cloud
+        path (PathSpecs): Specifications for paths that override .env settings
+        plot (PlottingOptions): Options for plotting and visualization
+        seed (Optional[int]): The seed for PyTorch/NumPy randomness. If None, no seed is set
+        checkpoint_every (PositiveInt): The number of epochs between saving checkpoints
+        n_generated_output_points (int): The number of points to generate during inference
+        load_checkpoint (int): The checkpoint to load if available. Default is the last one (-1)
+        counterfactual_value (PositiveFloat): The value for counterfactual strength
+    """
+
     cuda: bool
-    """run on cuda:0"""
     generate: GenerationOptions
-    """options for generation of point clouds"""
     path: PathSpecs
-    """specifications for paths that override .env settings"""
     plot: PlottingOptions
-    """options for plotting and visualization"""
     seed: Optional[int]
-    """torch/numpy seed. Default: no seed"""
     checkpoint_every: PositiveInt
-    """number of epochs between checkpoints"""
     n_generated_output_points: int
-    """number of points to generate during inference"""
     load_checkpoint: int = -1
-    """load checkpoint if available. Default: last one"""
     counterfactual_value: PositiveFloat = 1.
-    """value for counterfactual strength"""
 
     def __post_init__(self):
         self._set_seed()
@@ -492,76 +587,107 @@ class UserSettings:
 
     @property
     def device(self) -> torch.device:
-        """The device where to run the model."""
+        """The device where the model should run."""
         return torch.device('cuda:0' if self.cuda else 'cpu')
 
 
 @dataclass
-class Config:
-    """Shared options for training, evaluating and random generation."""
+class ConfigTrain:
+    """Specifications for the current experiment.
 
+    Attributes:
+        train (TrainingConfig): Training options
+        name (str): The name of the child experiment
+    """
     train: TrainingConfig
     name: str
-    """Name of the child experiment"""
 
 
 @dataclass
-class ConfigTrainClassifier(Config):
-    """Options for training the classifier."""
+class ConfigTrainClassifier(ConfigTrain):
+    """Configuration for training the classifier.
+
+    Attributes:
+        model (ClassifierConfig): The classifier model configuration.
+    """
     model: ClassifierConfig
 
 
 @dataclass
-class ConfigTrainAE(Config):
-    """Options for training the autoencoder."""
+class ConfigTrainAE(ConfigTrain):
+    """Configuration for training the autoencoder.
+
+    Attributes:
+        model (AEConfig): The autoencoder model configuration
+        objective (ObjectiveAEConfig): The autoencoder objective (loss and metrics) configuration
+        diagnose_every (StrictlyPositiveInt): The number of points between diagnostics (rearranging the discrete space)
+    """
     model: AEConfig
     objective: ObjectiveAEConfig
     diagnose_every: StrictlyPositiveInt
-    """number of points between diagnostics (PCGen rearranges the discrete space)"""
 
 
 @dataclass
-class ConfigTrainWAE(Config):
-    """Options for training the autoencoder."""
+class ConfigTrainWAE(ConfigTrain):
+    """Configuration for training the W-autoencoder.
+
+    Attributes:
+        objective (ObjectiveWAEConfig): The W-autoencoder objective (loss and metrics) configuration
+    """
     objective: ObjectiveWAEConfig
 
 
 @dataclass
 class ConfigAll:
-    """Configuration root."""
+    """Root configuration for all experiment settings.
+
+    Attributes:
+        base_name (str): The base name of the experiment
+        final (bool): If True, it uses the validation dataset for training and the test dataset for testing
+        classifier (ConfigTrainClassifier): The configuration for training the classifier
+        autoencoder (ConfigTrainAE): The configuration for training the autoencoder
+        w_autoencoder (ConfigTrainWAE): The configuration for training the W-autoencoder
+        user (UserSettings): User-specific settings
+        data (DataConfig): Data pre-processing configuration
+    """
     base_name: str
-    """Name of the experiment."""
     final: bool
-    """uses val dataset for training and test dataset for testing, otherwise test on val."""
+    version: str
     classifier: ConfigTrainClassifier
     autoencoder: ConfigTrainAE
     w_autoencoder: ConfigTrainWAE
     user: UserSettings
     data: DataConfig
+    variant: str = 'default'
+    tags: list[str] = field(default_factory=list)
+    project: str = 'PointCloudCounterfactual'
+    _lens: ConfigTrain | None = None
 
     @property
-    def name(self):
-        """Name of the experiment that clarifies whether metrics are calculated on the test dataset."""
+    def name(self) -> str:
+        """The full name of the experiment, indicating if metrics are calculated on the test dataset."""
         return f'{self.base_name}_final' if self.final else self.base_name
 
+    @property
+    def lens(self) -> ConfigTrain:
+        """The section of the configuration that is currently focused on."""
+        if self._lens is None:
+            raise ValueError('lens not set.')
+        return self._lens
 
-class MainExperiment(dry_torch.ParentExperiment[ConfigAll, Config]):
-    pass
+    @contextmanager
+    def focus(self, section: ConfigTrain) -> Iterator[Self]:
+        """Context manager that focuses on a specific config section."""
+        if self._lens is not None:
+            raise ValueError('lens already set.')
+        self._lens = section
+        try:
+            yield self
+        finally:
+            self._lens = None
 
 
-class ExperimentClassifier(dry_torch.ChildExperiment[ConfigTrainClassifier]):
-    """Subclass for current config."""
-    pass
-
-
-class ExperimentAE(dry_torch.ChildExperiment[ConfigTrainAE]):
-    """Subclass for current config."""
-    pass
-
-
-class ExperimentWAE(dry_torch.ChildExperiment[ConfigTrainWAE]):
-    """Subclass for current config."""
-    pass
+Experiment: TypeAlias = drytorch.Experiment[ConfigAll]
 
 
 def get_config_all(overrides: Optional[list[str]] = None) -> ConfigAll:
@@ -571,8 +697,9 @@ def get_config_all(overrides: Optional[list[str]] = None) -> ConfigAll:
     with hydra.initialize(version_base=None, config_path=ConfigPath.CONFIG_ALL.relative()):
         dict_cfg = hydra.compose(config_name='defaults', overrides=overrides)
         cfg = cast(ConfigAll, OmegaConf.to_object(dict_cfg))
-        # if overrides is not None:
-        #     update_exp_name(cfg, overrides)
+
+        if overrides is not None:
+            update_exp_name(cfg, overrides)
         return cfg
 
 
@@ -586,38 +713,19 @@ def hydra_main(func: Callable[[ConfigAll], None]) -> Callable[[], None]:
         cfg = cast(ConfigAll, OmegaConf.to_object(dict_cfg))
         overrides = HydraConfig.get().overrides.task
         update_exp_name(cfg, overrides)
+        drytorch.init_trackers(mode='hydra')
         return func(cfg)
 
     return wrapper.__call__
 
 
 def update_exp_name(cfg: ConfigAll, overrides: list[str]) -> None:
-    main_overrides = list[str]()
-    autoencoder_overrides = list[str]()
-    classifier_overrides = list[str]()
-    for override in overrides:
-        split_override = override.split('.', maxsplit=1)
-        if len(split_override) == 1:
-            split_override = override.split('/', maxsplit=1)
-            if len(split_override) == 1:
-                continue
-
-        denomination, specification = split_override
-        specification = specification.lower()
-        if specification.startswith('name'):
-            continue
-        if denomination == 'autoencoder':
-            autoencoder_overrides.append(specification)
-        elif denomination == 'w_autoencoder':
-            autoencoder_overrides.append(specification)
-        elif denomination == 'classifier':
-            classifier_overrides.append(specification)
-        elif denomination == 'data':
-            main_overrides.append(specification)
-
-    cfg.autoencoder.name = '_'.join([cfg.autoencoder.name, *autoencoder_overrides])
-    cfg.classifier.name = '_'.join([cfg.classifier.name, *classifier_overrides])
-    cfg.base_name = '_'.join([cfg.base_name, *main_overrides])
+    """Adds the overrides to the name for the experiment."""
+    overrides = [override for override in overrides
+                 if override.split('.')[0] != 'user' and
+                 override.split('=')[0] != 'final']
+    cfg.base_name = '_'.join([cfg.base_name] + overrides).replace('/', '_')
+    cfg.tags = overrides
     return
 
 

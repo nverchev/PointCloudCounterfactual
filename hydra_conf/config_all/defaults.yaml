@@ -7,5 +7,6 @@ defaults:
   - data: default_data
   - _self_
 
-base_name: main
+base_name: VAEX-PCGen
+version: 1.1
 final: false

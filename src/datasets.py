@@ -1,27 +1,31 @@
+"""Module that defines the datasets for the project."""
+
+import abc
 import json
 from abc import ABCMeta, abstractmethod
 import enum
 import pathlib
 from collections.abc import Iterable, Callable
-from typing import Any, Literal
+from typing import Any, Generic, TypeVar, Generator, Literal
 
-import h5py  # type: ignore
 import torch
 import numpy as np
 import numpy.typing as npt
-import glob2  # type: ignore
 from torch.utils.data import Dataset
-from dry_torch import Model
+from drytorch import Model
 from typing_extensions import override
 
-from src.config_options import MainExperiment, Datasets
+from src.config_options import Experiment, Datasets
 from src.data_structures import Inputs, Targets, W_Targets, Outputs, W_Inputs
-from src.autoencoder import VQVAE
+from src.autoencoder import AbstractVQVAE, VQVAE, CounterfactualVQVAE
 from src.utils import download_zip, load_h5_modelnet
 from src.utils import Singleton
 
+VQ = TypeVar('VQ', bound=AbstractVQVAE)
+
 
 class Partitions(enum.Enum):
+    """Splits of the dataset."""
     train = enum.auto()
     train_val = enum.auto()
     val = enum.auto()
@@ -29,6 +33,7 @@ class Partitions(enum.Enum):
 
 
 def normalise(cloud: npt.NDArray) -> tuple[npt.NDArray, float]:
+    """Standard normalization to unit sphere."""
     cloud -= cloud.mean(axis=0)
     std = np.max(np.sqrt(np.sum(cloud ** 2, axis=1)))
     cloud /= std
@@ -36,6 +41,7 @@ def normalise(cloud: npt.NDArray) -> tuple[npt.NDArray, float]:
 
 
 def jitter(cloud: torch.Tensor, sigma: float = 0.01, clip: float = 0.02) -> torch.Tensor:
+    """Add noise to points coordinates."""
     jitter_noise = torch.randn(cloud.shape) * torch.tensor(sigma)
     new_cloud = cloud.clone()
     new_cloud += torch.clamp(jitter_noise, min=-clip, max=clip)
@@ -43,35 +49,38 @@ def jitter(cloud: torch.Tensor, sigma: float = 0.01, clip: float = 0.02) -> torc
 
 
 def random_rotation() -> Callable[[torch.Tensor], torch.Tensor]:
+    """Define random rotation to be applied to input and reference clouds."""
     theta = torch.tensor(2 * torch.pi) * torch.rand(1)
     s = torch.sin(theta)
     rotation_matrix = torch.eye(2) * torch.cos(theta)
     rotation_matrix[0, 1] = -s
     rotation_matrix[1, 0] = s
 
-    def rotate(cloud: torch.Tensor) -> torch.Tensor:
+    def _rotate(cloud: torch.Tensor) -> torch.Tensor:
         new_cloud = cloud.clone()
         new_cloud[:, [0, 2]] = cloud[:, [0, 2]].mm(rotation_matrix)
         return new_cloud
 
-    return rotate
+    return _rotate
 
 
 def random_scale_and_translate() -> Callable[[torch.Tensor], torch.Tensor]:
+    """Define random scaling and translation to be applied to input and reference clouds."""
     scale = torch.rand(1, 3) * 5 / 6 + 2 / 3
     translate = torch.rand(1, 3) * 0.4 - 0.2
 
-    def scale_and_translate(cloud: torch.Tensor) -> torch.Tensor:
+    def _scale_and_translate(cloud: torch.Tensor) -> torch.Tensor:
         new_cloud = cloud.clone()
         new_cloud *= scale
         new_cloud += translate
         return new_cloud
 
-    return scale_and_translate
+    return _scale_and_translate
 
 
 def jitter_cloud() -> Callable[[torch.Tensor], torch.Tensor]:
-    cfg_data = MainExperiment.get_config().data
+    """Add Jitter depending on the configuration."""
+    cfg_data = Experiment.get_config().data
     jitter_sigma = cfg_data.jitter_sigma
     jitter_clip = cfg_data.jitter_clip
 
@@ -84,11 +93,12 @@ def jitter_cloud() -> Callable[[torch.Tensor], torch.Tensor]:
 
 
 def augment_clouds() -> Callable[[Iterable[torch.Tensor]], Iterable[torch.Tensor]]:
-    cfg_data = MainExperiment.get_config().data
+    """Combine rotation, translation and scaling depending on the configuration."""
+    cfg_data = Experiment.get_config().data
     rotation_flag = cfg_data.rotation
     translation_and_scale_flag = cfg_data.translation
 
-    def augment(clouds: Iterable[torch.Tensor]) -> Iterable[torch.Tensor]:
+    def _augment(clouds: Iterable[torch.Tensor]) -> Iterable[torch.Tensor]:
         if rotation_flag:
             rotate = random_rotation()
             clouds = map(rotate, clouds)
@@ -97,7 +107,7 @@ def augment_clouds() -> Callable[[Iterable[torch.Tensor]], Iterable[torch.Tensor
             clouds = map(scale_and_translate, clouds)
         return clouds
 
-    return augment
+    return _augment
 
 
 class PointCloudDataset(Dataset[tuple[Inputs, Targets]], metaclass=ABCMeta):
@@ -111,10 +121,12 @@ class PointCloudDataset(Dataset[tuple[Inputs, Targets]], metaclass=ABCMeta):
         ...
 
 
-class Modelnet40Split(PointCloudDataset):
+class ModelNet40Split(PointCloudDataset):
+    """Class for the ModelNet40 dataset sampled with 2048 points."""
+
     def __init__(self, pcd, indices, labels) -> None:
         super().__init__()
-        cfg_data = MainExperiment.get_config().data
+        cfg_data = Experiment.get_config().data
         self.pcd = pcd.astype(np.float32)
         self.indices = indices
         self.labels = labels
@@ -134,14 +146,14 @@ class Modelnet40Split(PointCloudDataset):
         if not torch.is_inference_mode_enabled():
             index_pool = np.arange(np_cloud.shape[0])
             sampled_indices = np.random.choice(index_pool, size=self.input_points, replace=True)
-            input_cloud = normalise(np_cloud)[0]
+            input_cloud = normalise(np_cloud[sampled_indices])[0]
             cloud = torch.from_numpy(input_cloud)
 
             cloud = self.jitter(cloud)
             if self.resample:
                 sampled_indices = np.random.choice(index_pool, size=self.input_points, replace=True)
                 np_ref_cloud = normalise(np_cloud)[0]
-                ref_cloud = torch.from_numpy(np_ref_cloud)
+                ref_cloud = torch.from_numpy(np_ref_cloud[sampled_indices])
                 cloud, ref_cloud, *_ = self.augment([cloud, ref_cloud])
             else:
                 cloud, *_ = self.augment([cloud])
@@ -153,9 +165,11 @@ class Modelnet40Split(PointCloudDataset):
 
 
 class ShapenetFlowSplit(PointCloudDataset):
+    """Class for the Shapenet dataset sampled with 10.000 points."""
+
     def __init__(self, paths: list[pathlib.Path]) -> None:
         super().__init__()
-        cfg_data = MainExperiment.get_config().data
+        cfg_data = Experiment.get_config().data
         self.paths = paths
         self.pcd = list[npt.NDArray]()
         self.input_points = cfg_data.n_input_points
@@ -194,13 +208,26 @@ class ShapenetFlowSplit(PointCloudDataset):
         return Inputs(cloud=input_cloud), Targets(ref_cloud=ref_cloud, label=label)
 
 
-class Modelnet40Dataset(metaclass=Singleton):
+class AbstractSingleton(Singleton, abc.ABCMeta):
+    """Combining abstract and singleton metaclass."""
+
+
+class SplitCreator(abc.ABC, metaclass=AbstractSingleton):
+    """Abstract class that creates the splits for a dataset. Instantiated only once for efficiency."""
+
+    @abc.abstractmethod
+    def split(self, split: Partitions) -> Dataset[tuple[Inputs, Targets]]:
+        """Retrieve the split."""
+
+
+class ModelNet40Dataset(SplitCreator):
+    """This class creates the splits for the ModelNet40 Dataset"""
 
     def __init__(self) -> None:
-        cfg = MainExperiment.get_config()
-        user_cfg = MainExperiment.get_config().user
+        cfg = Experiment.get_config()
+        user_cfg = cfg.user
 
-        with open(user_cfg.path.metadata_dir / 'modelnet_classes.txt', 'r') as f:
+        with open(user_cfg.path.metadata_dir / 'modelnet_classes.txt') as f:
             self.classes = f.read().splitlines()
         selected_classes = cfg.data.dataset.settings['select_classes']
         try:
@@ -212,12 +239,13 @@ class Modelnet40Dataset(metaclass=Singleton):
 
         self.data_dir = user_cfg.path.data_dir
         self.modelnet_path = self.data_dir / 'modelnet40_hdf5_2048'
-        self.download()
+        self._download()
         self.pcd, self.indices, self.labels = {}, {}, {}
         for split in [Partitions.train, Partitions.test]:
-            pcd, indices, labels = load_h5_modelnet(self.modelnet_path / f'*{split.name}*.h5',
-                                                    cfg.data.n_input_points,
-                                                    cfg.data.k)
+            pcd, indices, labels = load_h5_modelnet(path=self.modelnet_path,
+                                                    wild_str=f'*{split.name}*.h5',
+                                                    input_points=cfg.data.n_input_points,
+                                                    k=cfg.data.k)
             selected_indices: slice | np.ndarray[Any, np.dtype[np.bool_]]
             if cfg.data.dataset.n_classes == 40:
                 selected_indices = slice(None)
@@ -228,19 +256,20 @@ class Modelnet40Dataset(metaclass=Singleton):
             self.indices[split] = indices[selected_indices]
             self.labels[split] = np.vectorize(label_map.get)(labels[selected_indices])
 
+    @override
     def split(self, split: Partitions) -> Dataset[tuple[Inputs, Targets]]:
         if split == Partitions.train_val:
             assert Partitions.val not in self.pcd.keys(), 'train dataset has already been split'
             split = Partitions.train
         elif split in [Partitions.train, Partitions.val] and Partitions.val not in self.pcd.keys():
-            self.train_val_to_train_and_val()
-        return Modelnet40Split(pcd=self.pcd[split], indices=self.indices[split], labels=self.labels[split])
+            self._train_val_to_train_and_val()
+        return ModelNet40Split(pcd=self.pcd[split], indices=self.indices[split], labels=self.labels[split])
 
-    def download(self) -> None:
+    def _download(self) -> None:
         url = 'https://cloud.tsinghua.edu.cn/f/b3d9fe3e2a514def8097/?dl=1'
         return download_zip(target_folder=self.modelnet_path, url=url)
 
-    def train_val_to_train_and_val(self, val_every: int = 6) -> None:
+    def _train_val_to_train_and_val(self, val_every: int = 6) -> None:
         train_idx = list(range(self.pcd[Partitions.train].shape[0]))
         val_idx = [train_idx.pop(i) for i in train_idx[::-val_every]]
         # partition train into train and val
@@ -250,12 +279,14 @@ class Modelnet40Dataset(metaclass=Singleton):
             self.labels[new_split] = self.labels[Partitions.train][new_split_idx]
 
 
-class ShapeNetDatasetFlow(metaclass=Singleton):
+class ShapeNetDatasetFlow(SplitCreator):
+    """This class creates the splits for the Shapenet Dataset."""
 
     def __init__(self):
-        cfg = MainExperiment.get_config()
-        user_cfg = MainExperiment.get_config().user
-        with open(user_cfg.path.metadata_dir / 'shapenet_PointFlow_classes.json', 'r') as f:
+        cfg = Experiment.get_config()
+        user_cfg = cfg.user
+
+        with open(user_cfg.path.metadata_dir / 'shapenet_PointFlow_classes.json') as f:
             self.classes = json.load(f)
 
         self.data_dir = user_cfg.path.data_dir
@@ -266,7 +297,7 @@ class ShapeNetDatasetFlow(metaclass=Singleton):
         self.paths = dict[Partitions, list[pathlib.Path]]()
 
         if cfg.data.dataset.n_classes < 55:
-            selected_classes = cfg.data.dataset.settings['select_classes']
+            selected_classes = cfg.data.dataset.opt_settings['select_classes']
             folders = [folder for folder in folders if self.classes[folder.name] in selected_classes]
             assert folders, 'class is not in dataset'
         for folder in folders:
@@ -279,174 +310,289 @@ class ShapeNetDatasetFlow(metaclass=Singleton):
             self.paths.setdefault(Partitions.val, []).extend(val_files)
             self.paths.setdefault(Partitions.test, []).extend(test_files)
 
+    @override
     def split(self, split: Partitions) -> Dataset[tuple[Inputs, Targets]]:
         return ShapenetFlowSplit(self.paths[split])
 
 
-def get_dataset(partition: Partitions) -> PointCloudDataset:
-    cfg = MainExperiment.get_config()
-    user_cfg = MainExperiment.get_config().user
-    user_cfg.path.data_dir.mkdir(exist_ok=True)
+class BaseVQDataset(Dataset, Generic[VQ], metaclass=ABCMeta):
+    """Base dataset for VQVAE models with common functionality."""
 
-    dataset_name = cfg.data.dataset.name
-    dataset_dict: dict[Datasets, Any] = {Datasets.ModelNet: Modelnet40Dataset,
-                                         Datasets.ShapenetFlow: ShapeNetDatasetFlow}
-    dataset = dataset_dict[dataset_name]().split(partition)
-    return dataset
+    max_batch = 64
 
-
-class WDatasetWithProbs(Dataset[tuple[W_Inputs, W_Targets]]):
-
-    def __init__(
-            self,
-            dataset: Dataset[tuple[Inputs, Targets]],
-            autoencoder: VQVAE,
-            classifier: Model[Inputs, torch.Tensor]
-    ) -> None:
+    def __init__(self, dataset: Dataset[tuple[Inputs, Targets]], autoencoder: VQ) -> None:
         self.dataset = dataset
-        if hasattr(dataset, '__len__'):
-            self.dataset_len = dataset.__len__()
-        else:
+        if not hasattr(dataset, '__len__'):
             raise ValueError('Dataset does not have ``__len__`` method')
+        self.dataset_len = len(dataset)
         self.autoencoder = autoencoder
         self.device: torch.device = next(autoencoder.parameters()).device
-        self.classifier = classifier
-        self.classifier.module = classifier.module.eval()
-        self.max_batch = 64
 
-    def __getitems__(self, index_list: list[int]) -> list[tuple[W_Inputs, W_Targets]]:
-        self.autoencoder = self.autoencoder.train(not torch.is_inference_mode_enabled())
+    def __len__(self) -> int:
+        return self.dataset_len
 
-        # Load all data points
+    def _get_data(self, index_list: list[int]) -> Generator[tuple[Inputs, torch.Tensor], None, None]:
+        """Common data loading logic."""
         dataset_batch = [self.dataset[i] for i in index_list]
         batched_cloud = torch.stack([data[0].cloud for data in dataset_batch]).to(self.device)
         batched_indices = torch.cat([data[0].indices for data in dataset_batch]).to(self.device)
-        outputs = list[tuple[W_Inputs, W_Targets]]()
+        batched_labels = torch.cat([data[1].label.unsqueeze(0) for data in dataset_batch]).to(self.device)
 
         for i in range(0, len(index_list), self.max_batch):
             batch_slice = slice(i, i + self.max_batch)
             cloud_batch = batched_cloud[batch_slice]
             indices_batch = batched_indices[batch_slice]
             batch_inputs = Inputs(cloud=cloud_batch, indices=indices_batch)
+            batch_labels = batched_labels[batch_slice]
+            yield batch_inputs, batch_labels
 
-            batch_logits = self._run_classifier(batch_inputs)
-            batch_ae_data = self._run_autoencoder(cloud_batch, indices_batch)
-            for (w_q, one_hot_idx), logits in zip(batch_ae_data, batch_logits):
-                outputs.append((W_Inputs(w_q, logits), W_Targets(one_hot_idx=one_hot_idx, logits=logits)))
+    @abstractmethod
+    def __getitems__(self, index_list: list[int]) -> list:
+        """Subclasses must implement this method."""
+        pass
 
-        return outputs
+
+class ClassifierMixin:
+    """Mixin for datasets that need classifier functionality."""
+
+    def __init__(self, classifier: Model[Inputs, torch.Tensor], **kwargs):
+        super().__init__(**kwargs)
+        self.classifier = classifier
 
     @torch.inference_mode()
-    def _run_autoencoder(self,
-                         batched_cloud: torch.Tensor,
-                         batched_indices: torch.Tensor) -> list[tuple[torch.Tensor, torch.Tensor]]:
-        data = self.autoencoder.encode(batched_cloud, batched_indices)
-        w, one_hot_idx = self.autoencoder.quantise(data.w_q)
+    def _run_classifier(self, batch_inputs: Inputs) -> torch.Tensor:
+        """Run classifier on batch inputs."""
+        return self.classifier(batch_inputs)
 
-        return list(zip(data.w_q, one_hot_idx))
+
+class WDataset(BaseVQDataset[VQ], Dataset[tuple[W_Inputs, W_Targets]]):
+    """Dataset for training inner autoencoder with discrete codes."""
+
+    def __getitems__(self, index_list: list[int]) -> list[tuple[W_Inputs, W_Targets]]:
+        self.autoencoder = self.autoencoder.train(not torch.is_inference_mode_enabled())
+        batch_data = []
+
+        for batch_inputs, labels in self._get_data(index_list):
+            batch_ae_data = self._run_autoencoder(batch_inputs)
+            batch_w_q, batch_one_hot_idx = batch_ae_data.w_q, batch_ae_data.one_hot_idx
+
+            for w_q, one_hot_idx in zip(batch_w_q, batch_one_hot_idx):
+                batch_data.append((W_Inputs(w_q), W_Targets(one_hot_idx=one_hot_idx)))
+
+        return batch_data
 
     @torch.inference_mode()
-    def _run_classifier(self, batched_cloud: Inputs) -> torch.Tensor:
-        logits = self.classifier(batched_cloud)
-        return logits
+    def _run_autoencoder(self, inputs: Inputs) -> Outputs:
+        """Run autoencoder encoding and quantization."""
+        data = self.autoencoder.encode(inputs)
+        data.w, data.one_hot_idx = self.autoencoder.quantizer.quantize(data.w_q)
+        return data
 
-    def __len__(self) -> int:
-        return self.dataset_len
 
+class WDatasetWithLogits(ClassifierMixin, WDataset[CounterfactualVQVAE]):
+    """W Dataset with classifier logits for conditional training."""
 
-class ReconstructedDataset(Dataset[tuple[Inputs, Targets]]):
     def __init__(
             self,
             dataset: Dataset[tuple[Inputs, Targets]],
-            autoencoder: VQVAE,
+            autoencoder: CounterfactualVQVAE,
             classifier: Model[Inputs, torch.Tensor]
-
     ) -> None:
-        self.dataset = dataset
-        if hasattr(dataset, '__len__'):
-            self.dataset_len = dataset.__len__()
-        else:
-            raise ValueError('Dataset does not have ``__len__`` method')
-        self.autoencoder = autoencoder.eval()
-        self.device: torch.device = next(autoencoder.parameters()).device
-        self.classifier = classifier
-        self.classifier.module = classifier.module.eval()
+        super().__init__(
+            dataset=dataset,
+            autoencoder=autoencoder,
+            classifier=classifier
+        )
+
+    def __getitems__(self, index_list: list[int]) -> list[tuple[W_Inputs, W_Targets]]:
+        self.autoencoder = self.autoencoder.train(not torch.is_inference_mode_enabled())
+        batch_data = []
+
+        for batch_inputs, labels in self._get_data(index_list):
+            batch_ae_data = self._run_autoencoder(batch_inputs)
+            batch_logits = self._run_classifier(batch_inputs)
+            batch_w_q, batch_one_hot_idx = batch_ae_data.w_q, batch_ae_data.one_hot_idx
+
+            for w_q, one_hot_idx, logit in zip(batch_w_q, batch_one_hot_idx, batch_logits):
+                batch_data.append((
+                    W_Inputs(w_q, logit),
+                    W_Targets(one_hot_idx=one_hot_idx, logits=logit)
+                ))
+
+        return batch_data
+
+
+class ReconstructedDataset(BaseVQDataset[VQVAE], Dataset[tuple[Inputs, Targets]]):
+    """Dataset with reconstructed inputs after double encoding."""
 
     def __getitems__(self, index_list: list[int]) -> list[tuple[Inputs, Targets]]:
-        dataset_batch = [self.dataset[i] for i in index_list]
-        batched_cloud = torch.stack([data[0].cloud for data in dataset_batch]).to(self.device)
-        batched_indices = torch.cat([data[0].indices for data in dataset_batch]).to(self.device)
-        batched_labels = torch.cat([data[1].label.unsqueeze(0) for data in dataset_batch]).to(self.device)
-        batched_inputs = Inputs(cloud=batched_cloud, indices=batched_indices)
-        batched_logits = self._run_classifier(batched_inputs)
-        new_labels = self._modify_labels(batched_labels)
-        recons = self._run_autoencoder(batched_cloud, batched_indices, batched_logits, new_labels).recon
-        batch = list[tuple[Inputs, Targets]]()
-        for recon, label in zip(recons, new_labels):
-            batch.append((Inputs(cloud=recon), Targets(ref_cloud=recon, label=label)))
-        return batch
+        self.autoencoder = self.autoencoder.eval()
+        batch_data = []
+
+        for batch_inputs, batch_labels in self._get_data(index_list):
+            batch_ae_data = self._run_autoencoder(batch_inputs)
+            recons = batch_ae_data.recon
+
+            for recon, label in zip(recons, batch_labels):
+                batch_data.append((
+                    Inputs(cloud=recon),
+                    Targets(ref_cloud=recon, label=label)
+                ))
+
+        return batch_data
 
     @torch.inference_mode()
-    def _run_classifier(self, batched_cloud: Inputs) -> torch.Tensor:
-        logits = self.classifier(batched_cloud)
-        return logits
-
-    @torch.inference_mode()
-    def _run_autoencoder(self,
-                         batched_cloud: torch.Tensor,
-                         batched_indices: torch.Tensor,
-                         batched_logits: torch.Tensor,
-                         labels: torch.Tensor) -> Outputs:
-        _unused = (labels, batched_logits)
+    def _run_autoencoder(self, inputs: Inputs) -> Outputs:
+        """Run autoencoder with double encoding."""
         with self.autoencoder.double_encoding:
-            data = self.autoencoder.encode(batched_cloud, batched_indices)
-            return self.autoencoder.decode(data)
-
-    def _modify_labels(self, labels: torch.Tensor) -> torch.Tensor:
-        return labels
-
-    def __len__(self) -> int:
-        return self.dataset_len
+            return self.autoencoder(inputs)
 
 
-class CounterfactualDataset(ReconstructedDataset):
+class ReconstructedDatasetWithLogits(ClassifierMixin, ReconstructedDataset):
+    """Reconstructed dataset with classifier logits."""
+
     def __init__(
             self,
             dataset: Dataset[tuple[Inputs, Targets]],
-            autoencoder: VQVAE,
-            classifier: Model[Inputs, torch.Tensor],
-            target_label: Literal['original'] | int = 'original',
-            target_value: float = 1.,
-            num_classes: int = 2,
+            autoencoder: CounterfactualVQVAE,
+            classifier: Model[Inputs, torch.Tensor]
     ) -> None:
-        super().__init__(dataset, autoencoder, classifier=classifier)
-        self.num_classes = num_classes
-        self.target_label = target_label
-        self.target_value = target_value
+        super().__init__(
+            dataset=dataset,
+            autoencoder=autoencoder,
+            classifier=classifier
+        )
 
-    @override
+    def __getitems__(self, index_list: list[int]) -> list[tuple[Inputs, Targets]]:
+        self.autoencoder = self.autoencoder.eval()
+        self.classifier.module = self.classifier.module.eval()
+        batch_data = []
+
+        for batch_inputs, batch_labels in self._get_data(index_list):
+            batch_logits = self._run_classifier(batch_inputs)
+            batch_ae_data = self._run_autoencoder(batch_inputs, batch_logits)
+            recons = batch_ae_data.recon
+
+            for recon, label in zip(recons, batch_labels):
+                batch_data.append((
+                    Inputs(cloud=recon),
+                    Targets(ref_cloud=recon, label=label)
+                ))
+
+        return batch_data
+
     @torch.inference_mode()
-    def _run_autoencoder(self,
-                         batched_cloud: torch.Tensor,
-                         batched_indices: torch.Tensor,
-                         batched_logits: torch.Tensor,
-                         target_dim: torch.Tensor) -> Outputs:
+    def _run_autoencoder(self, inputs: Inputs, batched_logits: None | torch.Tensor = None) -> Outputs:
+        """Run autoencoder with logits conditioning."""
+        if batched_logits is None:
+            batched_logits = self._run_classifier(inputs)
 
         with self.autoencoder.double_encoding:
-            data = self.autoencoder.encode(batched_cloud, batched_indices)
-            probs = torch.nn.functional.softmax(batched_logits, dim=1) / self.autoencoder.w_autoencoder.temperature
+            data = self.autoencoder.encode(inputs)
+            data.probs = self.autoencoder.w_autoencoder.relaxed_softmax(batched_logits)
+            return self.autoencoder.decode(data, inputs)
+
+
+class CounterfactualDataset(ClassifierMixin, BaseVQDataset[CounterfactualVQVAE]):
+    """Dataset for counterfactual reconstruction with target conditioning."""
+
+    def __init__(
+            self,
+            dataset: Dataset[tuple[Inputs, Targets]],
+            autoencoder: CounterfactualVQVAE,
+            classifier: Model[Inputs, torch.Tensor],
+            target_label: int | Literal['original'] = 'original',
+            target_value: float = 1.0,
+            num_classes: int = 2,
+    ) -> None:
+        super().__init__(
+            dataset=dataset,
+            autoencoder=autoencoder,
+            classifier=classifier
+        )
+        self.num_classes = num_classes
+        self.target_label = target_label  # don't convert to tensor yet
+        self.target_value = target_value
+
+    def __getitems__(self, index_list: list[int]) -> list[tuple[Inputs, Targets]]:
+        self.autoencoder = self.autoencoder.eval()
+        batch_data = []
+
+        for batch_inputs, batch_labels in self._get_data(index_list):
+            batch_ae_data = self._run_autoencoder(batch_inputs, None, self.target_label, self.target_value)
+            recons = batch_ae_data.recon
+
+            # For targets, use original labels when target_label is 'original'
+            target_for_labels = batch_labels if self.target_label == 'original' else torch.tensor(self.target_label)
+
+            for recon, original_label in zip(recons, batch_labels):
+                final_label = original_label if self.target_label == 'original' else target_for_labels
+                batch_data.append((
+                    Inputs(cloud=recon),
+                    Targets(ref_cloud=recon, label=final_label)
+                ))
+
+        return batch_data
+
+    @torch.inference_mode()
+    def _run_autoencoder(
+            self,
+            inputs: Inputs,
+            batched_logits: None | torch.Tensor = None,
+            target_dim: int | Literal['original'] = 'original',
+            value: float = 1.0
+    ) -> Outputs:
+        """Run autoencoder with counterfactual conditioning."""
+        if batched_logits is None:
+            batched_logits = self._run_classifier(inputs)
+
+        with self.autoencoder.double_encoding:
+            data = self.autoencoder.encode(inputs)
+            probs = self.autoencoder.w_autoencoder.relaxed_softmax(batched_logits)
+
+            # Initialize target tensor
             target = torch.zeros_like(probs)
-            target[:, target_dim] = 1
-            data.probs = (1 - self.target_value) * probs + self.target_value * target
-            return self.autoencoder.decode(data)
 
-    @override
-    def _modify_labels(self, labels: torch.Tensor) -> torch.Tensor:
-        if self.target_label == 'original':
-            target_dim = labels
-        else:
-            target_dim = self.target_label * torch.ones_like(labels, dtype=torch.long)
-        return target_dim
+            if target_dim == 'original':
+                # Use original probabilities (no modification)
+                data.probs = probs
+            else:
+                # Apply counterfactual conditioning
+                target[:, target_dim] = 1
+                data.probs = (1 - value) * probs + value * target
 
-    def __len__(self) -> int:
-        return self.dataset_len
+            return self.autoencoder.decode(data, inputs)
+
+
+class BoundaryDataset(CounterfactualDataset):
+    """Dataset for boundary reconstruction with neutral conditioning."""
+
+    def __init__(
+            self,
+            dataset: Dataset[tuple[Inputs, Targets]],
+            autoencoder: CounterfactualVQVAE,
+            classifier: Model[Inputs, torch.Tensor],
+            target_label: int = 0,
+            num_classes: int = 2,
+    ) -> None:
+        super().__init__(
+            dataset=dataset,
+            autoencoder=autoencoder,
+            classifier=classifier,
+            target_label=target_label,
+            target_value=1 / num_classes,  # Neutral probability
+            num_classes=num_classes
+        )
+
+
+def get_dataset(partition: Partitions) -> PointCloudDataset:
+    """Getter for the dataset."""
+    cfg = Experiment.get_config()
+    user_cfg = Experiment.get_config().user
+    user_cfg.path.data_dir.mkdir(exist_ok=True)
+
+    dataset_name = cfg.data.dataset.name
+    dataset_dict: dict[Datasets, Any] = {Datasets.ModelNet: ModelNet40Dataset,
+                                         Datasets.ShapenetFlow: ShapeNetDatasetFlow}
+    dataset = dataset_dict[dataset_name]().split(partition)
+    return dataset

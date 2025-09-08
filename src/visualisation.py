@@ -1,3 +1,5 @@
+"""A module for visualizing point clouds and latent spaces using PyVista and Visdom."""
+
 import pathlib
 from typing import Literal, Optional, Sequence
 
@@ -6,8 +8,10 @@ from numpy import typing as npt
 import torch
 import pyvista as pv
 from sklearn.decomposition import PCA  # type: ignore
+from matplotlib import pyplot as plt
+import seaborn as sns
 
-from src.config_options import ExperimentAE, MainExperiment
+from src.config_options import Experiment
 from src.data_structures import Inputs
 from src.autoencoder import AutoEncoder
 
@@ -25,6 +29,7 @@ def render_scan(clouds: Sequence[npt.NDArray],
                 title: str = 'Cloud',
                 save_dir: pathlib.Path = pathlib.Path() / 'images',
                 ) -> None:
+    """Renders a sequence of point clouds using a scan-like visualization with PyVista."""
     plotter = pv.Plotter(lighting='three lights',
                          window_size=(1024, 1024),
                          notebook=False,
@@ -48,11 +53,6 @@ def render_scan(clouds: Sequence[npt.NDArray],
         else:
             raise ValueError('Colorscale not available.')
 
-        n = cloud.shape[0]
-        # cloud_pv = pv.PolyData(cloud[:, :3])
-        # geom = pv.Sphere(theta_resolution=8, phi_resolution=8)
-        # cloud_pv["radius"] = .2 * np.ones(n)
-        # glyphs = cloud_pv.glyph(scale='radius', geom=geom, orient=False)
         plotter.add_mesh(pv.PolyData(cloud[:, :3]),
                          color=color,
                          point_size=15,
@@ -81,13 +81,13 @@ def render_cloud(clouds: Sequence[npt.NDArray],
                  title: str = 'Cloud',
                  save_dir: pathlib.Path = pathlib.Path() / 'images',
                  ) -> None:
+    """Renders a sequence of point clouds with optional arrows using PyVista."""
     plotter = pv.Plotter(lighting='three lights',
                          window_size=(1024, 1024),
                          notebook=False,
                          off_screen=not interactive)
     plotter.camera_position = pv.CameraPosition((-3, 1, -2.5), focal_point=(0, 0, 0), viewup=(0, 1, 0))
 
-    # lateral lightning
     for light_point in ((3, 3, -2), (3, 3, 2)):
         light = pv.Light(position=light_point, focal_point=(0, 0, 0), intensity=1, positional=True)
         plotter.add_light(light)
@@ -147,33 +147,26 @@ def infer_and_visualize(model: AutoEncoder,
                         mode: Literal['recon', 'gen'] = 'recon',
                         z_bias: Optional[torch.Tensor] = None,
                         input_pc: Optional[torch.Tensor] = None) -> None:
-    cfg_user = MainExperiment.get_config().user
-    cfg = ExperimentAE.get_config()
-    cfg_ae = cfg.model
+    """Performs inference with an autoencoder and visualizes the results."""
+    cfg = Experiment.get_config()
+
+    cfg_user = cfg.user
+    cfg_model = cfg.autoencoder.model
     n_clouds = len(input_pc) if input_pc is not None else n_clouds
     if n_clouds is None:
         raise ValueError('Number of clouds must be provided.')
-    s = torch.randn(n_clouds, cfg_ae.decoder.sample_dim, cfg.model.training_output_points, device=cfg_user.device)
-    att = torch.empty(n_clouds, cfg.model.training_output_points, cfg_ae.decoder.n_components, device=cfg_user.device)
-    components = torch.empty(n_clouds, 3, cfg.model.training_output_points, cfg_ae.decoder.n_components)
-    # if cfg.add_viz == 'sampling_loop':
-    #     bbox1 = torch.eye(cfg.sample_dim, device=cfg.device, dtype=torch.float32)
-    #     bbox2 = -torch.eye(cfg.sample_dim, device=cfg.device, dtype=torch.float32)
-    #     bbox = torch.cat((bbox1, bbox2), dim=1).unsqueeze(0).expand(n_clouds, -1, -1)
-    #     s = torch.cat([s] + [t * bbox.roll(1, dims=2) + (1 - t) * bbox for t in torch.arange(0, 1, 0.03)], dim=2)
-    #     model.decoder.filtering = False
-    # elif cfg.add_viz == 'filter':
-    #     model.decoder.filtering = False
-    # elif cfg.add_viz == 'none':
-    #     pass
-    # elif cfg.add_viz:
-    #     raise ValueError(f'{cfg.add_viz} is not a recognized argument')
+    s = torch.randn(n_clouds, cfg_model.decoder.sample_dim, cfg_model.training_output_points, device=cfg_user.device)
+    att = torch.empty(
+        n_clouds, cfg_model.training_output_points, cfg_model.decoder.n_components, device=cfg_user.device
+    )
+    components = torch.empty(n_clouds, 3, cfg_model.training_output_points, cfg_model.decoder.n_components)
+
     if mode == 'recon':
         assert z_bias is None
         assert input_pc is not None
         with torch.inference_mode():
             model.eval()
-            inputs = Inputs(cloud=input_pc, initial_sampling=s, viz_att=att, viz_components=components)
+            inputs = Inputs(cloud=input_pc, initial_sampling=s)
             samples_and_loop = model(inputs)
     elif mode == 'gen':
         assert z_bias is not None
@@ -182,45 +175,21 @@ def infer_and_visualize(model: AutoEncoder,
     else:
         raise ValueError('Mode can only be "recon" or "gen".')
     samples_and_loop = samples_and_loop.recon.cpu()
-    samples, *loops = samples_and_loop.split(cfg.model.training_output_points, dim=1)
+    samples, *loops = samples_and_loop.split(cfg_model.training_output_points, dim=1)
 
-    def naming_syntax(num: int, viz_name: Optional[str] = None) -> str:
-        # if mode == 'recon':
-        #     num = cfg.viz[num]
+    def _naming_syntax(num: int, viz_name: Optional[str] = None) -> str:
         viz_name_list = [viz_name] if viz_name is not None else []
         return '_'.join([mode] + viz_name_list + [str(num)])
 
     for i, sample in enumerate(samples):
         sample_np: npt.NDArray = sample.numpy()
-        # if cfg.add_viz == 'sampling_loop':
-        #     sample_name = naming_syntax(i, 'sampling_loop')
-        #     render_cloud((sample_np, loops[0][i].numpy()), title=sample_name, interactive=cfg.interactive_plot)
-        # elif cfg.add_viz == 'components':
-        #     threshold = 0.  # boundary points shown in blue
-        #     att_max, att_argmax = att[i].max(dim=1)
-        #     indices = (att_argmax.cpu() + 1) * (att_max > threshold).bool().cpu()
-        #     pc_list = [sample_np[indices == component] for component in range(cfg.n_components + 1)]
-        #     sample_name = naming_syntax(i, 'attention')
-        #     render_cloud(pc_list, title=sample_name, interactive=cfg.interactive_plot)
-        #     component = components[i].cpu().transpose(1, 0)
-        #     components_cloud = [np.empty(0)]
-        #     for j, j_component in enumerate(component.unbind(2)):
-        #         j_component = j_component + torch.FloatTensor([[(1 - cfg.n_components) / 2 + j, 0, 0]])
-        #         components_cloud.append(j_component.numpy() / cfg.n_components)
-        #     sample_name = naming_syntax(i, 'components')
-        #     render_cloud(components_cloud, title=sample_name, interactive=cfg.interactive_plot)
-        # elif cfg.add_viz == 'filter':
-        #     filter_direction = graph_filtering(sample.transpose(0, 1).unsqueeze(0)).squeeze().transpose(0, 1)
-        #     filter_arrows = filter_direction.numpy() - sample_np
-        #     sample_name = naming_syntax(i, 'filter')
-        #     render_cloud((sample_np,), title=sample_name, arrows=filter_arrows, interactive=cfg.interactive_plot)
-        # elif cfg.add_viz == 'none':
-        sample_name = naming_syntax(i)
+        sample_name = _naming_syntax(i)
         render_cloud((sample_np,), title=sample_name, interactive=cfg_user.plot.interactive)
         pass
 
 
 def show_latent(mu: npt.NDArray, pseudo_mu: npt.NDArray, model_name: str) -> None:
+    """Visualizes latent space embeddings using Visdom."""
     try:
         import visdom
     except ImportError:
@@ -234,7 +203,31 @@ def show_latent(mu: npt.NDArray, pseudo_mu: npt.NDArray, model_name: str) -> Non
     mu_pca = np.vstack((test_mu_pca, pseudo_mu_pca))
     labels = np.hstack((test_labels, pseudo_labels))
     title = 'Continuous Latent Space'
-    exp_name = MainExperiment.get_config().name
+    exp_name = Experiment.get_config().name
     vis = visdom.Visdom(env='_'.join((exp_name, model_name)), raise_exceptions=False)
     vis.scatter(X=mu_pca, Y=labels, win=title,
                 opts=dict(title=title, markersize=5, legend=['Validation', 'Pseudo-Inputs']))
+
+
+def plot_confusion_matrix_heatmap(cm_array: npt.NDArray,
+                                  class_names: list[str],
+                                  title: str = 'Confusion Matrix',
+                                  dpi: int = 300) -> plt.Figure:
+    """Plots the confusion matrix as a heatmap using Matplotlib and Seaborn."""
+    num_classes = len(class_names)
+    plt.figure(figsize=(num_classes + 2, num_classes + 2), dpi=dpi)
+    sns.heatmap(cm_array,
+                annot=True,
+                fmt='d',
+                cmap='Blues',
+                xticklabels=class_names,
+                yticklabels=class_names,
+                linewidths=.5,
+                linecolor='black')
+    plt.title(title, fontsize=16)
+    plt.xlabel('Predicted Label', fontsize=14)
+    plt.ylabel('True Label', fontsize=14)
+    plt.xticks(rotation=45, ha='right', fontsize=12)
+    plt.yticks(rotation=0, fontsize=12)
+    plt.tight_layout()
+    return plt.gcf()  # Get the current matplotlib figure to log

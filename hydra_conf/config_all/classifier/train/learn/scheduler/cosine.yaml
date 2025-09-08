@@ -1,4 +1,7 @@
 function: Cosine
+restart_interval: ${classifier.train.epochs}
+restart_fraction: 1
+warmup_steps: 0
 settings:
-  min_decay: 0.001
+  min_decay: 0.01
   decay_steps:  ${classifier.train.epochs}

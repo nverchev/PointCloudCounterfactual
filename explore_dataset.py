@@ -1,29 +1,28 @@
-from src.datasets import get_dataset, Partitions
-from src.config_options import ExperimentAE, MainExperiment, hydra_main, ConfigAll
+"""Visualize the dataset after pre-processing."""
+
+from src.datasets import get_dataset, Partitions, PointCloudDataset
+from src.config_options import Experiment, hydra_main, ConfigAll
 from src.visualisation import render_cloud
 
 
-def visualize_reconstructions() -> None:
-    cfg = MainExperiment.get_config()
-    cfg_user = cfg.user
+def visualize_dataset(dataset: PointCloudDataset) -> None:
+    """Visualize the first point cloud in the dataset."""
+    cfg_user = Experiment.get_config().user
 
-    test_dataset = get_dataset(Partitions.test if cfg.final else Partitions.val)
-
-    for i in range(len(test_dataset)):
-        row = test_dataset[i]
+    for i in range(len(dataset)):
+        row = dataset[i]
         input_pc = row[0].cloud
         label = row[1].label + 1
-        print(f'Label is {label}')
         render_cloud([input_pc.numpy()], title=f'{label=}', interactive=cfg_user.plot.interactive)
 
 
 @hydra_main
 def main(cfg: ConfigAll) -> None:
-    parent_experiment = MainExperiment(cfg.name, cfg.user.path.exp_par_dir, cfg)
-    exp_ae = ExperimentAE(cfg.autoencoder.name, config=cfg.autoencoder)
-    parent_experiment.register_child(exp_ae)
-    with exp_ae:
-        visualize_reconstructions()
+    """Visualize the dataset after pre-processing."""
+    exp = Experiment(cfg, name=cfg.name, par_dir=cfg.user.path.exp_par_dir, tags=cfg.tags)
+    with exp.create_run(resume=True):
+        dataset = get_dataset(Partitions.test if cfg.final else Partitions.val)
+        visualize_dataset(dataset)
     return
 
 
