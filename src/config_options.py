@@ -660,13 +660,17 @@ class ConfigAll:
     data: DataConfig
     variant: str = 'default'
     tags: list[str] = field(default_factory=list)
-    project: str = 'PointCloudCounterfactual'
     _lens: ConfigTrain | None = None
 
     @property
     def name(self) -> str:
         """The full name of the experiment, indicating if metrics are calculated on the test dataset."""
         return f'{self.base_name}_final' if self.final else self.base_name
+
+    @property
+    def project(self) -> str:
+        """Project name for wandb logging."""
+        return 'PointCloudCounterfactual' + str(self.version)
 
     @property
     def lens(self) -> ConfigTrain:
