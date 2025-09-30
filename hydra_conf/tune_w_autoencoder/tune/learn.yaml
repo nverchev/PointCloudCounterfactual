@@ -15,11 +15,11 @@ params:
     suggest: suggest_int
     settings:
       low: 0
-      high: 0
+      high: 20
 
   w_autoencoder.train.learn.settings.weight_decay:
     suggest: suggest_float
     settings:
-      low: 1e-06
+      low: 0.
       high: 1e-02
       log: true
