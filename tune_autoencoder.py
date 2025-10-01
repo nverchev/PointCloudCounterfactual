@@ -7,6 +7,7 @@ import optuna
 from omegaconf import DictConfig
 from optuna.visualization import plot_param_importances
 import hydra
+import yaml
 
 from drytorch import init_trackers
 from drytorch.contrib.optuna import suggest_overrides, get_final_value
@@ -24,7 +25,7 @@ def set_objective(tune_cfg: DictConfig) -> Callable[[optuna.Trial], float]:
         overrides = suggest_overrides(tune_cfg, trial)
         cfg = get_config_all(overrides)
         exp = Experiment(cfg, name=cfg.name, par_dir=cfg.user.path.exp_par_dir, tags=cfg.tags)
-        with exp.create_run():
+        with exp.create_run(register=False):
             train_autoencoder(trial)
         return get_final_value(trial)
 
@@ -39,7 +40,10 @@ def main(tune_cfg: DictConfig):
     pruner = optuna.pruners.MedianPruner(n_startup_trials=tune_cfg.tune.n_startup_trials,
                                          n_warmup_steps=tune_cfg.tune.n_warmup_steps)
     sampler = optuna.samplers.TPESampler(multivariate=True, warn_independent_sampling=False)
-    study = optuna.create_study(study_name=tune_cfg.tune.study_name,
+    with (ConfigPath.CONFIG_ALL.get_path() / 'defaults').with_suffix('.yaml').open() as f:
+        version = f"v{yaml.safe_load(f)['version']}"
+
+    study = optuna.create_study(study_name=tune_cfg.tune.study_name + '_'.join(['', version] + tune_cfg.overrides[1:]),
                                 storage=tune_cfg.storage,
                                 sampler=sampler,
                                 pruner=pruner,

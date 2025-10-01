@@ -1,4 +1,5 @@
 """Tune the hyperparameters of the w-autoencoder."""
+
 from typing import Callable
 import pathlib
 
@@ -10,6 +11,7 @@ import optuna
 from omegaconf import DictConfig
 from optuna.visualization import plot_param_importances
 import hydra
+import yaml
 
 from src.autoencoder import CounterfactualVQVAE
 from src.classifier import DGCNN
@@ -42,7 +44,7 @@ def set_objective(tune_cfg: DictConfig) -> Callable[[optuna.Trial], float]:
         trial_exp = Experiment(trial_cfg, name='Trial', par_dir=trial_cfg.user.path.exp_par_dir, tags=overrides)
 
         # uses overridden settings for the architecture of the w_autoencoder
-        with trial_exp.create_run(resume=True):
+        with trial_exp.create_run(register=False):
             new_vqvae_module = CounterfactualVQVAE()
             # best to define a new model here otherwise the weights of the w_autoencoder will be modified
             new_autoencoder = Model(new_vqvae_module,
@@ -66,7 +68,10 @@ def tune(tune_cfg: DictConfig):
     pruner = optuna.pruners.MedianPruner(n_startup_trials=tune_cfg.tune.n_startup_trials,
                                          n_warmup_steps=tune_cfg.tune.n_warmup_steps)
     sampler = optuna.samplers.TPESampler(multivariate=True, warn_independent_sampling=False)
-    study = optuna.create_study(study_name=tune_cfg.tune.study_name,
+    with (ConfigPath.CONFIG_ALL.get_path() / 'defaults').with_suffix('.yaml').open() as f:
+        version = f"v{yaml.safe_load(f)['version']}"
+
+    study = optuna.create_study(study_name=tune_cfg.tune.study_name + '_'.join(['', version] + tune_cfg.overrides[1:]),
                                 storage=tune_cfg.storage,
                                 sampler=sampler,
                                 pruner=pruner,
