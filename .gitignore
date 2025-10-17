@@ -11,6 +11,6 @@
 updat*/tensorboard_runs/
 */wandb
 */metrics.db
-.idea
 *pyc
 /optimization_db/
+/__pycache__
