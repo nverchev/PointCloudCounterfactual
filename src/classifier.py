@@ -15,14 +15,14 @@ class DGCNN(nn.Module):
     def __init__(self) -> None:
         super().__init__()
         cfg = Experiment.get_config()
-        cfg_class = cfg.classifier
-        self.k = cfg_class.model.k
-        self.act_cls = cfg_class.model.act_cls
-        self.h_dim = cfg_class.model.hidden_dims
-        self.emb_dim = cfg_class.model.emb_dim
-        self.mlp_dims = cfg_class.model.mlp_dims
-        self.dropout = cfg_class.model.dropout
-        self._classes = cfg_class.model.out_classes
+        cfg_class_ae = cfg.classifier.architecture
+        self.k = cfg_class_ae.k
+        self.act_cls = cfg_class_ae.act_cls
+        self.h_dim = cfg_class_ae.hidden_dims
+        self.emb_dim = cfg_class_ae.emb_dim
+        self.mlp_dims = cfg_class_ae.mlp_dims
+        self.dropout = cfg_class_ae.dropout
+        self._classes = cfg_class_ae.out_classes
         self.num_classes = cfg.data.dataset.n_classes
         conv_modules: list[torch.nn.Module] = [EdgeConvLayer(2 * IN_CHAN, self.h_dim[0], act_cls=self.act_cls)]
         in_dims = self.h_dim[:-1]

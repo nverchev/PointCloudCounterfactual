@@ -78,9 +78,7 @@ def train_w_autoencoder(vqvae: CounterfactualVQVAE,
         trainer.post_epoch_hooks.register(prune_hook)
 
     # trainer.post_epoch_hooks.register(lambda trainer: print(trainer.model.module.temperature))
-
-    trainer.train_until(cfg_w_ae.train.epochs)
-
+    trainer.train_until(cfg_w_ae.train.n_epochs)
     test_encoding()
     return
 
@@ -97,13 +95,13 @@ def main(cfg: ConfigAll) -> None:
         engine_path = cfg.user.path.exp_par_dir / 'metrics.db'
         cfg.user.path.exp_par_dir.mkdir(exist_ok=True)
         engine = sqlalchemy.create_engine(f'sqlite:///{engine_path}')
-        exp.trackers.register(SQLConnection(engine=engine))
+        # exp.trackers.register(SQLConnection(engine=engine))
     with exp.create_run(resume=True):
         classifier_module = DGCNN()
-        classifier = Model(classifier_module, name=cfg.classifier.model.name, device=cfg.user.device)
+        classifier = Model(classifier_module, name=cfg.classifier.architecture.name, device=cfg.user.device)
         classifier.load_state()
         module = CounterfactualVQVAE()
-        autoencoder = Model(module, name=cfg.autoencoder.model.name, device=cfg.user.device)
+        autoencoder = Model(module, name=cfg.autoencoder.architecture.name, device=cfg.user.device)
         autoencoder.checkpoint.load()
         train_w_autoencoder(module, classifier, name=autoencoder.name)
         autoencoder.save_state()
@@ -112,8 +110,8 @@ def main(cfg: ConfigAll) -> None:
                     name='DoubleEncoding',
                     loader=DataLoader(dataset=test_dataset, batch_size=cfg.autoencoder.train.batch_size),
                     metric=get_recon_loss())
-        with module.double_encoding:
-            test()
+        # with module.double_encoding:
+        #     test()
     return
 
 

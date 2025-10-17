@@ -4,5 +4,5 @@ defaults:
   - _self_
 
 batch_size: 16
-epochs: 1000
+n_epochs: 1000
 

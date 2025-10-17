@@ -29,17 +29,17 @@ class BaseWEncoder(nn.Module, metaclass=abc.ABCMeta):
         self.num_classes = cfg.data.dataset.n_classes
 
         # Model configuration
-        cfg_model = cfg_ae.model
-        cfg_w_encoder = cfg_model.encoder.w_encoder
+        cfg_ae_arch = cfg_ae.architecture
+        cfg_w_encoder = cfg_ae_arch.encoder.w_encoder
 
         # Latent space dimensions
-        self.w_dim = cfg_model.w_dim  # W-space dimension
-        self.embedding_dim = cfg_model.embedding_dim  # Input embedding dimension
-        self.z_dim = cfg_model.z1_dim  # Z-space dimension
+        self.w_dim = cfg_ae_arch.w_dim  # W-space dimension
+        self.embedding_dim = cfg_ae_arch.embedding_dim  # Input embedding dimension
+        self.z_dim = cfg_ae_arch.z1_dim  # Z-space dimension
 
         # Vector quantization parameters
-        self.num_codes = cfg_model.n_codes  # Number of codebook vectors
-        self.book_size = cfg_model.book_size  # Size of each codebook
+        self.n_codes = cfg_ae_arch.n_codes  # Number of codebook vectors
+        self.book_size = cfg_ae_arch.book_size  # Size of each codebook
 
         # Network architecture parameters
         self.h_dims_conv = cfg_w_encoder.hidden_dims_conv  # Conv layer dimensions
@@ -83,21 +83,84 @@ class WEncoderConvolution(BaseWEncoder):
 
     def forward(self, x) -> tuple[torch.Tensor, torch.Tensor]:
         """Forward pass."""
-        x = x.view(-1, self.embedding_dim, self.w_dim // self.embedding_dim)
+        x = x.view(-1,  self.n_codes, self.embedding_dim).transpose(2, 1)
         h = self.conv(x).view(-1, self.w_dim * self.h_dims_conv[-1])
         x = self.encode(h)
         return h, x
 
 
+class WEncoderTransformers(BaseWEncoder):
+    """W-space encoder using transformer architecture.
+
+    This encoder uses self-attention mechanisms to transform point cloud
+    embeddings into latent space representations, allowing the model to
+    capture global dependencies in the input.
+    """
+
+    def __init__(self) -> None:
+        super().__init__()
+        self.proj_dim = 128
+        self.input_proj = nn.Linear(self.embedding_dim, self.proj_dim)
+        self.pos_encoding = nn.Parameter(
+            torch.randn(1, self.n_codes, self.proj_dim)
+        )
+        transformer_layers: list[nn.Module] = []
+        for hidden_dim in self.h_dims_conv:
+            encoder_layer = nn.TransformerEncoderLayer(
+                d_model=self.proj_dim,
+                nhead= 4,
+                dim_feedforward=hidden_dim * self.n_codes,
+                dropout=0.1,
+                activation='gelu',
+                batch_first=True,
+                norm_first=True,
+            )
+            transformer_layers.append(encoder_layer)
+
+        self.transformer = nn.Sequential(*transformer_layers)
+        self.compress = PointsConvLayer(self.proj_dim, self.h_dims_conv[-1] * self.embedding_dim, act_cls=self.act_cls)
+        final_dim = self.h_dims_conv[-1] * self.n_codes * self.embedding_dim
+        modules: list[nn.Module] = []
+        dim_pairs = itertools.pairwise([final_dim, *self.h_dims_lin])
+        for (in_dim, out_dim), do in zip(dim_pairs, self.dropout):
+            modules.append(LinearLayer(in_dim, out_dim, act_cls=self.act_cls))
+            modules.append(nn.Dropout(do))
+
+        modules.append(
+            LinearLayer(self.h_dims_lin[-1], 2 * self.z_dim, batch_norm=False)
+        )
+        self.encode = nn.Sequential(*modules)
+
+    def forward(self, x: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor]:
+        """Forward pass through transformer encoder.
+
+        Args:
+            x: Input embedding tensor of shape [batch_size, w_dim]
+
+        Returns:
+            tuple: (hidden_features, latent_encoding)
+                - hidden_features: Features for hierarchical VAE
+                - latent_encoding: Encoded latent parameters (mean and logvar)
+        """
+        batch_size = x.shape[0]
+
+        x = x.view(batch_size, self.n_codes, self.embedding_dim)
+        x = self.input_proj(x)
+        x = x + self.pos_encoding
+        x = self.transformer(x)
+        h = self.compress(x.transpose(1, 2)).reshape(batch_size, -1)
+        z = self.encode(h)
+        return h, z
+
 class BasePointEncoder(nn.Module, metaclass=abc.ABCMeta):
     def __init__(self) -> None:
         super().__init__()
         cfg = Experiment.get_config()
-        cfg_ae = cfg.autoencoder
-        self.k = cfg_ae.model.encoder.k
-        self.h_dim = cfg_ae.model.encoder.hidden_dims
-        self.w_dim = cfg_ae.model.w_dim
-        self.act_cls = cfg_ae.model.encoder.act_cls
+        cfg_ae_arc = cfg.autoencoder.architecture
+        self.k = cfg_ae_arc.encoder.k
+        self.h_dim = cfg_ae_arc.encoder.hidden_dims
+        self.w_dim = cfg_ae_arc.w_dim
+        self.act_cls = cfg_ae_arc.encoder.act_cls
 
     @abc.abstractmethod
     def forward(self, x: torch.Tensor, indices: torch.Tensor) -> torch.Tensor:
@@ -164,12 +227,13 @@ def get_encoder() -> BasePointEncoder:
         Encoders.LDGCNN: LDGCNN,
         Encoders.DGCNN: DGCNN,
     }
-    return dict_encoder[Experiment.get_config().autoencoder.model.encoder.architecture]()
+    return dict_encoder[Experiment.get_config().autoencoder.architecture.encoder.architecture]()
 
 
 def get_w_encoder() -> BaseWEncoder:
     """Returns the correct w_encoder."""
     decoder_dict: dict[WEncoders, type[BaseWEncoder]] = {
         WEncoders.Convolution: WEncoderConvolution,
+        WEncoders.Transformers: WEncoderTransformers,
     }
-    return decoder_dict[Experiment.get_config().autoencoder.model.encoder.w_encoder.architecture]()
+    return decoder_dict[Experiment.get_config().autoencoder.architecture.encoder.w_encoder.architecture]()

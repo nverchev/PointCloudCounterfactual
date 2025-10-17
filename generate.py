@@ -15,12 +15,12 @@ def generate_random_samples():
     cfg_user = cfg.user
     cfg_generate = cfg_user.generate
     module = CounterfactualVQVAE().eval()
-    model = Model(module, name=cfg_ae.model.name, device=cfg_user.device)
+    model = Model(module, name=cfg_ae.architecture.name, device=cfg_user.device)
     model.load_state()
     if module.w_autoencoder.pseudo_manager is not None:
         module.w_autoencoder.pseudo_manager.update_pseudo_latent()
 
-    z1_bias = torch.zeros(cfg_generate.batch_size, cfg_ae.model.z1_dim, device=cfg_user.device)
+    z1_bias = torch.zeros(cfg_generate.batch_size, cfg_ae.architecture.z1_dim, device=cfg_user.device)
     clouds = module.generate(batch_size=cfg_generate.batch_size, z1_bias=z1_bias).recon
     for cloud in clouds:
         np_cloud = cloud.cpu().numpy()

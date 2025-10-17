@@ -32,7 +32,7 @@ def train_classifier() -> None:
     cfg_user = cfg.user
 
     module = DGCNN()
-    model = Model(module, name=cfg_class.model.name, device=cfg_user.device)
+    model = Model(module, name=cfg_class.architecture.name, device=cfg_user.device)
 
     train_dataset = get_dataset(Partitions.train_val if cfg.final else Partitions.train)
     test_dataset = get_dataset(Partitions.test if cfg.final else Partitions.val)
@@ -55,7 +55,7 @@ def train_classifier() -> None:
                                                                 filter_fn=get_trailing_mean(window)))
     if checkpoint_every := cfg_user.checkpoint_every:
         trainer.post_epoch_hooks.register(saving_hook.bind(call_every(checkpoint_every)))
-    trainer.train_until(cfg_class.train.epochs)
+    trainer.train_until(cfg_class.train.n_epochs)
     trainer.save_checkpoint()
     final_test(store_outputs=True)
     outputs_probs = torch.cat(final_test.outputs_list)

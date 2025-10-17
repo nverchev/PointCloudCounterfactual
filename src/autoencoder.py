@@ -96,20 +96,20 @@ class BaseWAutoEncoder(nn.Module, abc.ABC):
     def __init__(self, codebook: torch.Tensor):
         super().__init__()
 
-        self.cfg_ae_model = Experiment.get_config().autoencoder.model
+        self.cfg_ae_arc = Experiment.get_config().autoencoder.architecture
         self.codebook = codebook
         self.dim_codes, self.book_size, self.embedding_dim = codebook.shape
         self.encoder = get_w_encoder()
         self.decoder = get_w_decoder()
-        self.bn = nn.BatchNorm1d(self.cfg_ae_model.z1_dim + self.cfg_ae_model.z2_dim)
+        self.bn = nn.BatchNorm1d(self.cfg_ae_arc.z1_dim + self.cfg_ae_arc.z2_dim)
         self.sampler = GaussianSampler()
         self.distance_calc = DistanceCalculator()
 
-        if self.cfg_ae_model.n_pseudo_inputs > 0:
+        if self.cfg_ae_arc.n_pseudo_inputs > 0:
             self.pseudo_manager: PseudoInputManager | None = PseudoInputManager(
-                self.cfg_ae_model.n_pseudo_inputs,
-                self.cfg_ae_model.embedding_dim,
-                self.cfg_ae_model.z1_dim,
+                self.cfg_ae_arc.n_pseudo_inputs,
+                self.cfg_ae_arc.embedding_dim,
+                self.cfg_ae_arc.z1_dim,
                 self.dim_codes,
             )
         else:
@@ -136,13 +136,13 @@ class BaseWAutoEncoder(nn.Module, abc.ABC):
         self.eval()
         data = Outputs()
 
-        if self.pseudo_manager and self.cfg_ae_model.n_pseudo_inputs > 0:
+        if self.pseudo_manager and self.cfg_ae_arc.n_pseudo_inputs > 0:
             pseudo_z_list = []
             for mu, log_var in self.pseudo_manager.sample_pseudo_latent(batch_size):
                 pseudo_z_list.append(self.sampler.sample(mu, log_var))
             z1 = torch.stack(pseudo_z_list).contiguous()
         else:
-            z1 = torch.randn((batch_size, self.cfg_ae_model.z1_dim), device=z1_bias.device)
+            z1 = torch.randn((batch_size, self.cfg_ae_arc.z1_dim), device=z1_bias.device)
 
         data.z1 = z1 + z1_bias
         return data
@@ -190,13 +190,12 @@ class WAutoEncoder(BaseWAutoEncoder):
     def decode(self, data: Outputs) -> Outputs:
         """Decode with counterfactual generation."""
         data.z1 = self.sampler.sample(data.mu1, data.log_var1, self.training)
-        data.z2 = torch.randn((data.z1.shape[0], self.cfg_ae_model.z2_dim))  # z2_dim should probably be equal 0 here
+        data.z2 = torch.randn((data.z1.shape[0], self.cfg_ae_arc.z2_dim))  # z2_dim should probably be equal 0 here
         z_combined = self.bn(torch.cat((data.z1, data.z2), dim=1))
         data.w_recon = self.decoder(z_combined)
-        data.w_dist, data.idx = self.distance_calc.compute_distances(
+        data.w_dist_2, data.idx = self.distance_calc.compute_distances(
             data.w_recon, self.codebook, self.dim_codes, self.embedding_dim
         )
-
         return data
 
 
@@ -205,8 +204,8 @@ class CounterfactualWAutoEncoder(BaseWAutoEncoder):
 
     def __init__(self, codebook: torch.Tensor):
         cfg = Experiment.get_config()
-        cfg_ae_model = cfg.autoencoder.model
-        cfg_wae = cfg_ae_model.encoder.w_encoder
+        cfg_ae_arc = cfg.autoencoder.architecture
+        cfg_wae = cfg_ae_arc.encoder.w_encoder
         super().__init__(codebook)
         self.n_classes = cfg.data.dataset.n_classes
 
@@ -215,7 +214,9 @@ class CounterfactualWAutoEncoder(BaseWAutoEncoder):
         self.relaxed_softmax = TemperatureScaledSoftmax(dim=1, temperature=cfg_wae.cf_temperature)
         self.z2_inference = PriorDecoder()
         self.posterior = PosteriorDecoder()
-        self.adversarial = nn.Linear(cfg_ae_model.z1_dim, self.n_classes)
+        self.adversarial = nn.Linear(cfg_ae_arc.z1_dim, self.n_classes)
+
+        return
 
     def encode(self, x: Optional[torch.Tensor]) -> Outputs:
         """Encode with adversarial features."""
@@ -253,7 +254,7 @@ class CounterfactualWAutoEncoder(BaseWAutoEncoder):
         # Combine and decode
         z_combined = self.bn(torch.cat((data.z1, data.z2), dim=1))
         data.w_recon = self.decoder(z_combined)
-        data.w_dist, data.idx = self.distance_calc.compute_distances(
+        data.w_dist_2, data.idx = self.distance_calc.compute_distances(
             data.w_recon, self.codebook, self.dim_codes, self.embedding_dim
         )
 
@@ -319,9 +320,9 @@ class AutoEncoder(nn.Module, abc.ABC):
 
     def __init__(self):
         super().__init__()
-        cfg = Experiment.get_config().autoencoder
-        self.m_training = cfg.model.training_output_points
-        self.m_test = cfg.objective.n_inference_output_points
+        cfg_ae = Experiment.get_config().autoencoder
+        self.m_training = cfg_ae.architecture.training_output_points
+        self.m_test = cfg_ae.objective.n_inference_output_points
 
     @property
     def m(self) -> int:
@@ -415,19 +416,20 @@ class AbstractVQVAE(AE, Generic[WA], abc.ABC):
 
     def __init__(self):
         super().__init__()
-        self.cfg_ae_model = Experiment.get_config().autoencoder.model
+        cfg_ae_arc = Experiment.get_config().autoencoder.architecture
+        self.n_codes = cfg_ae_arc.n_codes
+        self.book_size = cfg_ae_arc.book_size
+        self.embedding_dim = cfg_ae_arc.embedding_dim
 
         self.double_encoding = UsuallyFalse()
         self.codebook = nn.Parameter(torch.randn(
-            self.cfg_ae_model.n_codes,
-            self.cfg_ae_model.book_size,
-            self.cfg_ae_model.embedding_dim
+            self.n_codes,
+            self.book_size,
+            self.embedding_dim
         ))
 
         self.w_autoencoder = self._create_w_autoencoder()
-        self.quantizer = VectorQuantizer(
-            self.codebook, self.cfg_ae_model.n_codes, self.cfg_ae_model.embedding_dim
-        )
+        self.quantizer = VectorQuantizer(self.codebook, self.n_codes, self.embedding_dim)
         self.transfer = TransferGrad()
 
     def encode(self, inputs: Inputs) -> Outputs:
@@ -459,10 +461,10 @@ class AbstractVQVAE(AE, Generic[WA], abc.ABC):
         book = self.codebook.repeat(batch, 1, 1)
 
         idx_flat = idx.view(batch * idx.shape[1], 1, 1)
-        idx_expanded = idx_flat.expand(-1, -1, self.cfg_ae_model.embedding_dim)
+        idx_expanded = idx_flat.expand(-1, -1, self.embedding_dim)
         embeddings = book.gather(1, idx_expanded)
 
-        return embeddings.view(-1, self.cfg_ae_model.n_codes * self.cfg_ae_model.embedding_dim)
+        return embeddings.view(-1, self.n_codes * self.embedding_dim)
 
     @torch.inference_mode()
     def generate(self,
@@ -525,7 +527,7 @@ def get_autoencoder() -> AutoEncoder:
         ModelHead.CounterfactualVQVAE: CounterfactualVQVAE
     }
 
-    model_head = Experiment.get_config().autoencoder.model.head
+    model_head = Experiment.get_config().autoencoder.architecture.head
 
     if model_head not in model_registry:
         raise ValueError(f"Unknown model head: {model_head}")

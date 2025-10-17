@@ -15,4 +15,4 @@ counterfactual_value: 1
 
 load_checkpoint: 0
 checkpoint_every: 100
-n_generated_output_points: ${autoencoder.model.training_output_points}
+n_generated_output_points: ${autoencoder.architecture.training_output_points}

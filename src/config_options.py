@@ -7,7 +7,7 @@ import os
 from collections.abc import Iterator
 from contextlib import contextmanager
 from dataclasses import field
-from typing import Optional, Self, Type, Annotated, Callable, TypeAlias, cast
+from typing import Optional, Self, Annotated, Callable, TypeAlias, cast
 
 import dotenv
 import drytorch
@@ -45,10 +45,13 @@ class ConfigPath(enum.StrEnum):
         """Return folder_name."""
         return 'hydra_conf'
 
+    def get_path(self) -> pathlib.Path:
+        """Return folder path."""
+        return pathlib.Path(__file__).parent.parent / self.get_folder() / self
+
     def absolute(self) -> str:
         """Absolute path to folder"""
-        path = pathlib.Path(__file__).parent.parent / self.get_folder() / self
-        return str(path.absolute())
+        return str(self.get_path().absolute().resolve())
 
     def relative(self) -> str:
         """Relative path to folder"""
@@ -89,12 +92,14 @@ class Decoders(enum.StrEnum):
 class WEncoders(enum.StrEnum):
     """Encoder names for the W-autoencoder."""
     Convolution = enum.auto()
+    Transformers = enum.auto()
 
 
 class WDecoders(enum.StrEnum):
     """Decoder names for the W-autoencoder."""
     Convolution = enum.auto()
     Linear = enum.auto()
+    TransformerCross = enum.auto()
 
 
 class ModelHead(enum.StrEnum):
@@ -465,12 +470,12 @@ class TrainingConfig:
     Attributes:
         batch_size (StrictlyPositiveInt): The batch size for training
         learn (LearningConfig): The learning configuration for training
-        epochs (StrictlyPositiveInt): The total number of epochs for training
+        n_epochs (StrictlyPositiveInt): The total number of epochs for training
         early_stopping (EarlyStoppingConfig): The configuration for early stopping
     """
     batch_size: StrictlyPositiveInt
     learn: LearningConfig
-    epochs: StrictlyPositiveInt
+    n_epochs: StrictlyPositiveInt
     early_stopping: EarlyStoppingConfig
 
 
@@ -608,9 +613,9 @@ class ConfigTrainClassifier(ConfigTrain):
     """Configuration for training the classifier.
 
     Attributes:
-        model (ClassifierConfig): The classifier model configuration.
+        architecture (ClassifierConfig): The classifier architecture configuration.
     """
-    model: ClassifierConfig
+    architecture: ClassifierConfig
 
 
 @dataclass
@@ -618,11 +623,11 @@ class ConfigTrainAE(ConfigTrain):
     """Configuration for training the autoencoder.
 
     Attributes:
-        model (AEConfig): The autoencoder model configuration
+        architecture (AEConfig): The autoencoder architecture configuration
         objective (ObjectiveAEConfig): The autoencoder objective (loss and metrics) configuration
         diagnose_every (StrictlyPositiveInt): The number of points between diagnostics (rearranging the discrete space)
     """
-    model: AEConfig
+    architecture: AEConfig
     objective: ObjectiveAEConfig
     diagnose_every: StrictlyPositiveInt
 
@@ -665,7 +670,8 @@ class ConfigAll:
     @property
     def name(self) -> str:
         """The full name of the experiment, indicating if metrics are calculated on the test dataset."""
-        return f'{self.base_name}_final' if self.final else self.base_name
+        out = f'{self.base_name}_final' if self.final else self.base_name
+        return out[:255]
 
     @property
     def project(self) -> str:

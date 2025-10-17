@@ -50,6 +50,7 @@ def main(tune_cfg: DictConfig):
                                 load_if_exists=True)
     study.optimize(set_objective(tune_cfg), n_trials=tune_cfg.tune.n_trials)
     plot_param_importances(study).show(renderer=tune_cfg.renderer)
+    return
 
 
 if __name__ == '__main__':

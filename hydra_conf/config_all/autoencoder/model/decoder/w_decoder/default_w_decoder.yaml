@@ -1,5 +1,0 @@
-architecture: Linear
-expand: 32
-hidden_dims: [256]
-dropout: [.2, 0, 0]
-act_name: ''

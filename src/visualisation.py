@@ -151,15 +151,15 @@ def infer_and_visualize(model: AutoEncoder,
     cfg = Experiment.get_config()
 
     cfg_user = cfg.user
-    cfg_model = cfg.autoencoder.model
+    cfg_ae_arc = cfg.autoencoder.architecture
     n_clouds = len(input_pc) if input_pc is not None else n_clouds
     if n_clouds is None:
         raise ValueError('Number of clouds must be provided.')
-    s = torch.randn(n_clouds, cfg_model.decoder.sample_dim, cfg_model.training_output_points, device=cfg_user.device)
+    s = torch.randn(n_clouds, cfg_ae_arc.decoder.sample_dim, cfg_ae_arc.training_output_points, device=cfg_user.device)
     att = torch.empty(
-        n_clouds, cfg_model.training_output_points, cfg_model.decoder.n_components, device=cfg_user.device
+        n_clouds, cfg_ae_arc.training_output_points, cfg_ae_arc.decoder.n_components, device=cfg_user.device
     )
-    components = torch.empty(n_clouds, 3, cfg_model.training_output_points, cfg_model.decoder.n_components)
+    components = torch.empty(n_clouds, 3, cfg_ae_arc.training_output_points, cfg_ae_arc.decoder.n_components)
 
     if mode == 'recon':
         assert z_bias is None
@@ -175,7 +175,7 @@ def infer_and_visualize(model: AutoEncoder,
     else:
         raise ValueError('Mode can only be "recon" or "gen".')
     samples_and_loop = samples_and_loop.recon.cpu()
-    samples, *loops = samples_and_loop.split(cfg_model.training_output_points, dim=1)
+    samples, *loops = samples_and_loop.split(cfg_ae_arc.training_output_points, dim=1)
 
     def _naming_syntax(num: int, viz_name: Optional[str] = None) -> str:
         viz_name_list = [viz_name] if viz_name is not None else []

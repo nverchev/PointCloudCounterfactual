@@ -160,8 +160,8 @@ def get_nll_loss() -> LossBase[Outputs, W_Targets]:
     log_softmax = torch.nn.LogSoftmax(dim=2)
 
     def _nll(data: Outputs, targets: W_Targets) -> torch.Tensor:
-        sqrt_dist = torch.sqrt(data.w_dist)
-        w_neg_dist = -sqrt_dist + sqrt_dist.min(2, keepdim=True)[0].detach()  # second term for numerical stability
+        sqrt_dist = torch.sqrt(data.w_dist_2)
+        w_neg_dist = -sqrt_dist #+ sqrt_dist.min(2, keepdim=True)[0].detach()  # second term for numerical stability
         nll = (-log_softmax(w_neg_dist) * targets.one_hot_idx).sum((1, 2))
         return nll
 
@@ -172,7 +172,7 @@ def get_w_accuracy() -> Metric[Outputs, W_Targets]:
     """Get accuracy metric for quantization."""
 
     def _accuracy(data: Outputs, targets: W_Targets) -> torch.Tensor:
-        one_hot_predictions = F.one_hot(data.w_dist.argmin(2), num_classes=targets.one_hot_idx.shape[2])
+        one_hot_predictions = F.one_hot(data.w_dist_2.argmin(2), num_classes=targets.one_hot_idx.shape[2])
         return (targets.one_hot_idx * one_hot_predictions).sum(2).mean(1)
 
     return Metric(_accuracy, name='Quantisation Accuracy', higher_is_better=True)
@@ -238,6 +238,6 @@ def get_autoencoder_loss() -> LossBase[Outputs, Targets]:
     cfg_ae = Experiment.get_config().autoencoder
     c_embed = cfg_ae.objective.c_embedding
     loss = get_recon_loss()
-    if cfg_ae.model.head is not ModelHead.AE:
+    if cfg_ae.architecture.head is not ModelHead.AE:
         return loss + c_embed * get_embed_loss()
     return loss

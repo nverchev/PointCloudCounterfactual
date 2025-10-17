@@ -19,7 +19,7 @@ def visualize_reconstructions() -> None:
     test_dataset = get_dataset(Partitions.train_val if cfg.final else Partitions.val)
 
     module = CounterfactualVQVAE().eval()
-    autoencoder = Model(module, name=cfg_ae.model.name, device=cfg_user.device)
+    autoencoder = Model(module, name=cfg_ae.architecture.name, device=cfg_user.device)
     autoencoder.load_state()
     extracted_clouds = list[torch.Tensor]()
     extracted_indices = list[torch.Tensor]()

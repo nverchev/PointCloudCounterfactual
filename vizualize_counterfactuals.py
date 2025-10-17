@@ -20,14 +20,14 @@ def visualize_counterfactuals() -> None:
     value = cfg_user.counterfactual_value
 
     dgcnn_module = DGCNN().eval()
-    classifier = Model(dgcnn_module, name=cfg.classifier.model.name, device=cfg.user.device)
+    classifier = Model(dgcnn_module, name=cfg.classifier.architecture.name, device=cfg.user.device)
     classifier.load_state()
 
     test_dataset = get_dataset(Partitions.test if cfg.final else Partitions.val)
     num_classes = cfg.data.dataset.n_classes
 
     vqvae_module = CounterfactualVQVAE().eval()
-    model = Model(vqvae_module, name=cfg_ae.model.name, device=cfg_user.device)
+    model = Model(vqvae_module, name=cfg_ae.architecture.name, device=cfg_user.device)
     model.load_state()
 
     for i in cfg_user.plot.indices_to_reconstruct:
@@ -44,7 +44,7 @@ def visualize_counterfactuals() -> None:
         with torch.inference_mode():
             logits = classifier(Inputs(cloud=input_pc.unsqueeze(0), indices=indices))
         np_probs = torch.softmax(logits, dim=1).cpu().numpy()
-        relaxed_probs = torch.softmax(logits / cfg.autoencoder.model.encoder.w_encoder.cf_temperature, dim=1)
+        relaxed_probs = torch.softmax(logits / cfg.autoencoder.architecture.encoder.w_encoder.cf_temperature, dim=1)
         print(f'Probs for sample {i} with label {label}: (', end='')
         for prob in np_probs[0]:
             print(f'{prob:.2f}', end=' ')

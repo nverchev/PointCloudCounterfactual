@@ -1,5 +1,5 @@
 defaults:
-  - model: default_model
+  - architecture: default_architecture
   - train: default_train
   - _self_
 

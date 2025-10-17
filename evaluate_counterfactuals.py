@@ -219,13 +219,9 @@ def compute_overall_metric(metrics: list[Metric] | None = None) -> Metric | None
     return overall_metric
 
 
-def evaluate_counterfactuals(vqvae: CounterfactualVQVAE) -> None:
+def evaluate_counterfactuals(classifier: Model[Inputs, torch.Tensor], vqvae: CounterfactualVQVAE) -> None:
     """Evaluate the counterfactuals according to different metrics."""
     cfg = Experiment.get_config()
-
-    dgcnn_module = DGCNN()
-    classifier = Model(dgcnn_module, name=cfg.classifier.model.name, device=cfg.user.device)
-    classifier.load_state()
     num_classes = cfg.data.dataset.n_classes
     batch_size = cfg.classifier.train.batch_size
     test_dataset = get_dataset(Partitions.test if cfg.final else Partitions.val)
@@ -255,10 +251,13 @@ def main(cfg: ConfigAll) -> None:
     """Set up the experiment and launch the counterfactual evaluation."""
     exp = Experiment(cfg, name=cfg.name, par_dir=cfg.user.path.exp_par_dir, tags=cfg.tags)
     with exp.create_run(resume=True):
+        dgcnn_module = DGCNN()
+        classifier = Model(dgcnn_module, name=cfg.classifier.architecture.name, device=cfg.user.device)
+        classifier.load_state()
         vqvae = CounterfactualVQVAE()
-        autoencoder = Model(vqvae, name=cfg.autoencoder.model.name, device=cfg.user.device)
+        autoencoder = Model(vqvae, name=cfg.autoencoder.architecture.name, device=cfg.user.device)
         autoencoder.load_state()
-        evaluate_counterfactuals(vqvae)
+        evaluate_counterfactuals(classifier, vqvae)
 
 
 if __name__ == "__main__":

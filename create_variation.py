@@ -18,8 +18,8 @@ def create_variation() -> None:
     checkpoint_dir = sorted(sorted(main_exp_dir.iterdir())[-1].iterdir())[-1]  # get the latest checkpoint
 
     vqvae_module = CounterfactualVQVAE()
-    vqvae = Model(vqvae_module, name=cfg.autoencoder.model.name)
-    vqvae.epoch = cfg.autoencoder.train.epochs
+    vqvae = Model(vqvae_module, name=cfg.autoencoder.architecture.name)
+    vqvae.epoch = cfg.autoencoder.train.n_epochs
     main_vqvae_checkpoint = LocalCheckpoint(checkpoint_dir)
     main_vqvae_checkpoint.register_model(vqvae)
     main_state_path = main_vqvae_checkpoint.paths.model_state_path
@@ -30,7 +30,7 @@ def create_variation() -> None:
 
     # Copy the classifier state
     dgcnn_module = DGCNN()
-    dgcnn = Model(dgcnn_module, name=cfg.classifier.model.name)
+    dgcnn = Model(dgcnn_module, name=cfg.classifier.architecture.name)
     main_dgcnn_checkpoint = LocalCheckpoint(checkpoint_dir)
     main_dgcnn_checkpoint.register_model(dgcnn)
     epoch = main_dgcnn_checkpoint._get_last_saved_epoch()

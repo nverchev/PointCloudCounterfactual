@@ -48,7 +48,7 @@ class Outputs:
         w_q: outer encoder approximation of the discrete encodings' embedding.
         w_e: the discrete encodings' embeddings (no gradients).
         w_recon: inner autoencoder approximations of the discrete encodings' embeddings.
-        w_dist: distances between w and the embeddings.
+        w_dist_2: square distances between w and the embeddings.
         idx: the discrete encoding as the index for the embedding.
         one_hot_idx: the discrete encoding as one hot encoding for the index.
         attention_weights: torch.Tensor
@@ -76,7 +76,7 @@ class Outputs:
     w_q: torch.Tensor
     w_e: torch.Tensor
     w_recon: torch.Tensor
-    w_dist: torch.Tensor
+    w_dist_2: torch.Tensor
     idx: torch.Tensor
     one_hot_idx: torch.Tensor
     attention_weights: torch.Tensor
