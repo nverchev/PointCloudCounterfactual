@@ -8,9 +8,9 @@
 */.idea
 */.vscode
 /images/
-*/optimization_db/
-*/tensorboard_runs/
+updat*/tensorboard_runs/
 */wandb
 */metrics.db
 .idea
 *pyc
+/optimization_db/
