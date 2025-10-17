@@ -2,12 +2,9 @@
 
 import abc
 import itertools
-from typing import Type
-
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from torch.xpu import device
 
 from src.layers import PointsConvLayer, LinearLayer
 from src.neighbour_ops import graph_filtering
@@ -169,83 +166,13 @@ class WDecoderTransformers(BaseWDecoder):
         self.compress = nn.Linear(self.proj_dim, self.embedding_dim)
 
     def forward(self, z: torch.Tensor) -> torch.Tensor:
-        """Forward pass through transformer encoder.
-
-        Args:
-            z: Input embedding tensor of shape [batch_size, w_dim]
-
-        Returns:
-            w
-        """
+        """Forward pass through transformer encoder."""
         batch_size = z.shape[0]
         x = self.decode(z.repeat(1, self.n_codes).unsqueeze(2)).view(batch_size, self.n_codes, self.proj_dim)
         x = self.query_tokens.expand(batch_size, -1, -1) + x
         x = self.transformer(x)
         return self.compress(x).view(batch_size, self.n_codes * self.embedding_dim)
 
-#
-# class WDecoderTransformers(BaseWDecoder):
-#     """W-space encoder using transformer architecture.
-#
-#     This encoder uses self-attention mechanisms to transform point cloud
-#     embeddings into latent space representations, allowing the model to
-#     capture global dependencies in the input.
-#     """
-#
-#     def __init__(self) -> None:
-#         super().__init__()
-#         self.proj_dim = 128
-#         self.latent_proj = nn.Linear(self.z_dim,  self.proj_dim)
-#         self.query_tokens = nn.Parameter(torch.randn(1, self.n_codes, self.proj_dim))
-#         decoder_layers: list[nn.Module] = []
-#         for hidden_dim, do in zip(self.h_dims, self.dropout):
-#             decoder_layer = nn.TransformerDecoderLayer(
-#                 d_model=self.proj_dim,
-#                 nhead=4,
-#                 dim_feedforward=hidden_dim,
-#                 dropout=do,
-#                 batch_first=True,
-#                 norm_first=True,
-#                 activation='gelu'
-#             )
-#             decoder_layers.append(decoder_layer)
-#
-#         self.decoder = nn.ModuleList(decoder_layers)
-#         encoder_layers: list[nn.Module] = []
-#
-#         for hidden_dim, do in zip(self.h_dims, self.dropout):
-#             encoder_layer = nn.TransformerEncoderLayer(
-#                 d_model=self.proj_dim,
-#                 nhead=4,
-#                 dim_feedforward=hidden_dim,
-#                 dropout=do,
-#                 batch_first=True,
-#                 norm_first=True,
-#                 activation='gelu'
-#             )
-#             encoder_layers.append(encoder_layer)
-#
-#         self.encoder = nn.ModuleList(encoder_layers)
-#         self.output_proj = nn.Linear(self.proj_dim, self.embedding_dim)
-#
-#     def forward(self, z: torch.Tensor) -> torch.Tensor:
-#         """Forward pass through transformer encoder.
-#
-#         Args:
-#             z: Input embedding tensor of shape [batch_size, w_dim]
-#
-#         Returns:
-#             w
-#
-#         """
-#         batch_size = z.shape[0]
-#         z_expanded = self.latent_proj(z).view(batch_size, 1, self.proj_dim)
-#         x = self.query_tokens.expand(z.size(0), -1, -1)
-#         for decoder, encoder in zip(self.decoder, self.encoder):
-#             x = decoder(x, z_expanded)
-#             x = encoder(x)
-#
-#         return self.output_proj(x).view(batch_size, self.n_codes * self.embedding_dim)
 
 
 class BasePointDecoder(nn.Module, metaclass=abc.ABCMeta):
