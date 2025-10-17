@@ -3,6 +3,7 @@
 import sys
 from typing import Optional
 
+import drytorch.core.exceptions
 import optuna
 import sqlalchemy
 import wandb
@@ -32,7 +33,7 @@ def train_autoencoder(trial: Optional[optuna.Trial] = None) -> None:
     cfg_ae = cfg.autoencoder
     cfg_user = cfg.user
     ae = get_autoencoder()
-    model = Model(ae, name=cfg_ae.model.name, device=cfg_user.device)
+    model = Model(ae, name=cfg_ae.architecture.name, device=cfg_user.device)
 
     train_dataset = get_dataset(Partitions.train_val if cfg.final else Partitions.train)
     test_dataset = get_dataset(Partitions.test if cfg.final else Partitions.val)
@@ -63,7 +64,11 @@ def train_autoencoder(trial: Optional[optuna.Trial] = None) -> None:
         trainer.add_validation(DataLoader(dataset=val_dataset, batch_size=cfg_ae.train.batch_size))
 
     cfg_early = cfg_ae.train.early_stopping
-    trainer.post_epoch_hooks.register(Hook(WandbLogReconstruction(train_dataset)))
+    try:
+        trainer.post_epoch_hooks.register(Hook(WandbLogReconstruction(train_dataset)))
+    except drytorch.core.exceptions.DryTorchError:
+        pass
+
     if not cfg.final and cfg_early.active:
         trainer.post_epoch_hooks.register(EarlyStoppingCallback(metric=get_recon_loss(),
                                                                 filter_fn=get_trailing_mean(cfg_early.window),
@@ -79,7 +84,7 @@ def train_autoencoder(trial: Optional[optuna.Trial] = None) -> None:
 
         trainer.post_epoch_hooks.register(prune_hook)
 
-    trainer.train_until(cfg_ae.train.epochs)
+    trainer.train_until(cfg_ae.train.n_epochs)
     trainer.save_checkpoint()
     test_all_metrics()
     return
