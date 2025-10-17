@@ -132,16 +132,7 @@ class WEncoderTransformers(BaseWEncoder):
         self.encode = nn.Sequential(*modules)
 
     def forward(self, x: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor]:
-        """Forward pass through transformer encoder.
-
-        Args:
-            x: Input embedding tensor of shape [batch_size, w_dim]
-
-        Returns:
-            tuple: (hidden_features, latent_encoding)
-                - hidden_features: Features for hierarchical VAE
-                - latent_encoding: Encoded latent parameters (mean and logvar)
-        """
+        """Forward pass through transformer encoder."""
         batch_size = x.shape[0]
 
         x = x.view(batch_size, self.n_codes, self.embedding_dim)
