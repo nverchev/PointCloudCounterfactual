@@ -1,0 +1,7 @@
+architecture: Transformers
+hidden_dims_conv: [4]
+hidden_dims_lin: [512]
+dropout:  [0., ]
+act_name: ''
+gumbel: true
+cf_temperature: 5
