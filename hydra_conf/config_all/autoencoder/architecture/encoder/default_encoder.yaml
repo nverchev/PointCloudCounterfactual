@@ -1,0 +1,8 @@
+defaults:
+  - w_encoder: convolution_w_encoder
+  - _self_
+
+architecture: DGCNN
+k: ${data.k}
+hidden_dims: [16, 128, 512, 512]
+act_name: ''

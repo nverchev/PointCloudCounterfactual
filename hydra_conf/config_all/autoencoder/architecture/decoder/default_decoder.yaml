@@ -1,0 +1,13 @@
+defaults:
+  - w_decoder: linear_w_decoder
+  - prior_decoder: default_prior_decoder
+  - _self_
+
+architecture: PCGen
+sample_dim: 8
+n_components: 8
+hidden_dims_map: [ 64 ]
+hidden_dims_conv: [ 1024, 256, 16]
+tau: 5
+act_name: ReLU
+filtering: true

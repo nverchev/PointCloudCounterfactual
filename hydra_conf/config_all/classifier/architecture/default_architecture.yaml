@@ -1,0 +1,8 @@
+k: 20
+out_classes: ${data.dataset.n_classes}
+hidden_dims: [64, 64, 128, 256]
+act_name: ''
+dropout: [0.5, 0.5]
+emb_dim: 512
+mlp_dims: [512, 256]
+name: DGCNN

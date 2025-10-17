@@ -1,0 +1,3 @@
+hidden_dims: [16]
+dropout: [0., 0., 0.1]
+act_name: ''
