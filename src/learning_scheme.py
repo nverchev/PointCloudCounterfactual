@@ -22,7 +22,7 @@ def get_scheduler(config: SchedulerConfig) -> schedulers.AbstractScheduler:
     return scheduler
 
 
-def get_clipper(config: LearningConfig) -> None | p.GradientOpProtocol:
+def get_grad_op(config: LearningConfig) -> None | p.GradientOpProtocol:
     """Returns the gradient clipping instance based on config."""
     if config.gradient_op == GradOp.GradNormalizer:
         return gradient_ops.GradNormalizer()
@@ -47,5 +47,5 @@ def get_learning_scheme() -> LearningScheme:
                           base_lr=config.learning_rate,
                           scheduler=get_scheduler(config.scheduler),
                           optimizer_defaults=config.opt_settings,
-                          gradient_op=get_clipper(config)
+                          gradient_op=get_grad_op(config)
                           )
