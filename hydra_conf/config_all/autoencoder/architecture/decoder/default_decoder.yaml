@@ -1,6 +1,6 @@
 defaults:
-  - w_decoder: linear_w_decoder
-  - prior_decoder: default_prior_decoder
+  - w_decoder: transformer_w_decoder
+  - posterior_decoder: transformer_posterior_decoder.yaml
   - _self_
 
 architecture: PCGen

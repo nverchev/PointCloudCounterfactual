@@ -42,8 +42,8 @@ class BaseWEncoder(nn.Module, metaclass=abc.ABCMeta):
         self.book_size = cfg_ae_arch.book_size  # Size of each codebook
 
         # Network architecture parameters
-        self.h_dims_conv = cfg_w_encoder.hidden_dims_conv  # Conv layer dimensions
-        self.h_dims_lin = cfg_w_encoder.hidden_dims_lin  # Linear layer dimensions
+        self.h_dims_conv = cfg_w_encoder.hidden_dims_conv # Hidden dimensions for the linear layers
+        self.h_dims_lin = cfg_w_encoder.hidden_dims_lin # Hidden dimensions for the convolutional layers
         self.dropout = cfg_w_encoder.dropout  # Dropout probabilities
         self.act_cls = cfg_w_encoder.act_cls  # Activation function class
 
@@ -69,6 +69,7 @@ class WEncoderConvolution(BaseWEncoder):
         dim_pairs = itertools.pairwise([self.embedding_dim, *total_h_dims])
         for in_dim, out_dim in dim_pairs:
             modules.append(PointsConvLayer(in_dim, out_dim))
+
         self.conv = nn.Sequential(*modules)
         modules = []
         expand_w_dim = self.w_dim * self.h_dims_conv[-1]
@@ -99,18 +100,16 @@ class WEncoderTransformers(BaseWEncoder):
 
     def __init__(self) -> None:
         super().__init__()
-        self.proj_dim = 128
+        self.proj_dim = 512
         self.input_proj = nn.Linear(self.embedding_dim, self.proj_dim)
-        self.pos_encoding = nn.Parameter(
-            torch.randn(1, self.n_codes, self.proj_dim)
-        )
+        self.positional_encoding = nn.Parameter(torch.randn(1, self.n_codes, self.proj_dim))
         transformer_layers: list[nn.Module] = []
-        for hidden_dim in self.h_dims_conv:
+        for hidden_dim, do in zip(self.h_dims_lin, self.dropout):
             encoder_layer = nn.TransformerEncoderLayer(
                 d_model=self.proj_dim,
-                nhead= 4,
-                dim_feedforward=hidden_dim * self.n_codes,
-                dropout=0.1,
+                nhead=8,
+                dim_feedforward=hidden_dim,
+                dropout=0.0,
                 activation='gelu',
                 batch_first=True,
                 norm_first=True,
@@ -118,29 +117,15 @@ class WEncoderTransformers(BaseWEncoder):
             transformer_layers.append(encoder_layer)
 
         self.transformer = nn.Sequential(*transformer_layers)
-        self.compress = PointsConvLayer(self.proj_dim, self.h_dims_conv[-1] * self.embedding_dim, act_cls=self.act_cls)
-        final_dim = self.h_dims_conv[-1] * self.n_codes * self.embedding_dim
-        modules: list[nn.Module] = []
-        dim_pairs = itertools.pairwise([final_dim, *self.h_dims_lin])
-        for (in_dim, out_dim), do in zip(dim_pairs, self.dropout):
-            modules.append(LinearLayer(in_dim, out_dim, act_cls=self.act_cls))
-            modules.append(nn.Dropout(do))
-
-        modules.append(
-            LinearLayer(self.h_dims_lin[-1], 2 * self.z_dim, batch_norm=False)
-        )
-        self.encode = nn.Sequential(*modules)
+        self.lin = LinearLayer(self.proj_dim, 2 * self.z_dim, batch_norm=False, act_cls=nn.Identity)
 
     def forward(self, x: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor]:
         """Forward pass through transformer encoder."""
         batch_size = x.shape[0]
-
-        x = x.view(batch_size, self.n_codes, self.embedding_dim)
-        x = self.input_proj(x)
-        x = x + self.pos_encoding
-        x = self.transformer(x)
-        h = self.compress(x.transpose(1, 2)).reshape(batch_size, -1)
-        z = self.encode(h)
+        x = self.input_proj(x.view(batch_size, self.n_codes, self.embedding_dim))
+        x = self.positional_encoding.expand(batch_size, -1, -1) + x
+        h = self.transformer(x)
+        z = self.lin(torch.max(x, dim=1).values)
         return h, z
 
 class BasePointEncoder(nn.Module, metaclass=abc.ABCMeta):

@@ -1,5 +1,5 @@
 architecture: TransformerCross
 expand: 8
-hidden_dims: [1024, 512]
-dropout: [0.1, 0.1]
+hidden_dims: [1024, 1024, 1024]
+dropout: [0.1, 0.1, 0.1, 0.1, 0.1, 0.1]
 act_name: ''

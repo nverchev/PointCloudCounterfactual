@@ -109,13 +109,18 @@ class ModelHead(enum.StrEnum):
     CounterfactualVQVAE = enum.auto()
 
 class GradOp(enum.StrEnum):
-    """Scheduler names."""
+    """Gradient operation names."""
     GradNormalizer = enum.auto()
     GradZScoreNormalizer = enum.auto()
     GradNormClipper = enum.auto()
     GradValueClipper = enum.auto()
-    HistClipping = enum.auto()
-    ParamHistClipping = enum.auto()
+    HistClipper = enum.auto()
+    ParamHistClipper = enum.auto()
+
+class ClipCriterion(enum.StrEnum):
+    """Clipping criterion names."""
+    ZStat = enum.auto()
+    EMA = enum.auto()
 
 
 class Schedulers(enum.StrEnum):
@@ -180,7 +185,7 @@ class WEncoderConfig:
     Attributes:
         architecture (WEncoders): The name of the architecture
         hidden_dims_conv (tuple[StrictlyPositiveInt]): Hidden dimensions for the convolutional part
-        hidden_dims_lin (tuple[StrictlyPositiveInt]): Hidden dimensions for the linear part
+        hidden_dims_lin(tuple[StrictlyPositiveInt]): Hidden dimensions for the linear part
         dropout (tuple[PositiveFloat]): Dropout probabilities for the linear layers
         cf_temperature (int): Temperature for the probabilities (closer to zero means closer to samplings)
         act_name (str): The name of the PyTorch activation function (e.g., 'ReLU', 'LeakyReLU')
@@ -264,7 +269,7 @@ class WDecoderConfig:
 
 
 @dataclass
-class PriorDecoderConfig:
+class PosteriorDecoderConfig:
     """Configuration for the decoder of the latent space prior.
 
     Attributes:
@@ -301,7 +306,7 @@ class DecoderConfig:
         hidden_dims_map (tuple[StrictlyPositiveInt]): Hidden dimensions for mapping the initial sampling
         hidden_dims_conv (tuple[StrictlyPositiveInt]): Hidden channels for each component
         w_decoder (WDecoderConfig): Configuration for the word decoder
-        prior_decoder (PriorDecoderConfig): Configuration for the prior decoder (reused by the posterior as well)
+        posterior_decoder (PosteriorDecoderConfig): Configuration for the posterior distribution of z2
         tau (PositiveFloat): Coefficient for Gumbel Softmax activation
         filtering (bool): Whether to apply filtering to the output
         act_name (str): The name of the PyTorch activation function
@@ -313,7 +318,7 @@ class DecoderConfig:
     hidden_dims_map: tuple[StrictlyPositiveInt, ...]
     hidden_dims_conv: tuple[StrictlyPositiveInt, ...]
     w_decoder: WDecoderConfig
-    prior_decoder: PriorDecoderConfig
+    posterior_decoder: PosteriorDecoderConfig
     tau: PositiveFloat
     filtering: bool
     act_name: str = ''
@@ -432,13 +437,16 @@ class LearningConfig:
     Attributes:
         optimizer_name (str): The name of the PyTorch optimizer (e.g., 'Adam', 'SGD')
         learning_rate (PositiveFloat): The learning rate or a dictionary of learning rates for model parameters
+        grad_op (GradOp | None): The gradient operation to be applied before the optimizer
+        clip_criterion (ClipCriterion): The criterion for gradient clipping (only used for some gradient operations))
         opt_settings (dict): A dictionary containing default settings for the optimizer
         scheduler (SchedulerConfig): The scheduler configuration for learning rate decay
     """
 
     optimizer_name: str
     learning_rate: PositiveFloat
-    gradient_op: GradOp | None
+    grad_op: GradOp | None
+    clip_criterion: ClipCriterion
     opt_settings: dict
     scheduler: SchedulerConfig
 

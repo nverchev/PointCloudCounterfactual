@@ -3,7 +3,7 @@
 from drytorch.lib import schedulers, gradient_ops
 from drytorch import LearningScheme
 from drytorch.core import protocols as p
-from src.config_options import Schedulers, SchedulerConfig, Experiment, LearningConfig, GradOp
+from src.config_options import Schedulers, SchedulerConfig, Experiment, LearningConfig, GradOp, ClipCriterion
 
 
 def get_scheduler(config: SchedulerConfig) -> schedulers.AbstractScheduler:
@@ -24,20 +24,26 @@ def get_scheduler(config: SchedulerConfig) -> schedulers.AbstractScheduler:
 
 def get_grad_op(config: LearningConfig) -> None | p.GradientOpProtocol:
     """Returns the gradient clipping instance based on config."""
-    if config.gradient_op == GradOp.GradNormalizer:
+    if config.grad_op == GradOp.GradNormalizer:
         return gradient_ops.GradNormalizer()
-    elif config.gradient_op == GradOp.GradZScoreNormalizer:
+    elif config.grad_op == GradOp.GradZScoreNormalizer:
         return gradient_ops.GradZScoreNormalizer()
-    elif config.gradient_op == GradOp.GradValueClipper:
+    elif config.grad_op == GradOp.GradValueClipper:
         return gradient_ops.GradValueClipper()
-    elif config.gradient_op == GradOp.GradNormClipper:
+    elif config.grad_op == GradOp.GradNormClipper:
         return gradient_ops.GradNormClipper()
-    elif config.gradient_op == GradOp.HistClipping:
-        return gradient_ops.HistClipping()
-    elif config.gradient_op == GradOp.ParamHistClipping:
-        return gradient_ops.ParamHistClipping()
-    else:
-        return None
+    elif config.grad_op == GradOp.HistClipper:
+        if config.clip_criterion == ClipCriterion.ZStat:
+            return gradient_ops.HistClipper(criterion=gradient_ops.ZStatCriterion())
+        elif config.clip_criterion == ClipCriterion.EMA:
+            return gradient_ops.HistClipper(criterion=gradient_ops.EMACriterion())
+    elif config.grad_op == GradOp.ParamHistClipper:
+        if config.clip_criterion == ClipCriterion.ZStat:
+            return gradient_ops.ParamHistClipper(criterion=gradient_ops.ZStatCriterion())
+        elif config.clip_criterion == ClipCriterion.EMA:
+            return gradient_ops.ParamHistClipper(criterion=gradient_ops.EMACriterion())
+
+    return None
 
 
 def get_learning_scheme() -> LearningScheme:

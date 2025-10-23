@@ -19,45 +19,59 @@ class PriorDecoder(nn.Module):
         super().__init__()
         cfg = Experiment.get_config()
         cfg_ae_arc = cfg.autoencoder.architecture
-        cfg_prior = cfg_ae_arc.decoder.prior_decoder
-        self.h_conv = cfg_ae_arc.encoder.w_encoder.hidden_dims_conv
-        self.hidden_features = cfg_ae_arc.hidden_features
-        self.w_dim = cfg_ae_arc.w_dim
-        self.num_classes = cfg.data.dataset.n_classes
-        self.z_dim = cfg_ae_arc.z2_dim
-        self.h_dims = cfg_prior.hidden_dims
-        self.dropout = cfg_prior.dropout
-        self.act_cls = cfg_prior.act_cls
-        modules: list[nn.Module] = []
-        dim_pairs = itertools.pairwise([self.num_classes, *self.h_dims])
-        for (in_dim, out_dim), do in zip(dim_pairs, self.dropout):
-            modules.append(LinearLayer(in_dim, out_dim, act_cls=self.act_cls))
-            modules.append(nn.Dropout(do))
-        modules.append(LinearLayer(self.h_dims[-1], 2 * self.z_dim, batch_norm=False))
-        self.prior = nn.Sequential(*modules)
+        self.n_classes = cfg.data.dataset.n_classes
+        self.z2_dim = cfg_ae_arc.z2_dim
+        self.prior = LinearLayer(self.n_classes, 2 * self.z2_dim, batch_norm=False, act_cls=nn.Identity)
+        return
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         """Forward pass."""
         return self.prior(x)
 
 
-class PosteriorDecoder(PriorDecoder):
+class PosteriorDecoder(nn.Module):
     """Network for the conditional posterior"""
 
     def __init__(self) -> None:
         super().__init__()
-        modules: list[nn.Module] = []
-        expand_w_dim = self.w_dim * self.h_conv[-1]
-        dim_pairs = itertools.pairwise([self.num_classes + expand_w_dim, *self.h_dims])
-        for (in_dim, out_dim), do in zip(dim_pairs, self.dropout):
-            modules.append(LinearLayer(in_dim, out_dim, act_cls=self.act_cls))
-            modules.append(nn.Dropout(do))
-        modules.append(LinearLayer(self.h_dims[-1], 2 * self.z_dim, batch_norm=False))
-        self.prior = nn.Sequential(*modules)
+        cfg = Experiment.get_config()
+        cfg_ae_arc = cfg.autoencoder.architecture
+        cfg_posterior = cfg_ae_arc.decoder.posterior_decoder
+        self.hidden_features = cfg_ae_arc.hidden_features
+        self.w_dim = cfg_ae_arc.w_dim
+        self.n_classes = cfg.data.dataset.n_classes
+        self.n_codes = cfg_ae_arc.n_codes
+        self.z_dim = cfg_ae_arc.z2_dim
+        self.h_dims = cfg_posterior.hidden_dims
+        self.dropout = cfg_posterior.dropout
+        self.act_cls = cfg_posterior.act_cls
+        self.proj_dim = 512
+        self.input_proj = LinearLayer(self.n_classes, self.proj_dim, batch_norm=False, act_cls=nn.Identity)
+        transformer_layers: list[nn.Module] = []
+        for hidden_dim, do in zip(self.h_dims, self.dropout):
+            layer = nn.TransformerDecoderLayer(
+                d_model=self.proj_dim,
+                nhead=8,
+                dropout=0,
+                dim_feedforward=hidden_dim,
+                activation='gelu',
+                batch_first=True,
+                norm_first=True,
+            )
+            transformer_layers.append(layer)
 
-    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        self.transformer_layers = nn.Sequential(*transformer_layers)
+        self.compress = LinearLayer(self.proj_dim, 2 * self.z_dim, batch_norm=False, act_cls=nn.Identity)
+        return
+
+    def forward(self, probs: torch.Tensor, h: torch.Tensor) -> torch.Tensor:
         """Forward pass."""
-        return self.prior(x)
+        x = self.input_proj(probs).unsqueeze(1)
+
+        for layer in self.transformer_layers:
+            h = layer(h, x)
+
+        return self.compress(torch.max(h.squeeze(), dim=1).values)
 
 
 class BaseWDecoder(nn.Module, metaclass=abc.ABCMeta):
@@ -74,14 +88,15 @@ class BaseWDecoder(nn.Module, metaclass=abc.ABCMeta):
         self.embedding_dim = cfg_ae_arc.embedding_dim
         self.n_codes = cfg_ae_arc.n_codes
         self.book_size = cfg_ae_arc.book_size
-        self.z_dim = cfg_ae_arc.z1_dim + cfg_ae_arc.z2_dim
+        self.z1_dim = cfg_ae_arc.z1_dim
+        self.z2_dim = cfg_ae_arc.z2_dim
         self.expand = cfg_w_decoder.expand
         self.h_dims = cfg_w_decoder.hidden_dims
         self.dropout = cfg_w_decoder.dropout
         self.act_cls = cfg_w_decoder.act_cls
 
     @abc.abstractmethod
-    def forward(self, z: torch.Tensor) -> torch.Tensor:
+    def forward(self, z1: torch.Tensor, z2: torch.Tensor) -> torch.Tensor:
         """Forward pass."""
 
 
@@ -93,7 +108,7 @@ class WDecoderLinear(BaseWDecoder):
         modules: list[nn.Module] = []
         self.dropout = tuple([0., *self.dropout])
         expanded_w_dim = self.w_dim * self.expand
-        dim_pairs = itertools.pairwise([self.z_dim, *self.h_dims, expanded_w_dim])
+        dim_pairs = itertools.pairwise([self.z1_dim + self.z2_dim, *self.h_dims, expanded_w_dim])
         for (in_dim, out_dim), do in zip(dim_pairs, self.dropout):
             modules.append(LinearLayer(in_dim, out_dim, act_cls=self.act_cls))
             modules.append(nn.Dropout(do))
@@ -104,8 +119,9 @@ class WDecoderLinear(BaseWDecoder):
                             groups=self.embedding_dim,
                             batch_norm=False))
 
-    def forward(self, z: torch.Tensor):
+    def forward(self, z1: torch.Tensor, z2: torch.Tensor):
         """Forward pass."""
+        z = torch.cat((z1, z2), dim=1)
         x = self.decode(z).view(-1, self.expand * self.embedding_dim, self.n_codes)
         x = self.conv(x).transpose(2, 1).reshape(-1, self.w_dim)
         return x
@@ -125,10 +141,11 @@ class WDecoderConvolution(BaseWDecoder):
         modules.append(
             PointsConvLayer(total_h_dims[-1], self.w_dim, groups=self.n_codes, batch_norm=False)
         )
-        self.decode = nn.Sequential(*modules)
+        self.decode = nn.ModuleList(modules)
 
-    def forward(self, z: torch.Tensor):
+    def forward(self, z1: torch.Tensor, z2: torch.Tensor):
         """Forward pass."""
+        z = torch.cat((z1, z2), dim=1)
         x = self.decode(z.repeat(1, self.n_codes).unsqueeze(2))
         return x.squeeze(2)
 
@@ -143,17 +160,15 @@ class WDecoderTransformers(BaseWDecoder):
 
     def __init__(self) -> None:
         super().__init__()
-        self.proj_dim = 128
-        self.decode =PointsConvLayer(self.z_dim * self.n_codes, self.proj_dim * self.n_codes, groups=self.n_codes, batch_norm=False)
-
-
-        self.input_proj = LinearLayer(self.z_dim, self.proj_dim)
+        self.proj_dim = 512
+        self.z1_proj = LinearLayer(self.z2_dim, self.proj_dim, batch_norm=False, act_cls=nn.Identity)
+        self.z2_proj = LinearLayer(self.z2_dim, self.proj_dim, batch_norm=False, act_cls=nn.Identity)
         self.query_tokens = nn.Parameter(torch.randn(1, self.n_codes, self.proj_dim))
         transformer_layers: list[nn.Module] = []
         for hidden_dim, do in zip(self.h_dims, self.dropout):
-            layer = nn.TransformerEncoderLayer(
+            layer = nn.TransformerDecoderLayer(
                 d_model=self.proj_dim,
-                nhead= 4,
+                nhead=8,
                 dropout=do,
                 dim_feedforward=hidden_dim,
                 activation='gelu',
@@ -162,16 +177,24 @@ class WDecoderTransformers(BaseWDecoder):
             )
             transformer_layers.append(layer)
 
-        self.transformer = nn.Sequential(*transformer_layers)
+        self.transformer_layers = nn.Sequential(*transformer_layers)
+
         self.compress = nn.Linear(self.proj_dim, self.embedding_dim)
 
-    def forward(self, z: torch.Tensor) -> torch.Tensor:
+    def forward(self, z1: torch.Tensor, z2: torch.Tensor) -> torch.Tensor:
         """Forward pass through transformer encoder."""
-        batch_size = z.shape[0]
-        x = self.decode(z.repeat(1, self.n_codes).unsqueeze(2)).view(batch_size, self.n_codes, self.proj_dim)
-        x = self.query_tokens.expand(batch_size, -1, -1) + x
-        x = self.transformer(x)
-        return self.compress(x).view(batch_size, self.n_codes * self.embedding_dim)
+
+        batch_size = z1.shape[0]
+
+        z1_proj = self.z1_proj(z2).unsqueeze(1)
+        z2_proj = self.z2_proj(z2).unsqueeze(1)
+        z_proj = torch.cat((z1_proj, z2_proj), dim=1)
+        x = self.query_tokens.expand(batch_size, -1, -1)
+
+        for layer in self.transformer_layers:
+            x = layer(x, z_proj)
+
+        return self.compress(x.reshape(batch_size * self.n_codes, self.proj_dim)).view(batch_size, self.n_codes * self.embedding_dim)
 
 
 
@@ -296,9 +319,9 @@ def get_decoder() -> BasePointDecoder:
 
 def get_w_decoder() -> BaseWDecoder:
     """Get W-decoder according to the configuration."""
-    decoder_dict: dict[WDecoders, BaseWDecoder] = {
-        WDecoders.Convolution: WDecoderConvolution(),
-        WDecoders.Linear: WDecoderLinear(),
-        WDecoders.TransformerCross: WDecoderTransformers(),
+    decoder_dict: dict[WDecoders, type[BaseWDecoder]] = {
+        WDecoders.Convolution: WDecoderConvolution,
+        WDecoders.Linear: WDecoderLinear,
+        WDecoders.TransformerCross: WDecoderTransformers,
     }
-    return decoder_dict[Experiment.get_config().autoencoder.architecture.decoder.w_decoder.architecture]
+    return decoder_dict[Experiment.get_config().autoencoder.architecture.decoder.w_decoder.architecture]()
