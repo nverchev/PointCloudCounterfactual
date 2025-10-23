@@ -234,11 +234,11 @@ class CounterfactualWAutoEncoder(BaseWAutoEncoder):
         data.mu1, data.log_var1 = latent.chunk(2, 1)
         data.h = features
 
-        # Adversarial predictions
-        data.y1 = self.adversarial(data.mu1.detach())
-        data.y2 = frozen_forward(self.adversarial, data.mu1)
+        # # Adversarial predictions
+        # data.y1 = self.adversarial(data.mu1.detach())
+        # data.y2 = frozen_forward(self.adversarial, data.mu1)
         data.z1 = self.sampler.sample(data.mu1, data.log_var1, self.training)
-
+        #
         return data
 
     def decode(self, data: Outputs, logits: Optional[torch.Tensor] = None) -> Outputs:
@@ -252,8 +252,7 @@ class CounterfactualWAutoEncoder(BaseWAutoEncoder):
         data.z2 = self._compute_z2(data, probs)
 
         # Combine and decode
-        z_combined = self.bn(torch.cat((data.z1, data.z2), dim=1))
-        data.w_recon = self.decoder(z_combined)
+        data.w_recon = self.decoder(data.z1, data.z2)
         data.w_dist_2, data.idx = self.distance_calc.compute_distances(
             data.w_recon, self.codebook, self.dim_codes, self.embedding_dim
         )
@@ -280,8 +279,7 @@ class CounterfactualWAutoEncoder(BaseWAutoEncoder):
             return self.sampler.sample(data.p_mu2, data.p_log_var2, self.training)
 
         # Use posterior with features
-        h_combined = torch.cat((probs, data.h), dim=1)
-        data.d_mu2, data.d_log_var2 = self.posterior(h_combined).chunk(2, 1)
+        data.d_mu2, data.d_log_var2 = self.posterior(probs, data.h).chunk(2, 1)
 
         mu_combined = data.d_mu2 + data.p_mu2
         log_var_combined = data.d_log_var2 + data.p_log_var2
@@ -291,6 +289,7 @@ class CounterfactualWAutoEncoder(BaseWAutoEncoder):
     def forward(self, x: W_Inputs) -> Outputs:
         """Forward pass with logits."""
         data = self.encode(x.w_q)
+        data.y1 = x.w_q
         return self.decode(data, x.logits)
 
     @torch.inference_mode()

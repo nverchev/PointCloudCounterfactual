@@ -1,5 +1,5 @@
 defaults:
-  - w_encoder: convolution_w_encoder
+  - w_encoder: transformer_w_encoder
   - _self_
 
 architecture: DGCNN

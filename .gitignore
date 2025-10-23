@@ -5,12 +5,12 @@
 /outputs/
 /.env
 /experiments*/
-*/.idea
+.idea
 */.vscode
 /images/
 updat*/tensorboard_runs/
 */wandb
 */metrics.db
 *pyc
-/optimization_db/
+optimization_db/
 /__pycache__

@@ -157,15 +157,23 @@ def get_adversarial_loss() -> LossBase[Outputs, W_Targets]:
 
 def get_nll_loss() -> LossBase[Outputs, W_Targets]:
     """Get negative log likelihood loss."""
-    log_softmax = torch.nn.LogSoftmax(dim=2)
 
     def _nll(data: Outputs, targets: W_Targets) -> torch.Tensor:
-        sqrt_dist = torch.sqrt(data.w_dist_2)
-        w_neg_dist = -sqrt_dist #+ sqrt_dist.min(2, keepdim=True)[0].detach()  # second term for numerical stability
-        nll = (-log_softmax(w_neg_dist) * targets.one_hot_idx).sum((1, 2))
+        w_weights = 1.0 / data.w_dist_2.clamp(min=1e-6)
+        sum_weights = data.w_dist_2.sum(dim=2, keepdim=True)
+
+        nll = ((torch.log(sum_weights) - torch.log(w_weights)) * targets.one_hot_idx).sum((1, 2))
         return nll
 
     return Loss(_nll, name='NLL')
+
+def get_mse_loss() -> LossBase[Outputs, W_Targets]:
+    """Get negative log likelihood loss."""
+
+    def _mse(data: Outputs, targets: W_Targets) -> torch.Tensor:
+        return torch.pow(data.w_recon - data.y1, 2).sum(1)
+
+    return Loss(_mse, name='MSE')
 
 
 def get_w_accuracy() -> Metric[Outputs, W_Targets]:
@@ -229,7 +237,7 @@ def get_w_encoder_loss() -> LossBase[Outputs, W_Targets]:
     """Get encoder loss combining NLL, KLD and adversarial losses."""
     c_kld = Experiment.get_config().w_autoencoder.objective.c_kld
     c_adv = Experiment.get_config().w_autoencoder.objective.c_counterfactual
-    loss = get_nll_loss() + c_kld * get_kld_loss() + c_adv * get_adversarial_loss() | get_w_accuracy()
+    loss = get_mse_loss() + c_kld * get_kld_loss() | get_w_accuracy() #+ 0 * get_adversarial_loss()
     return loss
 
 

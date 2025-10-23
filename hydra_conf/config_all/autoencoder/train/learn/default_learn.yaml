@@ -4,6 +4,7 @@ defaults:
 
 optimizer_name: AdamW
 learning_rate: 0.004
-gradient_op:
+grad_op:
+clip_criterion: ZStat
 opt_settings:
     weight_decay: 0.001
