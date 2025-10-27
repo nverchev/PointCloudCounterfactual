@@ -25,7 +25,7 @@ def set_objective(tune_cfg: DictConfig) -> Callable[[optuna.Trial], float]:
         overrides = suggest_overrides(tune_cfg, trial)
         cfg = get_config_all(overrides)
         exp = Experiment(cfg, name=cfg.name, par_dir=cfg.user.path.exp_par_dir, tags=cfg.tags)
-        with exp.create_run(register=False):
+        with exp.create_run(record=False):
             train_autoencoder(trial)
         return get_final_value(trial)
 

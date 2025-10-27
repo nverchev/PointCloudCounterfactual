@@ -44,7 +44,7 @@ def set_objective(tune_cfg: DictConfig) -> Callable[[optuna.Trial], float]:
         trial_exp = Experiment(trial_cfg, name='Trial', par_dir=trial_cfg.user.path.exp_par_dir, tags=overrides)
 
         # uses overridden settings for the architecture of the w_autoencoder
-        with trial_exp.create_run(register=False):
+        with trial_exp.create_run(record=False):
             new_vqvae_module = CounterfactualVQVAE()
             # best to define a new model here otherwise the weights of the w_autoencoder will be modified
             new_autoencoder = Model(new_vqvae_module,
