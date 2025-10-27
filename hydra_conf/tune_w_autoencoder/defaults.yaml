@@ -11,5 +11,5 @@ overrides:
 
 tune:
   n_trials: 100
-  n_warmup_steps: 60
+  n_warmup_steps: 30
   n_startup_trials: 10
