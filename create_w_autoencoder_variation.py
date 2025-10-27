@@ -21,7 +21,7 @@ def create_variation() -> None:
     vqvae = Model(vqvae_module, name=cfg.autoencoder.architecture.name)
     vqvae.epoch = cfg.autoencoder.train.n_epochs
     main_vqvae_checkpoint = LocalCheckpoint(checkpoint_dir)
-    main_vqvae_checkpoint.register_model(vqvae)
+    main_vqvae_checkpoint.bind_model(vqvae)
     main_state_path = main_vqvae_checkpoint.paths.model_state_path
     state_dict = torch.load(main_state_path, weights_only=True)
     state_dict = {key: value for key, value in state_dict.items() if 'w_autoencoder' not in key}
@@ -32,7 +32,7 @@ def create_variation() -> None:
     dgcnn_module = DGCNN()
     dgcnn = Model(dgcnn_module, name=cfg.classifier.architecture.name)
     main_dgcnn_checkpoint = LocalCheckpoint(checkpoint_dir)
-    main_dgcnn_checkpoint.register_model(dgcnn)
+    main_dgcnn_checkpoint.bind_model(dgcnn)
     epoch = main_dgcnn_checkpoint._get_last_saved_epoch()
     dgcnn.epoch = epoch
     main_state_path = main_dgcnn_checkpoint.paths.model_state_path
