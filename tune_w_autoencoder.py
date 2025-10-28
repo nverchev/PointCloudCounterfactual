@@ -3,6 +3,7 @@
 from typing import Callable
 import pathlib
 
+import drytorch
 import torch
 from drytorch import Model, init_trackers
 from drytorch.contrib.optuna import suggest_overrides, get_final_value
@@ -37,6 +38,7 @@ def set_objective(tune_cfg: DictConfig) -> Callable[[optuna.Trial], float]:
         autoencoder = Model(vqvae_module, name=main_cfg.autoencoder.architecture.name, device=main_cfg.user.device)
         autoencoder.load_state()
         state_dict = {key: value for key, value in vqvae_module.state_dict().items() if 'w_autoencoder' not in key}
+        drytorch.init_trackers(mode='standard')
 
     def _objective(trial: optuna.Trial) -> float:
         overrides = suggest_overrides(tune_cfg, trial)
@@ -69,7 +71,7 @@ def tune(tune_cfg: DictConfig):
     pathlib.Path(tune_cfg.db_location).mkdir(exist_ok=True)
     pruner = optuna.pruners.MedianPruner(n_startup_trials=tune_cfg.tune.n_startup_trials,
                                          n_warmup_steps=tune_cfg.tune.n_warmup_steps)
-    sampler = optuna.samplers.TPESampler(multivariate=True, warn_independent_sampling=False)
+    sampler = optuna.samplers.GPSampler(warn_independent_sampling=False)
     with (ConfigPath.CONFIG_ALL.get_path() / 'defaults').with_suffix('.yaml').open() as f:
         version = f"v{yaml.safe_load(f)['version']}"
 

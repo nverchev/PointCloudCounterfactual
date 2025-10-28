@@ -39,7 +39,7 @@ def main(tune_cfg: DictConfig):
     pathlib.Path(tune_cfg.db_location).mkdir(exist_ok=True)
     pruner = optuna.pruners.MedianPruner(n_startup_trials=tune_cfg.tune.n_startup_trials,
                                          n_warmup_steps=tune_cfg.tune.n_warmup_steps)
-    sampler = optuna.samplers.TPESampler(multivariate=True, warn_independent_sampling=False)
+    sampler = optuna.samplers.GPSampler(warn_independent_sampling=False)
     with (ConfigPath.CONFIG_ALL.get_path() / 'defaults').with_suffix('.yaml').open() as f:
         version = f"v{yaml.safe_load(f)['version']}"
 
