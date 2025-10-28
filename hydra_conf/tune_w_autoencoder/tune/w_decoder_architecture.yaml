@@ -1,8 +1,8 @@
 study_name:
   decoder_architecture
 
-n_trials: 500
-n_startup_trials: 30
+n_trials: 300
+n_startup_trials: 20
 
 params:
 
@@ -16,6 +16,17 @@ params:
         low: 128
         high: 1024
         log: true
+
+  autoencoder.architecture.decoder.w_decoder.proj_dim:
+    suggest: suggest_categorical
+    settings:
+      choices: [128, 256, 512]
+
+
+  autoencoder.architecture.decoder.w_decoder.n_heads:
+    suggest: suggest_categorical
+    settings:
+      choices: [4, 8, 16]
 
   autoencoder.architecture.decoder.w_decoder.dropout.0:
     suggest: suggest_float

@@ -7,12 +7,12 @@ n_startup_trials: 15
 
 params:
 
-  autoencoder.model.decoder.sample_dim:
+  autoencoder.architecture.decoder.sample_dim:
     suggest: suggest_categorical
     settings:
       choices: [8, 16, 32]
 
-  autoencoder.model.decoder.hidden_dims_map:
+  autoencoder.model.architecture.hidden_dims_map:
     suggest: suggest_list
     settings:
       min_length: 1
@@ -24,7 +24,7 @@ params:
         log: true
 
 
-  autoencoder.model.decoder.hidden_dims_conv:
+  autoencoder.model.architecture.hidden_dims_conv:
     suggest: suggest_list
     settings:
       min_length: 1

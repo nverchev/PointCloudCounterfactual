@@ -16,7 +16,7 @@ from drytorch.trackers.hydra import HydraLink
 from drytorch.trackers.sqlalchemy import SQLConnection
 from drytorch.trackers.tensorboard import TensorBoard
 from drytorch.trackers.wandb import Wandb
-from drytorch.utils.average import get_trailing_mean
+from drytorch.utils.average import get_moving_average, get_trailing_mean
 
 from src.metrics_and_losses import get_autoencoder_loss, get_recon_loss, get_emd_loss
 from src.config_options import Experiment, ConfigAll
@@ -80,7 +80,7 @@ def train_autoencoder(trial: Optional[optuna.Trial] = None) -> None:
     else:
         prune_hook = TrialCallback(trial,
                                    metric=get_recon_loss(),
-                                   filter_fn=get_trailing_mean(cfg_early.window))
+                                   filter_fn=get_moving_average())
 
         trainer.post_epoch_hooks.register(prune_hook)
 

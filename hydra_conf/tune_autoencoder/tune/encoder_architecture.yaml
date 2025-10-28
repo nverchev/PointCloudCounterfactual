@@ -5,7 +5,7 @@ n_trials: 200
 
 params:
 
-  autoencoder.model.encoder.hidden_dims:
+  autoencoder.architecture.encoder.hidden_dims:
     suggest: suggest_list
     settings:
       min_length: 1
@@ -16,7 +16,7 @@ params:
         high: 512
         log: true
 
-  autoencoder.model.encoder.k:
+  autoencoder.architecture.encoder.k:
     suggest: suggest_int
     settings:
       low: 10

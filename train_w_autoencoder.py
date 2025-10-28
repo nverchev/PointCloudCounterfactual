@@ -12,7 +12,7 @@ from drytorch import DataLoader, Model, Test, Trainer
 from drytorch.lib.hooks import EarlyStoppingCallback
 from drytorch.trackers.sqlalchemy import SQLConnection
 from drytorch.trackers.tensorboard import TensorBoard
-from drytorch.utils.average import get_trailing_mean
+from drytorch.utils.average import get_moving_average, get_trailing_mean
 from drytorch.trackers.csv import CSVDumper
 from drytorch.trackers.hydra import HydraLink
 from drytorch.trackers.wandb import Wandb
@@ -73,7 +73,7 @@ def train_w_autoencoder(vqvae: CounterfactualVQVAE,
                                                                 patience=cfg_early.patience))
     if trial is not None:
         prune_hook = TrialCallback(trial,
-                                   filter_fn=get_trailing_mean(cfg_early.window),
+                                   filter_fn=get_moving_average(),
                                    metric=loss_calc)
         trainer.post_epoch_hooks.register(prune_hook)
 

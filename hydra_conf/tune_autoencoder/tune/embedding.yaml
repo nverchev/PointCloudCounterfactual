@@ -3,7 +3,7 @@ study_name:
 
 params:
 
-  autoencoder.model.vq_noise:
+  autoencoder.architecture.vq_noise:
     suggest: suggest_float
     settings:
       low: 0.1

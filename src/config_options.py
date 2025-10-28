@@ -186,6 +186,8 @@ class WEncoderConfig:
         architecture (WEncoders): The name of the architecture
         hidden_dims_conv (tuple[StrictlyPositiveInt]): Hidden dimensions for the convolutional part
         hidden_dims_lin(tuple[StrictlyPositiveInt]): Hidden dimensions for the linear part
+        n_heads (StrictlyPositiveInt): Number of attention heads for self-attention
+        proj_dim (StrictlyPositiveInt): Number of dimensions in expanded embedding
         dropout (tuple[PositiveFloat]): Dropout probabilities for the linear layers
         cf_temperature (int): Temperature for the probabilities (closer to zero means closer to samplings)
         act_name (str): The name of the PyTorch activation function (e.g., 'ReLU', 'LeakyReLU')
@@ -195,6 +197,8 @@ class WEncoderConfig:
     architecture: WEncoders
     hidden_dims_conv: tuple[StrictlyPositiveInt, ...]
     hidden_dims_lin: tuple[StrictlyPositiveInt, ...]
+    n_heads: StrictlyPositiveInt
+    proj_dim: StrictlyPositiveInt
     dropout: tuple[PositiveFloat, ...]
     cf_temperature: int
     act_name: str = ''
@@ -243,14 +247,16 @@ class WDecoderConfig:
 
     Attributes:
         architecture (WDecoders): The name of the architecture
-        expand (StrictlyPositiveInt): Feature expansion before the final output
+        n_heads (StrictlyPositiveInt): Number of attention heads for self-attention
+        proj_dim (StrictlyPositiveInt): Number of dimensions in expanded embedding
         hidden_dims (tuple[StrictlyPositiveInt]): Hidden dimensions for the decoder
         dropout (tuple[PositiveFloat]): Dropout probabilities
         act_name (str): The name of the PyTorch activation function
     """
 
     architecture: WDecoders
-    expand: StrictlyPositiveInt
+    n_heads: StrictlyPositiveInt
+    proj_dim: StrictlyPositiveInt
     hidden_dims: tuple[StrictlyPositiveInt, ...]
     dropout: tuple[PositiveFloat, ...]
     act_name: str = ''
@@ -273,12 +279,14 @@ class PosteriorDecoderConfig:
     """Configuration for the decoder of the latent space prior.
 
     Attributes:
-        hidden_dims (tuple[StrictlyPositiveInt]): Hidden dimensions for the prior decoder
+        hidden_dims (tuple[StrictlyPositiveInt]): Hidden dimensions
+        n_heads (StrictlyPositiveInt): Number of attention heads for self-attention
         dropout (tuple[PositiveFloat]): Dropout probabilities
         act_name (str): The name of the PyTorch activation function
     """
 
     hidden_dims: tuple[StrictlyPositiveInt, ...]
+    n_heads: StrictlyPositiveInt
     dropout: tuple[PositiveFloat, ...]
     act_name: str = ''
 

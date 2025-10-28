@@ -1,0 +1,46 @@
+study_name:
+  decoder_architecture
+
+n_trials: 300
+n_startup_trials: 20
+
+params:
+  autoencoder.architecture.decoder.posterior_decoder.n_heads:
+    suggest: suggest_categorical
+    settings:
+      choices: [4, 8, 16]
+
+  autoencoder.architecture.decoder.posterior_decoder.hidden_dims:
+    suggest: suggest_list
+    settings:
+      min_length: 1
+      max_length: 3
+      suggest: suggest_int
+      settings:
+        low: 128
+        high: 1024
+        log: true
+
+  autoencoder.architecture.decoder.posterior_decoder.dropout.0:
+    suggest: suggest_float
+    settings:
+      low: 0.
+      high: 0.2
+
+  autoencoder.architecture.decoder.posterior_decoder.dropout.1:
+    suggest: suggest_float
+    settings:
+      low: 0.
+      high: 0.2
+
+  autoencoder.architecture.decoder.posterior_decoder.dropout.2:
+    suggest: suggest_float
+    settings:
+      low: 0.
+      high: 0.2
+
+  autoencoder.architecture.decoder.posterior_decoder.dropout.3:
+    suggest: suggest_float
+    settings:
+      low: 0.
+      high: 0.2

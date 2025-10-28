@@ -42,6 +42,8 @@ class BaseWEncoder(nn.Module, metaclass=abc.ABCMeta):
         self.book_size = cfg_ae_arch.book_size  # Size of each codebook
 
         # Network architecture parameters
+        self.proj_dim = cfg_w_encoder.proj_dim
+        self.n_heads = cfg_w_encoder.n_heads
         self.h_dims_conv = cfg_w_encoder.hidden_dims_conv # Hidden dimensions for the linear layers
         self.h_dims_lin = cfg_w_encoder.hidden_dims_lin # Hidden dimensions for the convolutional layers
         self.dropout = cfg_w_encoder.dropout  # Dropout probabilities
@@ -100,17 +102,16 @@ class WEncoderTransformers(BaseWEncoder):
 
     def __init__(self) -> None:
         super().__init__()
-        self.proj_dim = 512
         self.input_proj = nn.Linear(self.embedding_dim, self.proj_dim)
         self.positional_encoding = nn.Parameter(torch.randn(1, self.n_codes, self.proj_dim))
         transformer_layers: list[nn.Module] = []
         for hidden_dim, do in zip(self.h_dims_lin, self.dropout):
             encoder_layer = nn.TransformerEncoderLayer(
                 d_model=self.proj_dim,
-                nhead=8,
+                nhead=self.n_heads,
                 dim_feedforward=hidden_dim,
-                dropout=0.0,
-                activation='gelu',
+                dropout=do,
+                activation=self.act_cls(),
                 batch_first=True,
                 norm_first=True,
             )
