@@ -8,5 +8,5 @@ defaults:
   - _self_
 
 base_name: VAEX-PCGen
-version: 1.3
+version: 1.4
 final: false

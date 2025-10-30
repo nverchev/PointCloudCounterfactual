@@ -10,6 +10,11 @@ params:
       low: 1e-04
       high: 1e-02
 
+  w_autoencoder.train.learn.grad_op:
+    suggest: suggest_categorical
+    settings:
+      choices: ['GradNormClipper', 'HistClipper', 'ParamHistClipper']
+
   w_autoencoder.train.learn.scheduler.warmup_steps:
     suggest: suggest_int
     settings:

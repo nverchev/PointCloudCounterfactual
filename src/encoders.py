@@ -118,7 +118,8 @@ class WEncoderTransformers(BaseWEncoder):
             transformer_layers.append(encoder_layer)
 
         self.transformer = nn.Sequential(*transformer_layers)
-        self.lin = LinearLayer(self.proj_dim, 2 * self.z_dim, batch_norm=False, act_cls=nn.Identity)
+        self.compress = LinearLayer(self.proj_dim, self.embedding_dim, batch_norm=False, act_cls=nn.Identity)
+        self.to_latent = LinearLayer(self.w_dim, 2 * self.z_dim, batch_norm=False, act_cls=nn.Identity)
 
     def forward(self, x: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor]:
         """Forward pass through transformer encoder."""
@@ -126,7 +127,7 @@ class WEncoderTransformers(BaseWEncoder):
         x = self.input_proj(x.view(batch_size, self.n_codes, self.embedding_dim))
         x = self.positional_encoding.expand(batch_size, -1, -1) + x
         h = self.transformer(x)
-        z = self.lin(torch.max(x, dim=1).values)
+        z = self.to_latent(self.compress(h).view(batch_size, -1))
         return h, z
 
 class BasePointEncoder(nn.Module, metaclass=abc.ABCMeta):

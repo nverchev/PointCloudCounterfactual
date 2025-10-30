@@ -1,6 +1,6 @@
 architecture: TransformerCross
 proj_dim: 512
 n_heads: 8
-hidden_dims: [1024, 1024, 1024]
+hidden_dims: [1024, 1024, 512]
 dropout: [0.1, 0.1, 0.1, 0.1, 0.1]
 act_name: 'GELU'

@@ -110,7 +110,7 @@ class ModelHead(enum.StrEnum):
 
 class GradOp(enum.StrEnum):
     """Gradient operation names."""
-    GradNormalizer = enum.auto()
+    GradParamNormalizer = enum.auto()
     GradZScoreNormalizer = enum.auto()
     GradNormClipper = enum.auto()
     GradValueClipper = enum.auto()

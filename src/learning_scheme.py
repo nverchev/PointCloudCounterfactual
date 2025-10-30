@@ -24,8 +24,8 @@ def get_scheduler(config: SchedulerConfig) -> schedulers.AbstractScheduler:
 
 def get_grad_op(config: LearningConfig) -> None | p.GradientOpProtocol:
     """Returns the gradient clipping instance based on config."""
-    if config.grad_op == GradOp.GradNormalizer:
-        return gradient_ops.GradNormalizer()
+    if config.grad_op == GradOp.GradParamNormalizer:
+        return gradient_ops.GradParamNormalizer()
     elif config.grad_op == GradOp.GradZScoreNormalizer:
         return gradient_ops.GradZScoreNormalizer()
     elif config.grad_op == GradOp.GradValueClipper:
