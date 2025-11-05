@@ -131,7 +131,7 @@ def tune(tune_cfg: DictConfig):
     with (ConfigPath.CONFIG_ALL.get_path() / 'defaults').with_suffix('.yaml').open() as f:
         version = f'v{yaml.safe_load(f)['version']}'
 
-    study = optuna.create_study(study_name=tune_cfg.tune.study_name + '_'.join(['1', version] + tune_cfg.overrides[1:]),
+    study = optuna.create_study(study_name=tune_cfg.tune.study_name + '_'.join(['', version] + tune_cfg.overrides[1:]),
                                 storage=tune_cfg.storage,
                                 sampler=sampler,
                                 pruner=pruner,
