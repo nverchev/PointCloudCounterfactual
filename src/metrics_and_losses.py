@@ -13,7 +13,7 @@ from structural_losses import match_cost
 from torcheval.metrics.functional import multiclass_accuracy, multiclass_f1_score
 
 from src.neighbour_ops import pykeops_square_distance, torch_square_distance
-from src.data_structures import Outputs, Targets, W_Targets
+from src.data_structures import Outputs, Targets, WTargets
 from src.config_options import ReconLosses, ModelHead, Experiment
 
 
@@ -107,58 +107,57 @@ def diff_gaussian_kld(d_mu: torch.Tensor, d_log_var: torch.Tensor, p_log_var: to
     return 0.5 * (-1 - d_log_var + d_log_var.exp() + (d_mu ** 2) / p_log_var.exp())
 
 
-def get_kld_loss() -> LossBase[Outputs, W_Targets]:
+def get_kld_loss() -> LossBase[Outputs, WTargets]:
     """Get KL divergence loss for variational autoencoder."""
     cfg_w_ae = Experiment.get_config().w_autoencoder
 
-    def _kld1(data: Outputs, _: W_Targets) -> torch.Tensor:
-        return diff_gaussian_kld(d_mu=data.d_mu2, d_log_var=data.d_log_var2, p_log_var=data.p_log_var2).sum(1)
+    def _kld1(data: Outputs, _: WTargets) -> torch.Tensor:
+        return diff_gaussian_kld(d_mu=data.d_mu2, d_log_var=data.d_log_var2, p_log_var=data.p_log_var2).sum((1, 2))
 
-    def _kld2(data: Outputs, _: W_Targets) -> torch.Tensor:
-        return gaussian_kld(mu=data.mu1, log_var=data.log_var1).sum(1)
+    def _kld2(data: Outputs, _: WTargets) -> torch.Tensor:
+        return gaussian_kld(mu=data.mu1, log_var=data.log_var1).sum((1, 2))
 
-    def _kld2_vamp(data: Outputs, _: W_Targets) -> torch.Tensor:
-        """Calculate KL divergence loss for VAMP prior."""
-        z_kld = data.z1
-        mu_kld = data.mu1
-        log_var_kld = data.log_var1
-        pseudo_mu = data.pseudo_mu1
-        pseudo_log_var = data.pseudo_log_var1
+    # def _kld2_vamp(data: Outputs, _: WTargets) -> torch.Tensor:
+    #     """Calculate KL divergence loss for VAMP prior."""
+    #     z_kld = data.z1
+    #     mu_kld = data.mu1
+    #     log_var_kld = data.log_var1
+    #     pseudo_mu = data.pseudo_mu1
+    #     pseudo_log_var = data.pseudo_log_var1
+    #
+    #     k = pseudo_mu.shape[0]
+    #     b = mu_kld.shape[0]
+    #     z = z_kld.unsqueeze(1).expand(-1, k, -1)  # create a copy for each pseudo input
+    #     posterior_ll = gaussian_ll(z_kld, mu_kld, log_var_kld).sum(1)  # sum dimensions
+    #     pseudo_mu = pseudo_mu.unsqueeze(0).expand(b, -1, -1)  # expand to match the batch size
+    #     pseudo_log_var = pseudo_log_var.unsqueeze(0).expand(b, -1, -1)  # expand to match the batch size
+    #     prior_ll = torch.logsumexp(gaussian_ll(z, pseudo_mu, pseudo_log_var).sum(2), dim=1)
+    #     total = posterior_ll - prior_ll + np.log(k)
+    #     return total
 
-        k = pseudo_mu.shape[0]
-        b = mu_kld.shape[0]
-        z = z_kld.unsqueeze(1).expand(-1, k, -1)  # create a copy for each pseudo input
-        posterior_ll = gaussian_ll(z_kld, mu_kld, log_var_kld).sum(1)  # sum dimensions
-        pseudo_mu = pseudo_mu.unsqueeze(0).expand(b, -1, -1)  # expand to match the batch size
-        pseudo_log_var = pseudo_log_var.unsqueeze(0).expand(b, -1, -1)  # expand to match the batch size
-        prior_ll = torch.logsumexp(gaussian_ll(z, pseudo_mu, pseudo_log_var).sum(2), dim=1)
-        total = posterior_ll - prior_ll + np.log(k)
-        return total
-
-    def _combined(data: Outputs, targets: W_Targets) -> torch.Tensor:
-        _kld2_final = _kld2_vamp if cfg_w_ae.objective.vamp else _kld2
-        return _kld1(data, targets) + _kld2_final(data, targets)
+    def _combined(data: Outputs, targets: WTargets) -> torch.Tensor:
+        return _kld1(data, targets) + _kld2(data, targets)
 
     return Loss(_combined, name='KLD')
 
 
-def get_adversarial_loss() -> LossBase[Outputs, W_Targets]:
+def get_adversarial_loss() -> LossBase[Outputs, WTargets]:
     """Get adversarial loss for training."""
     kld = nn.KLDivLoss(reduction='none', log_target=True)
 
-    def _corr(data: Outputs, targets: W_Targets) -> torch.Tensor:
+    def _corr(data: Outputs, targets: WTargets) -> torch.Tensor:
         return kld(F.log_softmax(data.y1, dim=1), F.log_softmax(targets.logits, dim=1)).sum(1)
 
-    def _max_entropy(data: Outputs, _: W_Targets) -> torch.Tensor:
+    def _max_entropy(data: Outputs, _: WTargets) -> torch.Tensor:
         return -torch.sum(F.softmax(data.y2, dim=1) * F.log_softmax(data.y2, dim=1), dim=1)
 
     return Loss(_corr, name='Correlation') + Loss(_max_entropy, name='Max entropy')
 
 
-def get_nll_loss() -> LossBase[Outputs, W_Targets]:
+def get_nll_loss() -> LossBase[Outputs, WTargets]:
     """Get negative log likelihood loss."""
 
-    def _nll(data: Outputs, targets: W_Targets) -> torch.Tensor:
+    def _nll(data: Outputs, targets: WTargets) -> torch.Tensor:
         w_weights = 1.0 / data.w_dist_2.clamp(min=1e-6)
         sum_weights = data.w_dist_2.sum(dim=2, keepdim=True)
 
@@ -167,19 +166,19 @@ def get_nll_loss() -> LossBase[Outputs, W_Targets]:
 
     return Loss(_nll, name='NLL')
 
-def get_mse_loss() -> LossBase[Outputs, W_Targets]:
+def get_mse_loss() -> LossBase[Outputs, WTargets]:
     """Get negative log likelihood loss."""
 
-    def _mse(data: Outputs, targets: W_Targets) -> torch.Tensor:
+    def _mse(data: Outputs, targets: WTargets) -> torch.Tensor:
         return torch.pow(data.w_recon - data.y1, 2).sum(1)
 
     return Loss(_mse, name='MSE')
 
 
-def get_w_accuracy() -> Metric[Outputs, W_Targets]:
+def get_w_accuracy() -> Metric[Outputs, WTargets]:
     """Get accuracy metric for quantization."""
 
-    def _accuracy(data: Outputs, targets: W_Targets) -> torch.Tensor:
+    def _accuracy(data: Outputs, targets: WTargets) -> torch.Tensor:
         one_hot_predictions = F.one_hot(data.w_dist_2.argmin(2), num_classes=targets.one_hot_idx.shape[2])
         return (targets.one_hot_idx * one_hot_predictions).sum(2).mean(1)
 
@@ -227,17 +226,29 @@ def get_f1() -> Metric[torch.Tensor, Targets]:
 
     return Metric(_f1, name='F1_Score', higher_is_better=True)
 
+def get_annealing() -> Loss[Outputs, WTargets]:
+    """Annealing component for loss."""
+    total_epochs = Experiment.get_config().w_autoencoder.train.n_epochs
+    midpoint = total_epochs / 2
+
+    def _annealing(outputs: Outputs, _: WTargets) -> torch.Tensor:
+        time_fraction = torch.tensor(outputs.model_epoch / total_epochs)
+        time_fraction = torch.clamp(time_fraction, 0.0, 1.0)
+        return 0.5 * (1.0 - torch.cos(time_fraction * math.pi))
+
+    return Loss(_annealing, name='Annealing')
+
 
 def get_classification_loss() -> LossBase[torch.Tensor, Targets]:
     """Get combined classification loss and metrics."""
     return get_cross_entropy_loss() | get_accuracy() | get_macro_accuracy()
 
 
-def get_w_encoder_loss() -> LossBase[Outputs, W_Targets]:
+def get_w_encoder_loss() -> LossBase[Outputs, WTargets]:
     """Get encoder loss combining NLL, KLD and adversarial losses."""
     c_kld = Experiment.get_config().w_autoencoder.objective.c_kld
     c_adv = Experiment.get_config().w_autoencoder.objective.c_counterfactual
-    loss = get_mse_loss() + c_kld * get_kld_loss() | get_w_accuracy() #+ 0 * get_adversarial_loss()
+    loss = get_mse_loss() + c_kld * get_kld_loss() | get_w_accuracy()
     return loss
 
 
