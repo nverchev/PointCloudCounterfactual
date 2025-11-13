@@ -8,9 +8,10 @@ from src.visualisation import render_cloud
 from drytorch import Model
 
 
-def generate_random_samples():
+def generate_random_samples() -> None:
     """Generate random samples from the autoencoder."""
     cfg = Experiment.get_config()
+    n_classes = cfg.data.dataset.n_classes
     cfg_ae = cfg.autoencoder
     cfg_user = cfg.user
     cfg_generate = cfg_user.generate
@@ -20,11 +21,16 @@ def generate_random_samples():
     if module.w_autoencoder.pseudo_manager is not None:
         module.w_autoencoder.pseudo_manager.update_pseudo_latent()
 
-    z1_bias = torch.zeros(cfg_generate.batch_size, cfg_ae.architecture.z1_dim, device=cfg_user.device)
-    clouds = module.generate(batch_size=cfg_generate.batch_size, z1_bias=z1_bias).recon
-    for cloud in clouds:
+    z1_bias = torch.zeros(cfg_generate.batch_size,
+                          1,
+                          cfg_ae.architecture.z1_dim,
+                          device=cfg_user.device)
+    probs = torch.ones(cfg_generate.batch_size, n_classes, device=cfg_user.device) // n_classes
+    clouds = module.generate(batch_size=cfg_generate.batch_size, z1_bias=z1_bias, probs=probs).recon
+    cloud: torch.Tensor
+    for i, cloud in enumerate(clouds):
         np_cloud = cloud.cpu().numpy()
-        render_cloud((np_cloud,), title='generated_{i}', interactive=cfg_user.plot.interactive)
+        render_cloud((np_cloud,), title=f'generated_{i}', interactive=cfg_user.plot.interactive)
 
 
 @hydra_main
