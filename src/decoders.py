@@ -20,13 +20,14 @@ class PriorDecoder(nn.Module):
         cfg = Experiment.get_config()
         cfg_ae_arc = cfg.autoencoder.architecture
         self.n_classes = cfg.data.dataset.n_classes
+        self.n_codes = cfg_ae_arc.n_codes
         self.z2_dim = cfg_ae_arc.z2_dim
-        self.prior = LinearLayer(self.n_classes, 2 * self.z2_dim, batch_norm=False, act_cls=nn.Identity)
+        self.prior = LinearLayer(self.n_classes, self.n_codes * 2 * self.z2_dim, batch_norm=False, act_cls=nn.Identity)
         return
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         """Forward pass."""
-        return self.prior(x)
+        return self.prior(x).view(-1, self.n_codes, 2 * self.z2_dim)
 
 
 class PosteriorDecoder(nn.Module):
@@ -48,33 +49,34 @@ class PosteriorDecoder(nn.Module):
         self.act_cls = cfg_posterior.act_cls
         self.proj_dim = cfg_ae_arc.encoder.w_encoder.proj_dim
         self.n_heads = cfg_posterior.n_heads
-        self.input_proj = LinearLayer(self.n_classes, self.proj_dim, batch_norm=False, act_cls=nn.Identity)
+        self.prob_proj = nn.Linear(self.n_classes, self.proj_dim)
+        self.input_proj = nn.Linear(self.embedding_dim, self.proj_dim)
+        self.positional_encoding = nn.Parameter(torch.randn(1, self.n_codes, self.proj_dim))
         transformer_layers: list[nn.Module] = []
         for hidden_dim, do in zip(self.h_dims, self.dropout):
-            layer = nn.TransformerEncoderLayer(
+            encoder_layer = nn.TransformerEncoderLayer(
                 d_model=self.proj_dim,
                 nhead=self.n_heads,
-                dropout=do,
                 dim_feedforward=hidden_dim,
+                dropout=do,
                 activation=self.act_cls(),
                 batch_first=True,
                 norm_first=True,
             )
-            transformer_layers.append(layer)
+            transformer_layers.append(encoder_layer)
 
-        self.transformer_layers = nn.Sequential(*transformer_layers)
-        self.compress = LinearLayer(self.proj_dim, self.embedding_dim, batch_norm=False, act_cls=nn.Identity)
-        self.to_latent = LinearLayer(self.w_dim, 2 * self.z_dim, batch_norm=False, act_cls=nn.Identity)
+        self.transformer = nn.ModuleList(transformer_layers)
+        self.to_latent = LinearLayer(self.proj_dim, 2 * self.z_dim, batch_norm=False, act_cls=nn.Identity)
         return
 
     def forward(self, probs: torch.Tensor, h: torch.Tensor) -> torch.Tensor:
         """Forward pass."""
-        batch_size = probs.size(0)
-        h = h + self.input_proj(probs).unsqueeze(1)
-        for layer in self.transformer_layers:
-            h = layer(h)
+        batch_size = h.shape[0]
+        x = self.positional_encoding.expand(batch_size, -1, -1) + h + self.prob_proj(probs).unsqueeze(1)
+        for layer in self.transformer:
+            x = layer(x)
 
-        return self.to_latent(self.compress(h).view(batch_size, -1))
+        return self.to_latent(x)
 
 
 class BaseWDecoder(nn.Module, metaclass=abc.ABCMeta):
@@ -164,12 +166,24 @@ class WDecoderTransformers(BaseWDecoder):
 
     def __init__(self) -> None:
         super().__init__()
-        self.z1_proj = LinearLayer(self.z2_dim, self.proj_dim, batch_norm=False, act_cls=nn.Identity)
-        self.z2_proj = LinearLayer(self.z2_dim, self.proj_dim * 8, batch_norm=False, act_cls=nn.Identity)
+        self.z1_proj = LinearLayer(self.z2_dim, self.proj_dim, batch_norm=False)
+        self.z2_proj = LinearLayer(self.z2_dim, self.proj_dim, batch_norm=False)
+
+        self.cross_attention_layer = nn.TransformerDecoderLayer(
+                d_model=self.proj_dim,
+                nhead=self.n_heads,
+                dropout=self.dropout[0],
+                dim_feedforward=self.h_dims[0],
+                activation=self.act_cls(),
+                batch_first=True,
+                norm_first=True,
+            )
+
         self.query_tokens = nn.Parameter(torch.randn(1, self.n_codes, self.proj_dim))
+        self.key_tokens = nn.Parameter(torch.randn(1, self.n_codes, self.proj_dim))
         transformer_layers: list[nn.Module] = []
-        for hidden_dim, do in zip(self.h_dims, self.dropout):
-            layer = nn.TransformerDecoderLayer(
+        for hidden_dim, do in zip(self.h_dims[1:], self.dropout[1:]):
+            layer = nn.TransformerEncoderLayer(
                 d_model=self.proj_dim,
                 nhead=self.n_heads,
                 dropout=do,
@@ -180,21 +194,20 @@ class WDecoderTransformers(BaseWDecoder):
             )
             transformer_layers.append(layer)
 
-        self.transformer_layers = nn.ModuleList(transformer_layers)
+        self.transformer = nn.Sequential(*transformer_layers)
         self.compress = nn.Linear(self.proj_dim, self.embedding_dim)
 
     def forward(self, z1: torch.Tensor, z2: torch.Tensor) -> torch.Tensor:
         """Forward pass through transformer encoder."""
         batch_size = z1.shape[0]
-        z1_proj = self.z1_proj(z1).view(batch_size, 1, self.proj_dim)
-        z2_proj = self.z2_proj(z2).view(batch_size, 8, self.proj_dim)
-        # z_proj = torch.cat((z1_proj, z2_proj), dim=1)
+        z1_proj = self.z1_proj(z1).view(batch_size, self.n_codes, self.proj_dim)
+        z2_proj = self.z2_proj(z2).view(batch_size, self.n_codes, self.proj_dim)
         x = self.query_tokens.expand(batch_size, -1, -1) + z1_proj
-        for layer in self.transformer_layers:
-            x = layer(x, z2_proj)
+        y = self.key_tokens.expand(batch_size, -1, -1) + z2_proj
+        x = self.cross_attention_layer(x, y)
+        x = self.transformer(x)
         x = self.compress(x)
         return x.view(batch_size, self.n_codes * self.embedding_dim)
-
 
 
 class BasePointDecoder(nn.Module, metaclass=abc.ABCMeta):

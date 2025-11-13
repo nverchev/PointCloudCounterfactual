@@ -2,7 +2,7 @@ architecture: Transformers
 proj_dim: 256
 n_heads: 4
 hidden_dims_conv: [512, 512, 512]
-hidden_dims_lin: [1024]
+hidden_dims_lin: [512, 512, 512]
 dropout: [0., 0., 0., 0., 0.]
 act_name: 'GELU'
 gumbel: true
