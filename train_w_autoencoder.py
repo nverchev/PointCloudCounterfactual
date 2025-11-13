@@ -19,7 +19,7 @@ from drytorch.trackers.wandb import Wandb
 
 from drytorch.contrib.optuna import TrialCallback
 from src.classifier import DGCNN
-from src.data_structures import Inputs
+from src.data_structures import Inputs, Outputs
 from src.metrics_and_losses import get_w_encoder_loss, get_recon_loss
 from src.config_options import Experiment, ConfigAll
 from src.config_options import hydra_main
@@ -27,6 +27,15 @@ from src.datasets import get_dataset, Partitions, WDatasetWithLogits
 from src.learning_scheme import get_learning_scheme
 from src.autoencoder import CounterfactualVQVAE
 # from src.visualisation import show_latent
+
+
+class ModelEpoch(Model):
+    """This class adds a hook to include the epoch in the outputs (to anneal the kld loss)."""
+
+    def __call__(self, inputs: Inputs) -> Outputs:
+        outputs = super().__call__(inputs)
+        outputs.model_epoch = self.epoch
+        return outputs
 
 
 def train_w_autoencoder(vqvae: CounterfactualVQVAE,
@@ -38,7 +47,7 @@ def train_w_autoencoder(vqvae: CounterfactualVQVAE,
     cfg_w_ae = cfg.w_autoencoder
     cfg_user = cfg.user
     module = vqvae.w_autoencoder
-    w_encoder_model = Model(module, name=f'{name:s}.WAutoEncoder')
+    w_encoder_model = ModelEpoch(module, name=f'{name:s}.WAutoEncoder')
 
     if not cfg_user.load_checkpoint:
         module.recursive_reset_parameters()
@@ -105,11 +114,11 @@ def main(cfg: ConfigAll) -> None:
         autoencoder.checkpoint.load()
         train_w_autoencoder(module, classifier, name=autoencoder.name)
         autoencoder.save_state()
-        test_dataset = get_dataset(Partitions.test if cfg.final else Partitions.val)
-        test = Test(autoencoder,
-                    name='DoubleEncoding',
-                    loader=DataLoader(dataset=test_dataset, batch_size=cfg.autoencoder.train.batch_size),
-                    metric=get_recon_loss())
+        # test_dataset = get_dataset(Partitions.test if cfg.final else Partitions.val)
+        # test = Test(autoencoder,
+        #             name='DoubleEncoding',
+        #             loader=DataLoader(dataset=test_dataset, batch_size=cfg.autoencoder.train.batch_size),
+        #             metric=get_recon_loss())
         # with module.double_encoding:
         #     test()
     return
