@@ -1,13 +1,13 @@
 """Create a variation of an existing experiment allowing for a different w_autoencoder architecture."""
 
 import torch
-
-from drytorch.lib.checkpoints import LocalCheckpoint
 from drytorch import Model
+from drytorch.lib.checkpoints import LocalCheckpoint
 
-from src.config_options import ConfigAll, Experiment, hydra_main
 from src.autoencoder import CounterfactualVQVAE
 from src.classifier import DGCNN
+from src.config_options import ConfigAll, Experiment, hydra_main
+
 
 def create_variation() -> None:
     """Convenience method that copies the autoencoder and classifier state from the main experiment to a new one."""
