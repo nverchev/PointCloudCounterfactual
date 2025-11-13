@@ -140,9 +140,10 @@ class BaseWAutoEncoder(nn.Module, abc.ABC):
             pseudo_z_list = []
             for mu, log_var in self.pseudo_manager.sample_pseudo_latent(batch_size):
                 pseudo_z_list.append(self.sampler.sample(mu, log_var))
+
             z1 = torch.stack(pseudo_z_list).contiguous()
         else:
-            z1 = torch.randn((batch_size, self.cfg_ae_arc.z1_dim), device=z1_bias.device)
+            z1 = torch.randn((batch_size, 1, self.cfg_ae_arc.z1_dim), device=z1_bias.device)
 
         data.z1 = z1 + z1_bias
         return data
@@ -181,9 +182,9 @@ class WAutoEncoder(BaseWAutoEncoder):
         if self.pseudo_manager is not None:
             split_index = [-self.pseudo_manager.n_pseudo_inputs]
             latent, pseudo_latent = torch.tensor_split(latent, split_index)
-            data.pseudo_mu1, data.pseudo_log_var1 = pseudo_latent.chunk(2, 1)
+            data.pseudo_mu1, data.pseudo_log_var1 = pseudo_latent.chunk(2, 2)
 
-        data.mu1, data.log_var1 = latent.chunk(2, 1)
+        data.mu1, data.log_var1 = latent.chunk(2, 2)
 
         return data
 
@@ -229,29 +230,22 @@ class CounterfactualWAutoEncoder(BaseWAutoEncoder):
             split_index = [-self.pseudo_manager.n_pseudo_inputs]
             latent, pseudo_latent = torch.tensor_split(latent, split_index)
             feature, _ = torch.tensor_split(features, split_index, dim=0)
-            data.pseudo_mu1, data.pseudo_log_var1 = pseudo_latent.chunk(2, 1)
+            data.pseudo_mu1, data.pseudo_log_var1 = pseudo_latent.chunk(2, 2)
 
-        data.mu1, data.log_var1 = latent.chunk(2, 1)
+        data.mu1, data.log_var1 = latent.chunk(2, 2)
         data.h = features
 
-        # # Adversarial predictions
+        # Adversarial predictions
         # data.y1 = self.adversarial(data.mu1.detach())
         # data.y2 = frozen_forward(self.adversarial, data.mu1)
         data.z1 = self.sampler.sample(data.mu1, data.log_var1, self.training)
-        #
         return data
 
     def decode(self, data: Outputs, logits: Optional[torch.Tensor] = None) -> Outputs:
         """Decode with counterfactual generation."""
-
-        # Handle probability computation
         probs = self._get_probabilities(data, logits)
-        data.p_mu2, data.p_log_var2 = self.z2_inference(probs).chunk(2, 1)
-
-        # Compute z2 based on whether we have features
+        data.p_mu2, data.p_log_var2 = self.z2_inference(probs).chunk(2, 2)
         data.z2 = self._compute_z2(data, probs)
-
-        # Combine and decode
         data.w_recon = self.decoder(data.z1, data.z2)
         data.w_dist_2, data.idx = self.distance_calc.compute_distances(
             data.w_recon, self.codebook, self.dim_codes, self.embedding_dim
@@ -279,7 +273,7 @@ class CounterfactualWAutoEncoder(BaseWAutoEncoder):
             return self.sampler.sample(data.p_mu2, data.p_log_var2, self.training)
 
         # Use posterior with features
-        data.d_mu2, data.d_log_var2 = self.posterior(probs, data.h).chunk(2, 1)
+        data.d_mu2, data.d_log_var2 = self.posterior(probs, data.h).chunk(2, 2)
 
         mu_combined = data.d_mu2 + data.p_mu2
         log_var_combined = data.d_log_var2 + data.p_log_var2
@@ -305,7 +299,8 @@ class CounterfactualWAutoEncoder(BaseWAutoEncoder):
             data.probs = probs.to(self.codebook.device)
 
         else:
-            data.probs = self.softmax(torch.rand((batch_size, self.n_classes), device=self.codebook.device))
+            alpha = torch.ones(self.n_classes, device=self.codebook.device)
+            data.probs = torch.distributions.Dirichlet(concentration=alpha).sample((batch_size, ))
 
         return data
 
@@ -475,9 +470,7 @@ class AbstractVQVAE(AE, Generic[WA], abc.ABC):
         z1_bias = z1_bias.to(self.codebook.device)
         initial_sampling = initial_sampling.to(self.codebook.device)
         data = self.w_autoencoder.sample_latent(z1_bias, batch_size=batch_size, **kwargs)
-
         inputs = Inputs(torch.empty(0), initial_sampling)
-
         with self.double_encoding:
             output = self.decode(data, inputs)
 
@@ -506,10 +499,11 @@ class CounterfactualVQVAE(AbstractVQVAE[CounterfactualWAutoEncoder]):
     def generate(self,
                  batch_size: int = 1,
                  initial_sampling: torch.Tensor = torch.empty(0),
-                 z1_bias: torch.Tensor = torch.empty(0),
-                 probs: torch.Tensor = torch.empty(0),
+                 z1_bias: torch.Tensor = torch.tensor(0),
+                 probs: Optional[torch.Tensor] = None,
                  **kwargs: Any) -> Outputs:
         """Generate counterfactual samples."""
+
         return super().generate(
             batch_size=batch_size,
             initial_sampling=initial_sampling,
