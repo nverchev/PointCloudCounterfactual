@@ -43,6 +43,7 @@ class Outputs:
     Outputs of the inner and outer autoencoder.
 
     Attributes:
+        model_epoch: the epoch of the model (used for annealing in some losses)
         recon: the reconstruction output.
         w: the discrete encodings' embeddings (with straight-through gradients).
         w_q: outer encoder approximation of the discrete encodings' embedding.
@@ -71,6 +72,7 @@ class Outputs:
         y2: output of the evaluated discriminator for the conditional inner autoencoder discriminative loss.
 
     """
+    model_epoch: int
     recon: torch.Tensor
     w: torch.Tensor
     w_q: torch.Tensor
@@ -117,7 +119,7 @@ class W_Inputs(NamedTuple):
     logits: torch.Tensor = torch.empty(0)
 
 
-class W_Targets(NamedTuple):
+class WTargets(NamedTuple):
     """
     Targets for training the inner autoencoder.
 
