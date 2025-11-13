@@ -446,7 +446,7 @@ class LearningConfig:
         optimizer_name (str): The name of the PyTorch optimizer (e.g., 'Adam', 'SGD')
         learning_rate (PositiveFloat): The learning rate or a dictionary of learning rates for model parameters
         grad_op (GradOp | None): The gradient operation to be applied before the optimizer
-        clip_criterion (ClipCriterion): The criterion for gradient clipping (only used for some gradient operations))
+        clip_criterion (ClipCriterion): The criterion for gradient clipping (only used for some gradient operations)
         opt_settings (dict): A dictionary containing default settings for the optimizer
         scheduler (SchedulerConfig): The scheduler configuration for learning rate decay
     """
@@ -629,6 +629,8 @@ class ConfigTrainClassifier(ConfigTrain):
     """Configuration for training the classifier.
 
     Attributes:
+        train (TrainingConfig): Training options
+        name (str): The name of the child experiment
         architecture (ClassifierConfig): The classifier architecture configuration.
     """
     architecture: ClassifierConfig
@@ -639,6 +641,8 @@ class ConfigTrainAE(ConfigTrain):
     """Configuration for training the autoencoder.
 
     Attributes:
+        train (TrainingConfig): Training options
+        name (str): The name of the child experiment
         architecture (AEConfig): The autoencoder architecture configuration
         objective (ObjectiveAEConfig): The autoencoder objective (loss and metrics) configuration
         diagnose_every (StrictlyPositiveInt): The number of points between diagnostics (rearranging the discrete space)
@@ -653,6 +657,8 @@ class ConfigTrainWAE(ConfigTrain):
     """Configuration for training the W-autoencoder.
 
     Attributes:
+        train (TrainingConfig): Training options
+        name (str): The name of the child experiment
         objective (ObjectiveWAEConfig): The W-autoencoder objective (loss and metrics) configuration
     """
     objective: ObjectiveWAEConfig
@@ -663,7 +669,7 @@ class ConfigAll:
     """Root configuration for all experiment settings.
 
     Attributes:
-        base_name (str): The base name of the experiment
+        variation (str): The name for the experiment
         final (bool): If True, it uses the validation dataset for training and the test dataset for testing
         classifier (ConfigTrainClassifier): The configuration for training the classifier
         autoencoder (ConfigTrainAE): The configuration for training the autoencoder
@@ -671,7 +677,7 @@ class ConfigAll:
         user (UserSettings): User-specific settings
         data (DataConfig): Data pre-processing configuration
     """
-    base_name: str
+    variation: str
     final: bool
     version: str
     classifier: ConfigTrainClassifier
@@ -686,7 +692,7 @@ class ConfigAll:
     @property
     def name(self) -> str:
         """The full name of the experiment, indicating if metrics are calculated on the test dataset."""
-        out = f'{self.base_name}_final' if self.final else self.base_name
+        out = f'{self.variation}_final' if self.final else self.variation
         return out[:255]
 
     @property
@@ -712,8 +718,9 @@ class ConfigAll:
         finally:
             self._lens = None
 
-
-Experiment: TypeAlias = drytorch.Experiment[ConfigAll]
+class Experiment(drytorch.Experiment[ConfigAll]):
+    """Specifications for the current experiment."""
+    pass
 
 
 def get_config_all(overrides: Optional[list[str]] = None) -> ConfigAll:
@@ -749,8 +756,8 @@ def update_exp_name(cfg: ConfigAll, overrides: list[str]) -> None:
     """Adds the overrides to the name for the experiment."""
     overrides = [override for override in overrides
                  if override.split('.')[0] != 'user' and
-                 override.split('=')[0] != 'final']
-    cfg.base_name = '_'.join([cfg.base_name] + overrides).replace('/', '_')
+                 override.split('=')[0] not in ('final', 'variation')]
+    cfg.variation = '_'.join([cfg.variation] + overrides).replace('/', '_')
     cfg.tags = overrides
     return
 
