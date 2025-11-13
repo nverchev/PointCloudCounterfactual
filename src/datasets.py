@@ -16,7 +16,7 @@ from drytorch import Model
 from typing_extensions import override
 
 from src.config_options import Experiment, Datasets
-from src.data_structures import Inputs, Targets, W_Targets, Outputs, W_Inputs
+from src.data_structures import Inputs, Targets, WTargets, Outputs, W_Inputs
 from src.autoencoder import AbstractVQVAE, VQVAE, CounterfactualVQVAE
 from src.utils import download_zip, load_h5_modelnet
 from src.utils import Singleton
@@ -365,10 +365,10 @@ class ClassifierMixin:
         return self.classifier(batch_inputs)
 
 
-class WDataset(BaseVQDataset[VQ], Dataset[tuple[W_Inputs, W_Targets]]):
+class WDataset(BaseVQDataset[VQ], Dataset[tuple[W_Inputs, WTargets]]):
     """Dataset for training inner autoencoder with discrete codes."""
 
-    def __getitems__(self, index_list: list[int]) -> list[tuple[W_Inputs, W_Targets]]:
+    def __getitems__(self, index_list: list[int]) -> list[tuple[W_Inputs, WTargets]]:
         self.autoencoder = self.autoencoder.train(not torch.is_inference_mode_enabled())
         batch_data = []
 
@@ -377,7 +377,7 @@ class WDataset(BaseVQDataset[VQ], Dataset[tuple[W_Inputs, W_Targets]]):
             batch_w_q, batch_one_hot_idx = batch_ae_data.w_q, batch_ae_data.one_hot_idx
 
             for w_q, one_hot_idx in zip(batch_w_q, batch_one_hot_idx):
-                batch_data.append((W_Inputs(w_q), W_Targets(one_hot_idx=one_hot_idx)))
+                batch_data.append((W_Inputs(w_q), WTargets(one_hot_idx=one_hot_idx)))
 
         return batch_data
 
@@ -404,7 +404,7 @@ class WDatasetWithLogits(ClassifierMixin, WDataset[CounterfactualVQVAE]):
             classifier=classifier
         )
 
-    def __getitems__(self, index_list: list[int]) -> list[tuple[W_Inputs, W_Targets]]:
+    def __getitems__(self, index_list: list[int]) -> list[tuple[W_Inputs, WTargets]]:
         self.autoencoder = self.autoencoder.train(not torch.is_inference_mode_enabled())
         batch_data = []
 
@@ -416,7 +416,7 @@ class WDatasetWithLogits(ClassifierMixin, WDataset[CounterfactualVQVAE]):
             for w_q, one_hot_idx, logit in zip(batch_w_q, batch_one_hot_idx, batch_logits):
                 batch_data.append((
                     W_Inputs(w_q, logit),
-                    W_Targets(one_hot_idx=one_hot_idx, logits=logit)
+                    WTargets(one_hot_idx=one_hot_idx, logits=logit)
                 ))
 
         return batch_data
