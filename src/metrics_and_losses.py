@@ -227,9 +227,11 @@ def get_f1() -> Metric[torch.Tensor, Targets]:
     return Metric(_f1, name='F1_Score', higher_is_better=True)
 
 def get_annealing() -> Loss[Outputs, WTargets]:
-    """Annealing component for loss."""
+    """(Reverse) Annealing component for loss.
+
+    It does the opposite of traditional annealing, but it is the accepted term for gradually increasing the KLD loss.
+    """
     total_epochs = Experiment.get_config().w_autoencoder.train.n_epochs
-    midpoint = total_epochs / 2
 
     def _annealing(outputs: Outputs, _: WTargets) -> torch.Tensor:
         time_fraction = torch.tensor(outputs.model_epoch / total_epochs)
@@ -259,4 +261,5 @@ def get_autoencoder_loss() -> LossBase[Outputs, Targets]:
     loss = get_recon_loss()
     if cfg_ae.architecture.head is not ModelHead.AE:
         return loss + c_embed * get_embed_loss()
+
     return loss
