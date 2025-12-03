@@ -1,7 +1,7 @@
 """ Train the w-autoencoder."""
 
 import sys
-from typing import Optional
+from typing import Optional, reveal_type
 
 import optuna
 import sqlalchemy
@@ -29,7 +29,7 @@ from src.autoencoder import CounterfactualVQVAE
 # from src.visualisation import show_latent
 
 
-class ModelEpoch(Model):
+class ModelEpoch(Model[Inputs, Outputs]):
     """This class adds a hook to include the epoch in the outputs (to anneal the kld loss)."""
 
     def __call__(self, inputs: Inputs) -> Outputs:

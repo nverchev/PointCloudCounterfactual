@@ -1,10 +1,11 @@
-# EMD approximation module (based on auction algorithm)
+"""EMD approximation module (based on auction algorithm)"""
+
 # memory complexity: O(n)
 # time complexity: O(n^2 * iter) 
 # author: Minghua Liu
 
 import time
-from typing import Any
+from typing import Any, cast, override
 
 import numpy as np
 import torch
@@ -67,6 +68,7 @@ class emdModule(nn.Module):
     def __init__(self) -> None:
         super().__init__()
 
+    @override
     def forward(self, input1: torch.Tensor, input2: torch.Tensor, eps: float, iters: int) -> torch.Tensor:
         """
         Compute the earth mover's distance (EMD) between two point clouds normalized to [0, 1] and of the same size.
@@ -81,7 +83,7 @@ class emdModule(nn.Module):
             dist: [#batch, #points] |  sqrt(dist) -> L2 distance
             assignment: [#batch, #points] index of the matched point in the ground truth point cloud
         """
-        return emdFunction.apply(input1, input2, eps, iters)
+        return cast(torch.Tensor, emdFunction.apply(input1, input2, eps, iters))
 
 
 def test_emd() -> None:
