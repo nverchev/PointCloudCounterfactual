@@ -107,7 +107,7 @@ class Outputs:
                 pass
 
 
-class W_Inputs(NamedTuple):
+class WInputs(NamedTuple):
     """
     Targets for training the inner autoencoder.
 
@@ -124,8 +124,10 @@ class WTargets(NamedTuple):
     Targets for training the inner autoencoder.
 
     Attributes:
+        w_e: the discrete encodings' embedding vectorized.
         one_hot_idx: torch.Tensor
         logits: optional argument to get a conditional distribution given a classifier's evaluation.
     """
+    w_e: torch.Tensor
     one_hot_idx: torch.Tensor
     logits: torch.Tensor = torch.empty(0)

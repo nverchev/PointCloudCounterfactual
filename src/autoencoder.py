@@ -7,7 +7,7 @@ import numpy as np
 import torch
 import torch.nn as nn
 
-from src.data_structures import Inputs, Outputs, W_Inputs
+from src.data_structures import Inputs, Outputs, WInputs
 from src.encoders import get_encoder, get_w_encoder
 from src.decoders import PriorDecoder, PosteriorDecoder, get_decoder, get_w_decoder
 from src.neighbour_ops import pykeops_square_distance
@@ -115,7 +115,7 @@ class BaseWAutoEncoder(nn.Module, abc.ABC):
         else:
             self.pseudo_manager = None
 
-    def forward(self, x: W_Inputs) -> Outputs:
+    def forward(self, x: WInputs) -> Outputs:
         """Forward pass."""
         data = self.encode(x.w_q)
         return self.decode(data)
@@ -250,7 +250,6 @@ class CounterfactualWAutoEncoder(BaseWAutoEncoder):
         data.w_dist_2, data.idx = self.distance_calc.compute_distances(
             data.w_recon, self.codebook, self.dim_codes, self.embedding_dim
         )
-
         return data
 
     def _get_probabilities(self, data: Outputs, logits: Optional[torch.Tensor]) -> torch.Tensor:
@@ -280,10 +279,9 @@ class CounterfactualWAutoEncoder(BaseWAutoEncoder):
 
         return self.sampler.sample(mu_combined, log_var_combined, self.training)
 
-    def forward(self, x: W_Inputs) -> Outputs:
+    def forward(self, x: WInputs) -> Outputs:
         """Forward pass with logits."""
         data = self.encode(x.w_q)
-        data.y1 = x.w_q
         return self.decode(data, x.logits)
 
     @torch.inference_mode()
@@ -453,7 +451,6 @@ class AbstractVQVAE(AE, Generic[WA], abc.ABC):
         idx = data.idx
         batch = idx.shape[0]
         book = self.codebook.repeat(batch, 1, 1)
-
         idx_flat = idx.view(batch * idx.shape[1], 1, 1)
         idx_expanded = idx_flat.expand(-1, -1, self.embedding_dim)
         embeddings = book.gather(1, idx_expanded)

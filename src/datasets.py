@@ -16,7 +16,7 @@ from drytorch import Model
 from typing_extensions import override
 
 from src.config_options import Experiment, Datasets
-from src.data_structures import Inputs, Targets, WTargets, Outputs, W_Inputs
+from src.data_structures import Inputs, Targets, WTargets, Outputs, WInputs
 from src.autoencoder import AbstractVQVAE, VQVAE, CounterfactualVQVAE
 from src.utils import download_zip, load_h5_modelnet
 from src.utils import Singleton
@@ -365,19 +365,19 @@ class ClassifierMixin:
         return self.classifier(batch_inputs)
 
 
-class WDataset(BaseVQDataset[VQ], Dataset[tuple[W_Inputs, WTargets]]):
+class WDataset(BaseVQDataset[VQ], Dataset[tuple[WInputs, WTargets]]):
     """Dataset for training inner autoencoder with discrete codes."""
 
-    def __getitems__(self, index_list: list[int]) -> list[tuple[W_Inputs, WTargets]]:
+    def __getitems__(self, index_list: list[int]) -> list[tuple[WInputs, WTargets]]:
         self.autoencoder = self.autoencoder.train(not torch.is_inference_mode_enabled())
         batch_data = []
 
         for batch_inputs, labels in self._get_data(index_list):
             batch_ae_data = self._run_autoencoder(batch_inputs)
-            batch_w_q, batch_one_hot_idx = batch_ae_data.w_q, batch_ae_data.one_hot_idx
+            batch_w_q, batch_w_e, batch_one_hot_idx = batch_ae_data.w_q, batch_ae_data.w_e, batch_ae_data.one_hot_idx
 
-            for w_q, one_hot_idx in zip(batch_w_q, batch_one_hot_idx):
-                batch_data.append((W_Inputs(w_q), WTargets(one_hot_idx=one_hot_idx)))
+            for w_q, w_e, one_hot_idx in zip(batch_w_q, batch_w_e, batch_one_hot_idx):
+                batch_data.append((WInputs(w_q), WTargets(w_e=w_e, one_hot_idx=one_hot_idx)))
 
         return batch_data
 
@@ -385,7 +385,7 @@ class WDataset(BaseVQDataset[VQ], Dataset[tuple[W_Inputs, WTargets]]):
     def _run_autoencoder(self, inputs: Inputs) -> Outputs:
         """Run autoencoder encoding and quantization."""
         data = self.autoencoder.encode(inputs)
-        data.w, data.one_hot_idx = self.autoencoder.quantizer.quantize(data.w_q)
+        data.w_e, data.one_hot_idx = self.autoencoder.quantizer.quantize(data.w_q)
         return data
 
 
@@ -404,19 +404,19 @@ class WDatasetWithLogits(ClassifierMixin, WDataset[CounterfactualVQVAE]):
             classifier=classifier
         )
 
-    def __getitems__(self, index_list: list[int]) -> list[tuple[W_Inputs, WTargets]]:
+    def __getitems__(self, index_list: list[int]) -> list[tuple[WInputs, WTargets]]:
         self.autoencoder = self.autoencoder.train(not torch.is_inference_mode_enabled())
         batch_data = []
 
         for batch_inputs, labels in self._get_data(index_list):
             batch_ae_data = self._run_autoencoder(batch_inputs)
             batch_logits = self._run_classifier(batch_inputs)
-            batch_w_q, batch_one_hot_idx = batch_ae_data.w_q, batch_ae_data.one_hot_idx
+            batch_w_q, batch_w_e, batch_one_hot_idx = batch_ae_data.w_q, batch_ae_data.w_e, batch_ae_data.one_hot_idx
 
-            for w_q, one_hot_idx, logit in zip(batch_w_q, batch_one_hot_idx, batch_logits):
+            for w_q, w_e, one_hot_idx, logit in zip(batch_w_q, batch_w_e, batch_one_hot_idx, batch_logits):
                 batch_data.append((
-                    W_Inputs(w_q, logit),
-                    WTargets(one_hot_idx=one_hot_idx, logits=logit)
+                    WInputs(w_q, logit),
+                    WTargets(w_e=w_e, one_hot_idx=one_hot_idx, logits=logit)
                 ))
 
         return batch_data
