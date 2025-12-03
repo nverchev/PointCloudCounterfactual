@@ -14,7 +14,7 @@ def create_variation() -> None:
     cfg = Experiment.get_config()
 
     # Copy the autoencoder state
-    main_exp_dir = cfg.user.path.exp_par_dir / 'checkpoints' / 'VAEX-PCGen'
+    main_exp_dir = cfg.user.path.exp_par_dir / 'checkpoints' / 'main'
     checkpoint_dir = sorted(sorted(main_exp_dir.iterdir())[-1].iterdir())[-1]  # get the latest checkpoint
 
     vqvae_module = CounterfactualVQVAE()
