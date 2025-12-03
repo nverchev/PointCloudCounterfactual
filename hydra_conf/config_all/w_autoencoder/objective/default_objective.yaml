@@ -1,3 +1,4 @@
 vamp: false
-c_kld: 4.
+c_kld1: 1.5
+c_kld2: 4.
 c_counterfactual: 0

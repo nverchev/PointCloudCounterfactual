@@ -515,11 +515,13 @@ class ObjectiveWAEConfig:
 
     Attributes:
         vamp (bool): Whether to use the Variational Mixture of Posteriors (VAMP) loss
-        c_kld (PositiveFloat): The Kullback-Leibler Divergence coefficient
+        c_kld1 (PositiveFloat): The Kullback-Leibler Divergence coefficient for the first latent variable
+        c_kld2 (PositiveFloat): The Kullback-Leibler Divergence coefficient for the second latent variable
         c_counterfactual (PositiveFloat): The coefficient for the Counterfactual loss
     """
     vamp: bool
-    c_kld: PositiveFloat
+    c_kld1: PositiveFloat
+    c_kld2: PositiveFloat
     c_counterfactual: PositiveFloat
 
 

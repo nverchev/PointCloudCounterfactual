@@ -107,38 +107,47 @@ def diff_gaussian_kld(d_mu: torch.Tensor, d_log_var: torch.Tensor, p_log_var: to
     return 0.5 * (-1 - d_log_var + d_log_var.exp() + (d_mu ** 2) / p_log_var.exp())
 
 
-def get_kld_loss() -> LossBase[Outputs, WTargets]:
-    """Get KL divergence loss for variational autoencoder."""
-    cfg_w_ae = Experiment.get_config().w_autoencoder
+def get_kld1_loss() -> LossBase[Outputs, WTargets]:
+    """Get KL divergence loss for the first latent variable in the variational autoencoder."""
 
     def _kld1(data: Outputs, _: WTargets) -> torch.Tensor:
-        return diff_gaussian_kld(d_mu=data.d_mu2, d_log_var=data.d_log_var2, p_log_var=data.p_log_var2).sum((1, 2))
-
-    def _kld2(data: Outputs, _: WTargets) -> torch.Tensor:
         return gaussian_kld(mu=data.mu1, log_var=data.log_var1).sum((1, 2))
 
-    # def _kld2_vamp(data: Outputs, _: WTargets) -> torch.Tensor:
-    #     """Calculate KL divergence loss for VAMP prior."""
-    #     z_kld = data.z1
-    #     mu_kld = data.mu1
-    #     log_var_kld = data.log_var1
-    #     pseudo_mu = data.pseudo_mu1
-    #     pseudo_log_var = data.pseudo_log_var1
-    #
-    #     k = pseudo_mu.shape[0]
-    #     b = mu_kld.shape[0]
-    #     z = z_kld.unsqueeze(1).expand(-1, k, -1)  # create a copy for each pseudo input
-    #     posterior_ll = gaussian_ll(z_kld, mu_kld, log_var_kld).sum(1)  # sum dimensions
-    #     pseudo_mu = pseudo_mu.unsqueeze(0).expand(b, -1, -1)  # expand to match the batch size
-    #     pseudo_log_var = pseudo_log_var.unsqueeze(0).expand(b, -1, -1)  # expand to match the batch size
-    #     prior_ll = torch.logsumexp(gaussian_ll(z, pseudo_mu, pseudo_log_var).sum(2), dim=1)
-    #     total = posterior_ll - prior_ll + np.log(k)
-    #     return total
+    return Loss(_kld1, name='KLD1')
 
-    def _combined(data: Outputs, targets: WTargets) -> torch.Tensor:
-        return _kld1(data, targets) + _kld2(data, targets)
 
-    return Loss(_combined, name='KLD')
+def get_kld2_loss() -> LossBase[Outputs, WTargets]:
+    """Get KL divergence loss for the second latent variable in the variational autoencoder."""
+
+    def _kld2(data: Outputs, _: WTargets) -> torch.Tensor:
+        return diff_gaussian_kld(d_mu=data.d_mu2, d_log_var=data.d_log_var2, p_log_var=data.p_log_var2).sum((1, 2))
+
+    return Loss(_kld2, name='KLD2')
+
+
+def get_kld_vamp_loss() -> LossBase[Outputs, WTargets]:
+    """Get KL divergence loss for the variational autoencoder from aggregated posterior."""
+    cfg_w_ae = Experiment.get_config().w_autoencoder
+
+    def _kld2_vamp(data: Outputs, _: WTargets) -> torch.Tensor:
+        """Calculate KL divergence loss for VAMP prior."""
+        z_kld = data.z1
+        mu_kld = data.mu1
+        log_var_kld = data.log_var1
+        pseudo_mu = data.pseudo_mu1
+        pseudo_log_var = data.pseudo_log_var1
+
+        k = pseudo_mu.shape[0]
+        b = mu_kld.shape[0]
+        z = z_kld.unsqueeze(1).expand(-1, k, -1)  # create a copy for each pseudo input
+        posterior_ll = gaussian_ll(z_kld, mu_kld, log_var_kld).sum(1)  # sum dimensions
+        pseudo_mu = pseudo_mu.unsqueeze(0).expand(b, -1, -1)  # expand to match the batch size
+        pseudo_log_var = pseudo_log_var.unsqueeze(0).expand(b, -1, -1)  # expand to match the batch size
+        prior_ll = torch.logsumexp(gaussian_ll(z, pseudo_mu, pseudo_log_var).sum(2), dim=1)
+        total = posterior_ll - prior_ll + np.log(k)
+        return total
+
+    return Loss(_kld2_vamp, name='KLD2_VAMP')
 
 
 def get_adversarial_loss() -> LossBase[Outputs, WTargets]:
@@ -170,7 +179,7 @@ def get_mse_loss() -> LossBase[Outputs, WTargets]:
     """Get negative log likelihood loss."""
 
     def _mse(data: Outputs, targets: WTargets) -> torch.Tensor:
-        return torch.pow(data.w_recon - data.y1, 2).sum(1)
+        return torch.pow(data.w_recon - targets.w_e, 2).sum(1)
 
     return Loss(_mse, name='MSE')
 
@@ -248,9 +257,9 @@ def get_classification_loss() -> LossBase[torch.Tensor, Targets]:
 
 def get_w_encoder_loss() -> LossBase[Outputs, WTargets]:
     """Get encoder loss combining NLL, KLD and adversarial losses."""
-    c_kld = Experiment.get_config().w_autoencoder.objective.c_kld
-    c_adv = Experiment.get_config().w_autoencoder.objective.c_counterfactual
-    loss = get_mse_loss() + c_kld * get_kld_loss() | get_w_accuracy()
+    c_kld1 = Experiment.get_config().w_autoencoder.objective.c_kld1
+    c_kld2 = Experiment.get_config().w_autoencoder.objective.c_kld2
+    loss = get_mse_loss() + c_kld1 * get_kld1_loss() + c_kld2 * get_kld2_loss() | get_w_accuracy()
     return loss
 
 
