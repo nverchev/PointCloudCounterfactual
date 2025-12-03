@@ -44,8 +44,8 @@ class BaseWEncoder(nn.Module, metaclass=abc.ABCMeta):
         # Network architecture parameters
         self.proj_dim = cfg_w_encoder.proj_dim
         self.n_heads = cfg_w_encoder.n_heads
-        self.h_dims_conv = cfg_w_encoder.hidden_dims_conv # Hidden dimensions for the linear layers
-        self.h_dims_lin = cfg_w_encoder.hidden_dims_lin # Hidden dimensions for the convolutional layers
+        self.h_dims_conv = cfg_w_encoder.hidden_dims_conv  # Hidden dimensions for the linear layers
+        self.h_dims_lin = cfg_w_encoder.hidden_dims_lin  # Hidden dimensions for the convolutional layers
         self.dropout = cfg_w_encoder.dropout  # Dropout probabilities
         self.act_cls = cfg_w_encoder.act_cls  # Activation function class
 
@@ -124,11 +124,11 @@ class WEncoderTransformers(BaseWEncoder):
         """Forward pass through transformer encoder."""
         batch_size = x.shape[0]
         x = self.input_proj(x.view(batch_size, self.n_codes, self.embedding_dim))
-        z = self.positional_encoding.expand(batch_size, -1, -1) + x
+        h = self.positional_encoding.expand(batch_size, -1, -1) + x
         for layer in self.transformer:
-            z = layer(z)
+            h = layer(h)
 
-        z = self.to_latent(z)
+        z = self.to_latent(h)
         return x, z
 
 class BasePointEncoder(nn.Module, metaclass=abc.ABCMeta):
