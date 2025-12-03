@@ -1,7 +1,7 @@
 """Module for learning scheme configuration."""
 
 from drytorch.lib import schedulers, gradient_ops
-from drytorch import LearningScheme
+from drytorch import LearningSchema
 from drytorch.core import protocols as p
 from src.config_options import Schedulers, SchedulerConfig, Experiment, LearningConfig, GradOp, ClipCriterion
 
@@ -22,7 +22,7 @@ def get_scheduler(config: SchedulerConfig) -> schedulers.AbstractScheduler:
     return scheduler
 
 
-def get_grad_op(config: LearningConfig) -> None | p.GradientOpProtocol:
+def get_grad_op(config: LearningConfig) -> p.GradientOpProtocol:
     """Returns the gradient clipping instance based on config."""
     if config.grad_op == GradOp.GradParamNormalizer:
         return gradient_ops.GradParamNormalizer()
@@ -43,13 +43,13 @@ def get_grad_op(config: LearningConfig) -> None | p.GradientOpProtocol:
         elif config.clip_criterion == ClipCriterion.EMA:
             return gradient_ops.ParamHistClipper(criterion=gradient_ops.EMACriterion())
 
-    return None
+    return gradient_ops.NoOp()
 
 
-def get_learning_scheme() -> LearningScheme:
+def get_learning_schema() -> LearningSchema:
     """Returns configured the learning scheme."""
     config = Experiment.get_config().lens.train.learn
-    return LearningScheme(optimizer_cls=config.optimizer_cls,
+    return LearningSchema(optimizer_cls=config.optimizer_cls,
                           base_lr=config.learning_rate,
                           scheduler=get_scheduler(config.scheduler),
                           optimizer_defaults=config.opt_settings,

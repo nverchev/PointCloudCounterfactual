@@ -23,7 +23,7 @@ from src.config_options import Experiment, ConfigAll
 from src.config_options import hydra_main
 from src.datasets import get_dataset, Partitions
 from src.hooks import DiscreteSpaceOptimizer, WandbLogReconstruction
-from src.learning_scheme import get_learning_scheme
+from src.learning_schema import get_learning_schema
 from src.autoencoder import get_autoencoder, AbstractVQVAE
 
 
@@ -38,12 +38,12 @@ def train_autoencoder(trial: Optional[optuna.Trial] = None) -> None:
     train_dataset = get_dataset(Partitions.train_val if cfg.final else Partitions.train)
     test_dataset = get_dataset(Partitions.test if cfg.final else Partitions.val)
     with cfg.focus(cfg.autoencoder):
-        learning_scheme = get_learning_scheme()
+        learning_schema = get_learning_schema()
     loss = get_autoencoder_loss()
     trainer = Trainer(model,
                       loader=DataLoader(dataset=train_dataset, batch_size=cfg_ae.train.batch_size),
                       loss=loss,
-                      learning_scheme=learning_scheme)
+                      learning_schema=learning_schema)
     diagnostic = Diagnostic(model,
                             loader=DataLoader(dataset=train_dataset, batch_size=cfg_ae.train.batch_size),
                             objective=loss
@@ -95,14 +95,14 @@ def main(cfg: ConfigAll) -> None:
     """Set up experiment and start training cycle."""
     exp = Experiment(cfg, name=cfg.name, par_dir=cfg.user.path.exp_par_dir, tags=cfg.tags)
     if not sys.gettrace():
-        exp.trackers.register(Wandb(settings=wandb.Settings(project=cfg.project)))
-        exp.trackers.register(HydraLink())
-        exp.trackers.register(CSVDumper())
-        exp.trackers.register(TensorBoard())
+        exp.trackers.subscribe(Wandb(settings=wandb.Settings(project=cfg.project)))
+        exp.trackers.subscribe(HydraLink())
+        exp.trackers.subscribe(CSVDumper())
+        exp.trackers.subscribe(TensorBoard())
         engine_path = cfg.user.path.exp_par_dir / 'metrics.db'
         cfg.user.path.exp_par_dir.mkdir(exist_ok=True)
         engine = sqlalchemy.create_engine(f'sqlite:///{engine_path}')
-        exp.trackers.register(SQLConnection(engine=engine))
+        exp.trackers.subscribe(SQLConnection(engine=engine))
     with exp.create_run(resume=True):
         train_autoencoder()
     return
