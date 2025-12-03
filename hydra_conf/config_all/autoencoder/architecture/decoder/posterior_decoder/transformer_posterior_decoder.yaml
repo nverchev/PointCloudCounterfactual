@@ -1,4 +1,4 @@
-hidden_dims: [512, 512, 512]
-n_heads: 4
+hidden_dims: [1024, 1024]
+n_heads: 8
 dropout: [0., 0., 0., 0., 0.]
 act_name: 'GELU'

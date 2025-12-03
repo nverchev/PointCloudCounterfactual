@@ -8,5 +8,5 @@ defaults:
   - _self_
 
 variation: main
-version: 1.5
+version: 1.6
 final: false
