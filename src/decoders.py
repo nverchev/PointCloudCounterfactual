@@ -171,18 +171,8 @@ class WDecoderTransformers(BaseWDecoder):
         self.query_tokens = nn.Parameter(torch.randn(1, self.n_codes, self.proj_dim))
         self.key_tokens = nn.Parameter(torch.randn(1, self.n_codes, self.proj_dim))
         transformer_layers: list[nn.Module] = []
-        self.decoder = nn.TransformerDecoderLayer(
-                d_model=self.proj_dim,
-                nhead=self.n_heads,
-                dropout=0,
-                dim_feedforward=self.h_dims[0],
-                activation=self.act_cls(),
-                batch_first=True,
-                norm_first=True,
-            )
-
-        for hidden_dim, do in zip(self.h_dims[1:], self.dropout[1:]):
-            layer = nn.TransformerEncoderLayer(
+        for hidden_dim, do in zip(self.h_dims, self.dropout):
+            layer = nn.TransformerDecoderLayer(
                 d_model=self.proj_dim,
                 nhead=self.n_heads,
                 dropout=do,
@@ -203,9 +193,8 @@ class WDecoderTransformers(BaseWDecoder):
         z2_proj = self.z2_proj(z2).view(batch_size, self.n_codes, self.proj_dim)
         x = z1_proj + self.query_tokens.expand(batch_size, -1, -1)
         y = z2_proj + self.key_tokens.expand(batch_size, -1, -1)
-        x = self.decoder(x, y)
         for layer in self.transformer:
-            x = layer(x)
+            x = layer(x, y)
 
         x = self.compress(x)
         return x.view(batch_size, self.n_codes * self.embedding_dim)

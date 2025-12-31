@@ -23,7 +23,7 @@ from src.data_structures import Inputs, Outputs
 from src.metrics_and_losses import get_w_encoder_loss, get_recon_loss
 from src.config_options import Experiment, ConfigAll
 from src.config_options import hydra_main
-from src.datasets import get_dataset, Partitions, WDatasetWithLogits
+from src.datasets import get_dataset, Partitions, WDatasetWithLogits, WDatasetWithLogitsFrozen
 from src.learning_schema import get_learning_schema
 from src.autoencoder import CounterfactualVQVAE
 # from src.visualisation import show_latent
@@ -52,9 +52,9 @@ def train_w_autoencoder(vqvae: CounterfactualVQVAE,
     if not cfg_user.load_checkpoint:
         module.recursive_reset_parameters()
     train_dataset = get_dataset(Partitions.train_val if cfg.final else Partitions.train)
-    train_w_dataset = WDatasetWithLogits(train_dataset, vqvae, classifier)
+    train_w_dataset = WDatasetWithLogitsFrozen(train_dataset, vqvae, classifier)
     test_dataset = get_dataset(Partitions.test if cfg.final else Partitions.val)
-    test_w_dataset = WDatasetWithLogits(test_dataset, vqvae, classifier)
+    test_w_dataset = WDatasetWithLogitsFrozen(test_dataset, vqvae, classifier)
     test_loader = DataLoader(dataset=test_w_dataset, batch_size=cfg_w_ae.train.batch_size, pin_memory=False)
 
     loss_calc = get_w_encoder_loss()
@@ -71,7 +71,7 @@ def train_w_autoencoder(vqvae: CounterfactualVQVAE,
 
     if not cfg.final:
         val_dataset = get_dataset(Partitions.val)
-        val_w_dataset = WDatasetWithLogits(val_dataset, vqvae, classifier)
+        val_w_dataset = WDatasetWithLogitsFrozen(val_dataset, vqvae, classifier)
         val_loader = DataLoader(dataset=val_w_dataset, batch_size=cfg_w_ae.train.batch_size, pin_memory=False)
         trainer.add_validation(val_loader)
 
