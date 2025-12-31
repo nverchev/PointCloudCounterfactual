@@ -116,6 +116,7 @@ class GradOp(enum.StrEnum):
     GradValueClipper = enum.auto()
     HistClipper = enum.auto()
     ParamHistClipper = enum.auto()
+    NoOp = enum.auto()
 
 class ClipCriterion(enum.StrEnum):
     """Clipping criterion names."""

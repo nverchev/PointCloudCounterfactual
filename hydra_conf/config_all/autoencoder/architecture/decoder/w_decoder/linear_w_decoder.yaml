@@ -1,6 +1,0 @@
-architecture: Linear
-proj_dim: 32
-n_heads: 8
-hidden_dims: [256]
-dropout: [0.2, 0., 0., 0., 0.]
-act_name: ''

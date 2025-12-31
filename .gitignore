@@ -5,7 +5,7 @@
 /outputs/
 /.env
 /experiments*/
-.idea
+/.idea
 */.vscode
 /images/
 updat*/tensorboard_runs/

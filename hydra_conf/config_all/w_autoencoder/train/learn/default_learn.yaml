@@ -5,6 +5,6 @@ defaults:
 optimizer_name: AdamW
 learning_rate: 0.0005
 grad_op: ParamHistClipper
-clip_criterion: ZStat
+clip_criterion: EMA
 opt_settings:
     weight_decay: 0.000001

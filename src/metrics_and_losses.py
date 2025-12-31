@@ -127,7 +127,6 @@ def get_kld2_loss() -> LossBase[Outputs, WTargets]:
 
 def get_kld_vamp_loss() -> LossBase[Outputs, WTargets]:
     """Get KL divergence loss for the variational autoencoder from aggregated posterior."""
-    cfg_w_ae = Experiment.get_config().w_autoencoder
 
     def _kld2_vamp(data: Outputs, _: WTargets) -> torch.Tensor:
         """Calculate KL divergence loss for VAMP prior."""
@@ -259,7 +258,7 @@ def get_w_encoder_loss() -> LossBase[Outputs, WTargets]:
     """Get encoder loss combining NLL, KLD and adversarial losses."""
     c_kld1 = Experiment.get_config().w_autoencoder.objective.c_kld1
     c_kld2 = Experiment.get_config().w_autoencoder.objective.c_kld2
-    loss = get_mse_loss() + c_kld1 * get_kld1_loss() + c_kld2 * get_kld2_loss() | get_w_accuracy()
+    loss = get_mse_loss() + get_annealing() * (c_kld1 * get_kld1_loss() + c_kld2 * get_kld2_loss()) | get_w_accuracy()
     return loss
 
 

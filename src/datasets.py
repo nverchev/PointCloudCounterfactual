@@ -7,6 +7,7 @@ import enum
 import pathlib
 from collections.abc import Iterable, Callable
 from typing import Any, Generic, TypeVar, Generator, Literal
+import itertools
 
 import torch
 import numpy as np
@@ -416,10 +417,32 @@ class WDatasetWithLogits(ClassifierMixin, WDataset[CounterfactualVQVAE]):
             for w_q, w_e, one_hot_idx, logit in zip(batch_w_q, batch_w_e, batch_one_hot_idx, batch_logits):
                 batch_data.append((
                     WInputs(w_q, logit),
-                    WTargets(w_e=w_e, one_hot_idx=one_hot_idx, logits=logit)
+                    WTargets(w_e=w_q, one_hot_idx=one_hot_idx, logits=logit)
                 ))
 
         return batch_data
+
+
+class WDatasetWithLogitsFrozen(WDatasetWithLogits):
+    """W Dataset with classifier logits for conditional training."""
+
+    def __init__(
+            self,
+            dataset: Dataset[tuple[Inputs, Targets]],
+            autoencoder: CounterfactualVQVAE,
+            classifier: Model[Inputs, torch.Tensor]
+    ) -> None:
+        super().__init__(
+            dataset=dataset,
+            autoencoder=autoencoder,
+            classifier=classifier
+        )
+        self.w_dataset: list[tuple[WInputs, WTargets]] = []
+        for batch_idx in itertools.batched(range(len(self)), 32):
+            self.w_dataset.extend(super().__getitems__(list(batch_idx)))
+
+    def __getitems__(self, index_list: list[int]) -> list[tuple[WInputs, WTargets]]:
+        return [self.w_dataset[i] for i in index_list]
 
 
 class ReconstructedDataset(BaseVQDataset[VQVAE], Dataset[tuple[Inputs, Targets]]):
