@@ -1,4 +1,5 @@
 """Module for training and testing a DGCNN classifier on point cloud data."""
+import pathlib
 import sys
 
 import torch
@@ -17,11 +18,12 @@ from drytorch.trackers.csv import CSVDumper
 from torchmetrics import ConfusionMatrix
 
 from src.metrics_and_losses import get_classification_loss
-from src.config_options import Experiment, ConfigAll
+from src.config_options import Experiment, ConfigAll, get_current_hydra_dir
 from src.config_options import hydra_main
 from src.datasets import get_dataset, Partitions
 from src.classifier import DGCNN
 from src.learning_schema import get_learning_schema
+from src.parallel import DistributedWorker
 from src.visualisation import plot_confusion_matrix_heatmap
 
 
@@ -90,23 +92,35 @@ def train_classifier() -> None:
         writer.close()
 
 
-@hydra_main
-def main(cfg: ConfigAll) -> None:
+def setup_and_train(cfg: ConfigAll, hydra_dir: pathlib.Path) -> None:
     """Set up the experiment and launch the classifier training."""
     exp = Experiment(cfg, name=cfg.name, par_dir=cfg.user.path.exp_par_dir, tags=cfg.tags)
     resume = cfg.user.load_checkpoint != 0
     if not sys.gettrace():
         exp.trackers.subscribe(Wandb(settings=wandb.Settings(project=cfg.project)))
-        exp.trackers.subscribe(HydraLink())
+        exp.trackers.subscribe(HydraLink(hydra_dir=hydra_dir))
         exp.trackers.subscribe(CSVDumper())
         exp.trackers.subscribe(TensorBoard())
         engine_path = cfg.user.path.exp_par_dir / 'metrics.db'
         cfg.user.path.exp_par_dir.mkdir(exist_ok=True)
         engine = sqlalchemy.create_engine(f'sqlite:///{engine_path}')
         exp.trackers.subscribe(SQLConnection(engine=engine))
+
     with exp.create_run(resume=resume):
         train_classifier()
+
     return
+
+
+@hydra_main
+def main(cfg: ConfigAll) -> None:
+    """Main entry point for module that creates subprocesses in parallel mode."""
+    n_processes = cfg.user.n_parallel_training_processes
+    hydra_dir = get_current_hydra_dir()
+    if n_processes:
+        DistributedWorker(setup_and_train, n_processes).process(cfg, hydra_dir)
+    else:
+        setup_and_train(cfg, hydra_dir)
 
 
 if __name__ == "__main__":

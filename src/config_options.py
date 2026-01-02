@@ -116,6 +116,7 @@ class GradOp(enum.StrEnum):
     GradValueClipper = enum.auto()
     HistClipper = enum.auto()
     ParamHistClipper = enum.auto()
+    NoOp = enum.auto()
 
 class ClipCriterion(enum.StrEnum):
     """Clipping criterion names."""
@@ -576,6 +577,8 @@ class UserSettings:
 
     Attributes:
         cuda (bool): Whether to run computations on `cuda:0`
+        n_workers: The number of workers for data loading
+        n_parallel_training_processes: The number of parallel training processes
         generate (GenerationOptions): Options for generating a point cloud
         path (PathSpecs): Specifications for paths that override .env settings
         plot (PlottingOptions): Options for plotting and visualization
@@ -587,6 +590,8 @@ class UserSettings:
     """
 
     cuda: bool
+    n_workers: PositiveInt
+    n_parallel_training_processes: PositiveInt
     generate: GenerationOptions
     path: PathSpecs
     plot: PlottingOptions
@@ -714,6 +719,7 @@ class ConfigAll:
         """Context manager that focuses on a specific config section."""
         if self._lens is not None:
             raise ValueError('lens already set.')
+
         self._lens = section
         try:
             yield self
@@ -736,6 +742,11 @@ def get_config_all(overrides: Optional[list[str]] = None) -> ConfigAll:
         if overrides is not None:
             update_exp_name(cfg, overrides)
         return cfg
+
+def get_current_hydra_dir() -> pathlib.Path:
+    """Get the path to the current hydra run."""
+    hydra_config = hydra.core.hydra_config.HydraConfig.get()
+    return pathlib.Path(hydra_config.runtime.output_dir)
 
 
 def hydra_main(func: Callable[[ConfigAll], None]) -> Callable[[], None]:

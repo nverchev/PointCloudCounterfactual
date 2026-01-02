@@ -24,6 +24,7 @@ def create_variation() -> None:
     main_vqvae_checkpoint.bind_model(vqvae)
     main_state_path = main_vqvae_checkpoint.paths.model_state_path
     state_dict = torch.load(main_state_path, weights_only=True)
+    state_dict = {key[7:]: value for key, value in state_dict.items() if key.startswith('module.')}
     state_dict = {key: value for key, value in state_dict.items() if 'w_autoencoder' not in key}
     vqvae_module.load_state_dict(state_dict, strict=False)
     vqvae.save_state()

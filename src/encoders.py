@@ -102,7 +102,7 @@ class WEncoderTransformers(BaseWEncoder):
 
     def __init__(self) -> None:
         super().__init__()
-        self.input_proj = nn.Linear(self.embedding_dim, self.proj_dim)
+        self.input_proj = LinearLayer(self.embedding_dim, self.proj_dim, batch_norm=False)
         self.positional_encoding = nn.Parameter(torch.randn(1, self.n_codes, self.proj_dim))
         transformer_layers: list[nn.Module] = []
         for hidden_dim, do in zip(self.h_dims_lin, self.dropout):
@@ -181,7 +181,7 @@ class DGCNN(BasePointEncoder):
         for in_dim, out_dim in itertools.pairwise(self.h_dim):
             modules.append(EdgeConvLayer(2 * in_dim, out_dim, act_cls=self.act_cls))
         self.edge_convs = nn.Sequential(*modules)
-        self.final_conv = nn.Conv1d(sum(self.h_dim), self.w_dim, kernel_size=1)
+        self.final_conv = PointsConvLayer(sum(self.h_dim), self.w_dim, batch_norm=False, act_cls=nn.Identity)
 
     def forward(self, x: torch.Tensor, indices: torch.Tensor) -> torch.Tensor:
         """Forward pass."""
