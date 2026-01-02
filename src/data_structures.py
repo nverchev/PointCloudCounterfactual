@@ -106,6 +106,22 @@ class Outputs:
             except AttributeError:  # slot not yet initialized
                 pass
 
+    def __repr__(self):
+        field_names = [f.name for f in dataclasses.fields(self) if f.repr]
+
+        parts = []
+        for name in field_names:
+            if hasattr(self, name):
+                try:
+                    value = getattr(self, name)
+                    parts.append(f"{name}={value!r}")
+                except Exception:
+                    parts.append(f"{name}=<error>")
+            else:
+                parts.append(f"{name}=<uninitialized>")
+
+        return f"{self.__class__.__name__}({', '.join(parts)})"
+
 
 class WInputs(NamedTuple):
     """

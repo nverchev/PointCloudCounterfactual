@@ -15,6 +15,7 @@ from src.layers import TransferGrad, TemperatureScaledSoftmax, frozen_forward
 from src.utils import UsuallyFalse
 from src.config_options import Experiment, ModelHead
 
+
 class GaussianSampler:
     """Handles Gaussian sampling logic."""
 
@@ -97,11 +98,10 @@ class BaseWAutoEncoder(nn.Module, abc.ABC):
         super().__init__()
 
         self.cfg_ae_arc = Experiment.get_config().autoencoder.architecture
-        self.codebook = codebook
+        self.register_buffer("codebook", codebook)
         self.dim_codes, self.book_size, self.embedding_dim = codebook.shape
         self.encoder = get_w_encoder()
         self.decoder = get_w_decoder()
-        self.bn = nn.BatchNorm1d(self.cfg_ae_arc.z1_dim + self.cfg_ae_arc.z2_dim)
         self.sampler = GaussianSampler()
         self.distance_calc = DistanceCalculator()
 
@@ -178,7 +178,6 @@ class WAutoEncoder(BaseWAutoEncoder):
         input_tensor = self._get_input(x)
         _, latent = self.encoder(input_tensor)
         data = Outputs()
-
         if self.pseudo_manager is not None:
             split_index = [-self.pseudo_manager.n_pseudo_inputs]
             latent, pseudo_latent = torch.tensor_split(latent, split_index)
@@ -215,7 +214,7 @@ class CounterfactualWAutoEncoder(BaseWAutoEncoder):
         self.relaxed_softmax = TemperatureScaledSoftmax(dim=1, temperature=cfg_wae.cf_temperature)
         self.z2_inference = PriorDecoder()
         self.posterior = PosteriorDecoder()
-        self.adversarial = nn.Linear(cfg_ae_arc.z1_dim, self.n_classes)
+        # self.adversarial = nn.Linear(cfg_ae_arc.z1_dim, self.n_classes)
 
         return
 
@@ -273,10 +272,8 @@ class CounterfactualWAutoEncoder(BaseWAutoEncoder):
 
         # Use posterior with features
         data.d_mu2, data.d_log_var2 = self.posterior(probs, data.h).chunk(2, 2)
-
         mu_combined = data.d_mu2 + data.p_mu2
         log_var_combined = data.d_log_var2 + data.p_log_var2
-
         return self.sampler.sample(mu_combined, log_var_combined, self.training)
 
     def forward(self, x: WInputs) -> Outputs:
@@ -292,13 +289,12 @@ class CounterfactualWAutoEncoder(BaseWAutoEncoder):
                       ) -> Outputs:
         """Generate samples with counterfactual probabilities."""
         data = super().sample_latent(z1_bias, batch_size)
-
         if probs is not None and probs.numel() > 0:
             data.probs = probs.to(self.codebook.device)
 
         else:
             alpha = torch.ones(self.n_classes, device=self.codebook.device)
-            data.probs = torch.distributions.Dirichlet(concentration=alpha).sample((batch_size, ))
+            data.probs = torch.distributions.Dirichlet(concentration=alpha).sample((batch_size,))
 
         return data
 
@@ -421,6 +417,9 @@ class AbstractVQVAE(AE, Generic[WA], abc.ABC):
         ))
 
         self.w_autoencoder = self._create_w_autoencoder()
+        for param in self.w_autoencoder.parameters():
+            param.requires_grad = False  # separate training for W autoencoder
+
         self.quantizer = VectorQuantizer(self.codebook, self.n_codes, self.embedding_dim)
         self.transfer = TransferGrad()
 

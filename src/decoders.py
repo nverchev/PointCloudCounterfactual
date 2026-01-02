@@ -50,8 +50,8 @@ class PosteriorDecoder(nn.Module):
         self.proj_dim = cfg_ae_arc.encoder.w_encoder.proj_dim
         self.n_heads = cfg_posterior.n_heads
         self.prob_proj = nn.Linear(self.n_classes, self.proj_dim)
-        self.input_proj = nn.Linear(self.embedding_dim, self.proj_dim)
         self.positional_encoding = nn.Parameter(torch.randn(1, self.n_codes, self.proj_dim))
+
         transformer_layers: list[nn.Module] = []
         for hidden_dim, do in zip(self.h_dims, self.dropout):
             encoder_layer = nn.TransformerEncoderLayer(

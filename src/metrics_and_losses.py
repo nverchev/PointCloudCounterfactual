@@ -242,7 +242,7 @@ def get_annealing() -> Loss[Outputs, WTargets]:
     total_epochs = Experiment.get_config().w_autoencoder.train.n_epochs
 
     def _annealing(outputs: Outputs, _: WTargets) -> torch.Tensor:
-        time_fraction = torch.tensor(outputs.model_epoch / total_epochs)
+        time_fraction = torch.tensor(outputs.model_epoch / total_epochs, device=outputs.w_recon.device)
         time_fraction = torch.clamp(time_fraction, 0.0, 1.0)
         return 0.5 * (1.0 - torch.cos(time_fraction * math.pi))
 

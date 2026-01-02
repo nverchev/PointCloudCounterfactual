@@ -4,6 +4,7 @@ import numpy as np
 import torch
 import wandb
 from torch.utils import data
+import  torch.distributed as dist
 
 from drytorch.core import protocols as p
 from drytorch.lib.load import take_from_dataset
@@ -30,16 +31,23 @@ class DiscreteSpaceOptimizer:
             model_runner: Runner containing the model to optimize.
         """
         self.model_runner = model_runner
-        if not isinstance(self.model_runner.model.module, AbstractVQVAE):
+        if isinstance(model_runner.model.module, torch.nn.parallel.DistributedDataParallel):
+            self.module = model_runner.model.module.module
+        else:
+            self.module = model_runner.model.module
+
+        if not isinstance(self.module, AbstractVQVAE):
             raise ValueError('Model not supported for VQ optimization.')
+
         cfg_ae = Experiment.get_config().autoencoder
         self.cfg_ae_arc = cfg_ae.architecture
         self.final_epoch = cfg_ae.train.n_epochs
 
     def __call__(self) -> None:
         """Optimize codebook usage by reassigning unused entries."""
-        module = self.model_runner.model.module
         self.model_runner(store_outputs=True)
+        if dist.is_initialized() and dist.get_rank() != 0:
+            return
 
         # Calculate codebook usage statistics
         codebook_usage = torch.vstack([output.one_hot_idx for output in self.model_runner.outputs_list]).sum(0)
@@ -56,15 +64,15 @@ class DiscreteSpaceOptimizer:
                 if unused_entries[book_idx, entry_idx]:
                     # Sample from used entries and add noise to create new embedding
                     sampled_idx = np.random.choice(np.arange(self.cfg_ae_arc.book_size), p=usage_probs)
-                    template_embedding = module.codebook.data[book_idx, sampled_idx]
+                    template_embedding = self.module.codebook.data[book_idx, sampled_idx]
 
                     if self.model_runner.model.epoch == self.final_epoch:
                         # Disable unused entries in final epoch
-                        module.codebook.data[book_idx, entry_idx] = 1000
+                        self.module.codebook.data[book_idx, entry_idx] = 1000
                     else:
                         # Add noise to template embedding
                         noise = self.cfg_ae_arc.vq_noise * torch.randn_like(template_embedding)
-                        module.codebook.data[book_idx, entry_idx] = template_embedding + noise
+                        self.module.codebook.data[book_idx, entry_idx] = template_embedding + noise
 
 
 class WandbLogReconstruction:
