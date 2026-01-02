@@ -6,7 +6,6 @@ from typing import Optional, TYPE_CHECKING
 
 from drytorch import DataLoader, Diagnostic, Model, Test, Trainer
 import drytorch.core.exceptions
-from drytorch.contrib.optuna import TrialCallback
 from drytorch.lib.hooks import Hook, EarlyStoppingCallback, StaticHook, call_every, saving_hook
 from drytorch.utils.average import get_moving_average, get_trailing_mean
 
@@ -66,6 +65,8 @@ def train_autoencoder(trial: Optional[optuna.Trial] = None) -> None:
         if checkpoint_every := cfg_user.checkpoint_every:
             trainer.post_epoch_hooks.register(saving_hook.bind(call_every(checkpoint_every)))
     else:
+        from drytorch.contrib.optuna import TrialCallback
+
         prune_hook = TrialCallback(trial, metric=get_recon_loss(), filter_fn=get_moving_average())
         trainer.post_epoch_hooks.register(prune_hook)
 
