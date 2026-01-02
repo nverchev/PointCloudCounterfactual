@@ -4,13 +4,13 @@ import enum
 import functools
 import pathlib
 import os
+import sys
 from collections.abc import Iterator
 from contextlib import contextmanager
 from dataclasses import field
 from typing import Optional, Self, Annotated, Callable, TypeAlias, cast
 
 import dotenv
-import drytorch
 import hydra
 import numpy as np
 from hydra.core.global_hydra import GlobalHydra
@@ -20,6 +20,7 @@ from pydantic import model_validator, Field
 from pydantic.dataclasses import dataclass
 import torch
 
+import drytorch
 
 dotenv.load_dotenv()
 DATASET_DIR = pathlib.Path(os.getenv('DATASET_DIR', ''))
@@ -108,6 +109,7 @@ class ModelHead(enum.StrEnum):
     VQVAE = enum.auto()
     CounterfactualVQVAE = enum.auto()
 
+
 class GradOp(enum.StrEnum):
     """Gradient operation names."""
     GradParamNormalizer = enum.auto()
@@ -117,6 +119,7 @@ class GradOp(enum.StrEnum):
     HistClipper = enum.auto()
     ParamHistClipper = enum.auto()
     NoOp = enum.auto()
+
 
 class ClipCriterion(enum.StrEnum):
     """Clipping criterion names."""
@@ -209,7 +212,7 @@ class WEncoderConfig:
     def act_cls(self) -> ActClass:
         """The activation class."""
         return _get_activation_cls(self.act_name) if self.act_name else ACT
-    
+
     @model_validator(mode='after')
     def _check_length_dropout(self) -> Self:
         if len(self.hidden_dims_lin) > len(self.dropout):
@@ -382,6 +385,7 @@ class AEConfig:
     def hidden_features(self) -> int:
         """The number of codes."""
         return self.encoder.w_encoder.hidden_dims_conv[-1]
+
 
 @dataclass
 class ClassifierConfig:
@@ -572,6 +576,25 @@ class GenerationOptions:
 
 
 @dataclass
+class TrackerList:
+    """List of trackers to use for logging.
+
+    Attributes:
+        wandb: use the Wandb tracker
+        hydra: use the HydraLink tracker
+        csv: use the CSVDumper tracker
+        tensorboard: use the TensorBoard tracker
+        sqlalchemy: use the SQLAlchemyConnection tracker
+    """
+
+    wandb: bool
+    hydra: bool
+    csv: bool
+    tensorboard: bool
+    sqlalchemy: bool
+
+
+@dataclass
 class UserSettings:
     """User-specific options and preferences.
 
@@ -594,6 +617,7 @@ class UserSettings:
     n_parallel_training_processes: PositiveInt
     generate: GenerationOptions
     path: PathSpecs
+    trackers: TrackerList
     plot: PlottingOptions
     seed: Optional[int]
     checkpoint_every: PositiveInt
@@ -726,6 +750,7 @@ class ConfigAll:
         finally:
             self._lens = None
 
+
 class Experiment(drytorch.Experiment[ConfigAll]):
     """Specifications for the current experiment."""
     pass
@@ -743,10 +768,51 @@ def get_config_all(overrides: Optional[list[str]] = None) -> ConfigAll:
             update_exp_name(cfg, overrides)
         return cfg
 
+
 def get_current_hydra_dir() -> pathlib.Path:
     """Get the path to the current hydra run."""
     hydra_config = hydra.core.hydra_config.HydraConfig.get()
     return pathlib.Path(hydra_config.runtime.output_dir)
+
+
+def get_trackers(cfg: ConfigAll, hydra_dir: pathlib.Path) -> list[drytorch.Tracker]:
+    """Get trackers from according to the user configuration."""
+    cfg_trackers = cfg.user.trackers
+    tracker_list: list[drytorch.Tracker] = []
+    if sys.gettrace():  # skip in debug mode
+        return tracker_list
+
+    if cfg_trackers.wandb:
+        from drytorch.trackers.wandb import Wandb
+        import wandb
+
+        tracker_list.append(Wandb(settings=wandb.Settings(project=cfg.project)))
+
+    if cfg_trackers.hydra:
+        from drytorch.trackers.hydra import HydraLink
+
+        tracker_list.append(HydraLink(hydra_dir=hydra_dir))
+
+    if cfg_trackers.csv:
+        from drytorch.trackers.csv import CSVDumper
+
+        tracker_list.append(CSVDumper())
+
+    if cfg_trackers.tensorboard:
+        from drytorch.trackers.tensorboard import TensorBoard
+
+        tracker_list.append(TensorBoard())
+
+    if cfg_trackers.sqlalchemy:
+        import sqlalchemy
+        from drytorch.trackers.sqlalchemy import SQLConnection
+
+        engine_path = cfg.user.path.exp_par_dir / 'metrics.db'
+        cfg.user.path.exp_par_dir.mkdir(exist_ok=True)
+        engine = sqlalchemy.create_engine(f'sqlite:///{engine_path}')
+        tracker_list.append(SQLConnection(engine=engine))
+
+    return tracker_list
 
 
 def hydra_main(func: Callable[[ConfigAll], None]) -> Callable[[], None]:

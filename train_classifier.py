@@ -1,24 +1,18 @@
 """Module for training and testing a DGCNN classifier on point cloud data."""
+
 import pathlib
-import sys
 
 import torch
-import sqlalchemy
-import wandb
 
 from drytorch.core. exceptions import TrackerNotActiveError
 from drytorch import DataLoader, Model, Test, Trainer
 from drytorch.lib.hooks import EarlyStoppingCallback, call_every, saving_hook
-from drytorch.trackers.wandb import Wandb
-from drytorch.trackers.sqlalchemy import SQLConnection
 from drytorch.utils.average import get_trailing_mean
-from drytorch.trackers.hydra import HydraLink
 from drytorch.trackers.tensorboard import TensorBoard
-from drytorch.trackers.csv import CSVDumper
 from torchmetrics import ConfusionMatrix
 
 from src.metrics_and_losses import get_classification_loss
-from src.config_options import Experiment, ConfigAll, get_current_hydra_dir
+from src.config_options import Experiment, ConfigAll, get_current_hydra_dir, get_trackers
 from src.config_options import hydra_main
 from src.datasets import get_dataset, Partitions
 from src.classifier import DGCNN
@@ -83,7 +77,9 @@ def train_classifier() -> None:
         pass
     else:
         writer = tensorboard_tracker.writer
-        writer.add_figure(f"{model.name}/{final_test.name}-Confusion Matrix", fig_cm)
+        if fig_cm is not None:
+            writer.add_figure(f"{model.name}/{final_test.name}-Confusion Matrix", fig_cm)
+
         writer.add_text(
             "{model.name}/{final_test.name}- Misclassified Indices",
             f"Total misclassified samples: {len(misclassified_indices)}\nIndices: {misclassified_indices_str}",
@@ -96,15 +92,8 @@ def setup_and_train(cfg: ConfigAll, hydra_dir: pathlib.Path) -> None:
     """Set up the experiment and launch the classifier training."""
     exp = Experiment(cfg, name=cfg.name, par_dir=cfg.user.path.exp_par_dir, tags=cfg.tags)
     resume = cfg.user.load_checkpoint != 0
-    if not sys.gettrace():
-        exp.trackers.subscribe(Wandb(settings=wandb.Settings(project=cfg.project)))
-        exp.trackers.subscribe(HydraLink(hydra_dir=hydra_dir))
-        exp.trackers.subscribe(CSVDumper())
-        exp.trackers.subscribe(TensorBoard())
-        engine_path = cfg.user.path.exp_par_dir / 'metrics.db'
-        cfg.user.path.exp_par_dir.mkdir(exist_ok=True)
-        engine = sqlalchemy.create_engine(f'sqlite:///{engine_path}')
-        exp.trackers.subscribe(SQLConnection(engine=engine))
+    for tracker in get_trackers(cfg, hydra_dir):
+        exp.trackers.subscribe(tracker)
 
     with exp.create_run(resume=resume):
         train_classifier()

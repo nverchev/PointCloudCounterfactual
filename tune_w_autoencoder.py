@@ -90,6 +90,7 @@ def set_objective(tune_cfg: DictConfig) -> Callable[[optuna.Trial], float]:
                 imputed_value = worst_fn(imputed_value, median_final_value)
                 trial.set_user_attr('imputed', True)
                 return imputed_value
+
             except drytorch.core.exceptions.ConvergenceError:
                 trial.set_user_attr('imputed', True)  # treating the trial as complete
                 study = trial.study

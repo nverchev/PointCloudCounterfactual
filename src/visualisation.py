@@ -6,10 +6,8 @@ from typing import Literal, Optional, Sequence
 import numpy as np
 from numpy import typing as npt
 import torch
-import pyvista as pv
 from sklearn.decomposition import PCA  # type: ignore
 from matplotlib import pyplot as plt
-import seaborn as sns
 
 from src.config_options import Experiment
 from src.data_structures import Inputs
@@ -30,6 +28,12 @@ def render_scan(clouds: Sequence[npt.NDArray],
                 save_dir: pathlib.Path = pathlib.Path() / 'images',
                 ) -> None:
     """Renders a sequence of point clouds using a scan-like visualization with PyVista."""
+    try:
+        import pyvista as pv
+    except ImportError:
+        print('pyvista not installed. Please install it using pip: pip install pyvista.')
+        return
+
     plotter = pv.Plotter(lighting='three lights',
                          window_size=(1024, 1024),
                          notebook=False,
@@ -82,6 +86,12 @@ def render_cloud(clouds: Sequence[npt.NDArray],
                  save_dir: pathlib.Path = pathlib.Path() / 'images',
                  ) -> None:
     """Renders a sequence of point clouds with optional arrows using PyVista."""
+    try:
+        import pyvista as pv
+    except ImportError:
+        print('pyvista not installed. Please install it using pip: pip install pyvista.')
+        return
+
     plotter = pv.Plotter(lighting='three lights',
                          window_size=(1024, 1024),
                          notebook=False,
@@ -149,7 +159,6 @@ def infer_and_visualize(model: AutoEncoder,
                         input_pc: Optional[torch.Tensor] = None) -> None:
     """Performs inference with an autoencoder and visualizes the results."""
     cfg = Experiment.get_config()
-
     cfg_user = cfg.user
     cfg_ae_arc = cfg.autoencoder.architecture
     n_clouds = len(input_pc) if input_pc is not None else n_clouds
@@ -212,8 +221,13 @@ def show_latent(mu: npt.NDArray, pseudo_mu: npt.NDArray, model_name: str) -> Non
 def plot_confusion_matrix_heatmap(cm_array: npt.NDArray,
                                   class_names: list[str],
                                   title: str = 'Confusion Matrix',
-                                  dpi: int = 300) -> plt.Figure:
+                                  dpi: int = 300) -> plt.Figure | None:
     """Plots the confusion matrix as a heatmap using Matplotlib and Seaborn."""
+    try:
+        import seaborn as sns
+    except ImportError:
+        return
+
     num_classes = len(class_names)
     plt.figure(figsize=(num_classes + 2, num_classes + 2), dpi=dpi)
     sns.heatmap(cm_array,

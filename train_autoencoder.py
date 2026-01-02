@@ -1,34 +1,26 @@
 """Train the outer encoder to learn a discrete representation."""
-import pathlib
-import sys
-from typing import Optional
+from __future__ import annotations
 
-import hydra
-import torch.multiprocessing as mp
-import optuna
-import sqlalchemy
-import wandb
-import yaml
+import pathlib
+from typing import Optional, TYPE_CHECKING
 
 from drytorch import DataLoader, Diagnostic, Model, Test, Trainer
 import drytorch.core.exceptions
 from drytorch.contrib.optuna import TrialCallback
 from drytorch.lib.hooks import Hook, EarlyStoppingCallback, StaticHook, call_every, saving_hook
-from drytorch.trackers.csv import CSVDumper
-from drytorch.trackers.hydra import HydraLink
-from drytorch.trackers.sqlalchemy import SQLConnection
-from drytorch.trackers.tensorboard import TensorBoard
-from drytorch.trackers.wandb import Wandb
 from drytorch.utils.average import get_moving_average, get_trailing_mean
 
 from src.metrics_and_losses import get_autoencoder_loss, get_recon_loss, get_emd_loss
-from src.config_options import Experiment, ConfigAll, ConfigPath, get_current_hydra_dir
+from src.config_options import Experiment, ConfigAll, get_current_hydra_dir, get_trackers
 from src.config_options import hydra_main
 from src.datasets import get_dataset, Partitions
 from src.hooks import DiscreteSpaceOptimizer, WandbLogReconstruction
 from src.learning_schema import get_learning_schema
 from src.autoencoder import get_autoencoder, AbstractVQVAE
 from src.parallel import DistributedWorker
+
+if TYPE_CHECKING:
+    import optuna
 
 
 def train_autoencoder(trial: Optional[optuna.Trial] = None) -> None:
@@ -86,15 +78,8 @@ def train_autoencoder(trial: Optional[optuna.Trial] = None) -> None:
 def setup_and_train(cfg: ConfigAll, hydra_dir: pathlib.Path) -> None:
     """Set up experiment and start training cycle."""
     exp = Experiment(cfg, name=cfg.name, par_dir=cfg.user.path.exp_par_dir, tags=cfg.tags)
-    if not sys.gettrace():  # skip in debug mode
-        exp.trackers.subscribe(Wandb(settings=wandb.Settings(project=cfg.project)))
-        exp.trackers.subscribe(HydraLink(hydra_dir=hydra_dir))
-        exp.trackers.subscribe(CSVDumper())
-        exp.trackers.subscribe(TensorBoard())
-        engine_path = cfg.user.path.exp_par_dir / 'metrics.db'
-        cfg.user.path.exp_par_dir.mkdir(exist_ok=True)
-        engine = sqlalchemy.create_engine(f'sqlite:///{engine_path}')
-        exp.trackers.subscribe(SQLConnection(engine=engine))
+    for tracker in get_trackers(cfg, hydra_dir):
+        exp.trackers.subscribe(tracker)
 
     with exp.create_run(resume=True):
         train_autoencoder()
@@ -115,4 +100,3 @@ def main(cfg: ConfigAll) -> None:
 
 if __name__ == "__main__":
     main()
-

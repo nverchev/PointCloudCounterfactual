@@ -1,27 +1,22 @@
 """ Train the w-autoencoder."""
-import pathlib
-import sys
-from typing import Optional, reveal_type
 
-import optuna
-import sqlalchemy
+from __future__ import annotations
+
+import pathlib
+from typing import Optional, TYPE_CHECKING
+
 import torch
-import wandb
 
 from drytorch import DataLoader, Model, Test, Trainer
 from drytorch.lib.hooks import EarlyStoppingCallback
-from drytorch.trackers.sqlalchemy import SQLConnection
-from drytorch.trackers.tensorboard import TensorBoard
 from drytorch.utils.average import get_moving_average, get_trailing_mean
-from drytorch.trackers.csv import CSVDumper
-from drytorch.trackers.hydra import HydraLink
-from drytorch.trackers.wandb import Wandb
+
 
 from drytorch.contrib.optuna import TrialCallback
 from src.classifier import DGCNN
-from src.data_structures import Inputs, Outputs
-from src.metrics_and_losses import get_w_encoder_loss, get_recon_loss
-from src.config_options import Experiment, ConfigAll, get_current_hydra_dir
+from src.data_structures import Inputs
+from src.metrics_and_losses import get_w_encoder_loss
+from src.config_options import Experiment, ConfigAll, get_current_hydra_dir, get_trackers
 from src.config_options import hydra_main
 from src.datasets import get_dataset, Partitions, WDatasetWithLogits, WDatasetWithLogitsFrozen
 from src.learning_schema import get_learning_schema
@@ -29,6 +24,9 @@ from src.models import ModelEpoch
 from src.autoencoder import CounterfactualVQVAE
 from src.parallel import DistributedWorker
 # from src.visualisation import show_latent
+
+if TYPE_CHECKING:
+    import optuna
 
 
 def train_w_autoencoder(vqvae: CounterfactualVQVAE,
@@ -89,15 +87,8 @@ def train_w_autoencoder(vqvae: CounterfactualVQVAE,
 def setup_and_train(cfg: ConfigAll, hydra_dir: pathlib.Path) -> None:
     """Set up the experiment, load the classifier and the autoencoder, and train the w-autoencoder."""
     exp = Experiment(cfg, name=cfg.name, par_dir=cfg.user.path.exp_par_dir, tags=cfg.tags)
-    if not sys.gettrace():  # skip in debug mode
-        exp.trackers.subscribe(HydraLink(hydra_dir=hydra_dir))
-        exp.trackers.subscribe(CSVDumper())
-        # exp.trackers.register(Wandb(settings=wandb.Settings(project=cfg.project)))
-        exp.trackers.subscribe(TensorBoard())
-        engine_path = cfg.user.path.exp_par_dir / 'metrics.db'
-        cfg.user.path.exp_par_dir.mkdir(exist_ok=True)
-        engine = sqlalchemy.create_engine(f'sqlite:///{engine_path}')
-        exp.trackers.subscribe(SQLConnection(engine=engine))
+    for tracker in get_trackers(cfg, hydra_dir):
+        exp.trackers.subscribe(tracker)
 
     with exp.create_run(resume=True):
         classifier_module = DGCNN()
