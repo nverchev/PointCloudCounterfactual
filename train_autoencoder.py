@@ -57,7 +57,7 @@ def train_autoencoder(trial: Optional[optuna.Trial] = None) -> None:
         trainer.post_epoch_hooks.register(Hook(WandbLogReconstruction(train_dataset)))
     except drytorch.core.exceptions.DryTorchError:  # tracker is not subscribed
         pass
-    except ImportError:  # library is not installed
+    except (ImportError, ModuleNotFoundError):  # library is not installed
         pass
 
     if not cfg.final and cfg_early.active:

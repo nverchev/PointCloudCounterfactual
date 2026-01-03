@@ -7,7 +7,7 @@ generate:
   bias_dim: 0
   bias_value: 0.
 trackers:
-  hydra: True
+  hydra: true
   tensorboard: true
   wandb: false
   sqlalchemy: false
