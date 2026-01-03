@@ -13,7 +13,7 @@ from src.metrics_and_losses import get_autoencoder_loss, get_recon_loss, get_emd
 from src.config_options import Experiment, ConfigAll, get_current_hydra_dir, get_trackers
 from src.config_options import hydra_main
 from src.datasets import get_dataset, Partitions
-from src.hooks import DiscreteSpaceOptimizer, WandbLogReconstruction
+from src.hooks import DiscreteSpaceOptimizer
 from src.learning_schema import get_learning_schema
 from src.autoencoder import get_autoencoder, AbstractVQVAE
 from src.parallel import DistributedWorker
@@ -52,8 +52,12 @@ def train_autoencoder(trial: Optional[optuna.Trial] = None) -> None:
         trainer.add_validation(test_loader)  # when not final, this uses the validation dataset
 
     try:
+        from src.hooks import WandbLogReconstruction
+
         trainer.post_epoch_hooks.register(Hook(WandbLogReconstruction(train_dataset)))
-    except drytorch.core.exceptions.DryTorchError:
+    except drytorch.core.exceptions.DryTorchError:  # tracker is not subscribed
+        pass
+    except ImportError:  # library is not installed
         pass
 
     if not cfg.final and cfg_early.active:

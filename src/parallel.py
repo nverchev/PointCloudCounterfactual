@@ -54,6 +54,7 @@ class DistributedWorker(Generic[P, T]):
     def _setup_distributed(self, rank: int) -> None:
         os.environ['MASTER_ADDR'] = 'localhost'
         os.environ['MASTER_PORT'] = '12355'
+        torch.cuda.set_device(rank)
         acc = torch.accelerator.current_accelerator()
         backend = torch.distributed.get_default_backend_for_device(acc)
         dist.init_process_group(backend,

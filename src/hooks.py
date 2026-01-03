@@ -4,15 +4,14 @@ import numpy as np
 import torch
 import wandb
 from torch.utils import data
-import  torch.distributed as dist
+import torch.distributed as dist
 
 from drytorch.core import protocols as p
 from drytorch.lib.load import take_from_dataset
 from drytorch.lib.runners import ModelRunner
-from drytorch.trackers.wandb import Wandb
 
 from src.config_options import Experiment
-from src.autoencoder import VQVAE, AbstractVQVAE
+from src.autoencoder import AbstractVQVAE
 from src.data_structures import Inputs, Outputs, Targets
 
 
@@ -90,12 +89,16 @@ class WandbLogReconstruction:
             dataset: Dataset containing input samples to visualize.
             num_samples: Number of samples to log in each iteration.
         """
+        from drytorch.trackers.wandb import Wandb
+
         self._dataset = dataset
         self._num_samples = num_samples
-        run = Wandb.get_current().run
+        self.run = Wandb.get_current().run
         inputs, targets = take_from_dataset(dataset, num_samples)
         for i, (input_, label) in enumerate(zip(inputs.cloud.numpy(), targets.label)):
-            run.log({f'Sample {i} with label: {label.item()}': wandb.Object3D(input_)})
+            self.run.log({f'Sample {i} with label: {label.item()}': wandb.Object3D(input_)})
+
+        return
 
     def __call__(self, trainer: p.TrainerProtocol[Inputs, Targets, Outputs]) -> None:
         """Log reconstructed samples to Weights & Biases.
@@ -103,7 +106,6 @@ class WandbLogReconstruction:
         Args:
             trainer: Training protocol containing the model to evaluate.
         """
-        run = Wandb.get_current().run
         model = trainer.model
 
         # Get samples and generate reconstructions
@@ -112,4 +114,4 @@ class WandbLogReconstruction:
 
         # Log reconstructions as 3D objects
         for i, recon in enumerate(outputs.recon.detach().cpu().numpy()):
-            run.log({f'Recon {i}': wandb.Object3D(recon)})
+            self.run.log({f'Recon {i}': wandb.Object3D(recon)})
