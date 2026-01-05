@@ -4,6 +4,8 @@ import pathlib
 
 import torch
 
+import torch.distributed as dist
+
 from drytorch.core. exceptions import TrackerNotActiveError
 from drytorch import DataLoader, Model, Test, Trainer
 from drytorch.lib.hooks import EarlyStoppingCallback, call_every, saving_hook
@@ -53,6 +55,9 @@ def train_classifier() -> None:
     trainer.train_until(cfg_class.train.n_epochs)
     trainer.save_checkpoint()
     final_test(store_outputs=True)
+    if dist.is_initialized() and dist.get_rank() != 0:
+        return
+
     outputs_probs = torch.cat(final_test.outputs_list)
     predictions = outputs_probs.argmax(dim=1)
     labels = torch.cat([data[1].label for data in test_loader.get_loader(inference=True)])
@@ -90,6 +95,8 @@ def train_classifier() -> None:
             global_step=model.epoch
         )
         writer.close()
+
+    return
 
 
 def setup_and_train(cfg: ConfigAll, hydra_dir: pathlib.Path) -> None:
