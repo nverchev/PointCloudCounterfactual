@@ -22,37 +22,17 @@ class DistributedWorker(Generic[P, T]):
         self.port = self._get_free_port()
         return
 
-    def __call__(
-        self, rank: int, return_dict: managers.DictProxy, *args: P.args
-    ) -> None:
+    def __call__(self, rank: int, *args: P.args) -> None:
         """Run the worker in a distributed environment."""
         self._setup_distributed(rank)
-        return_dict[rank] = self.worker(*args)
-        self._cleanup_distributed()
-        return
+        try:
+            return self.worker(*args)
+        finally:
+            self._cleanup_distributed()
 
-    def process(self, *args: P.args) -> tuple[list[int], dict[int, T]]:
-        """Run processes with multiprocessing.Manager."""
-        ctx = mp.get_context('spawn')
-
-        with ctx.Manager() as manager:
-            return_dict = manager.dict()
-            processes = []
-            for rank in range(self.world_size):
-                p = ctx.Process(target=self, args=(rank, return_dict, *args))
-                p.start()
-                processes.append(p)
-
-            for p in processes:
-                p.join(timeout=100)
-                if p.is_alive():
-                    logging.error(f"Process {p.pid} hung - terminating")
-                    p.terminate()
-                    p.join(timeout=5)
-                    if p.is_alive():
-                        p.kill()
-
-        return [p.exitcode for p in processes], dict(return_dict)
+    def spawn(self, *args: P.args) -> None:
+        """Spawn the worker in multiple processes."""
+        return mp.spawn(self, args=args, nprocs=self.world_size)
 
     def _setup_distributed(self, rank: int) -> None:
         os.environ['MASTER_ADDR'] = 'localhost'
