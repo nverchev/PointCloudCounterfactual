@@ -10,6 +10,7 @@ from typing import Any, Generic, TypeVar, Generator, Literal
 import itertools
 
 import torch
+import torch.distributed as dist
 import numpy as np
 import numpy.typing as npt
 from torch.utils.data import Dataset
@@ -635,3 +636,29 @@ def get_dataset(partition: Partitions) -> PointCloudDataset:
                                          Datasets.ShapenetFlow: ShapeNetDatasetFlow}
     dataset = dataset_dict[dataset_name]().split(partition)
     return dataset
+
+def get_datasets() -> tuple[PointCloudDataset, PointCloudDataset]:
+    """Get the correct datasets for training and testing."""
+    cfg = Experiment.get_config()
+    train_dataset = get_dataset(Partitions.train_val if cfg.final else Partitions.train)
+    test_dataset = get_dataset(Partitions.test if cfg.final else Partitions.val)
+    return train_dataset, test_dataset
+
+def get_dataset_multiprocess_safe() -> tuple[PointCloudDataset, PointCloudDataset]:
+    """Get the correct datasets for training and testing, but in a multiprocess safe way."""
+    cfg = Experiment.get_config()
+    datasets: tuple[PointCloudDataset, PointCloudDataset] | None = None
+    if cfg.user.n_parallel_training_processes:
+        rank = dist.get_rank()
+        for i in range(cfg.user.n_parallel_training_processes):
+            if rank == i:
+                datasets = get_datasets()
+
+            dist.barrier()
+    else:
+        datasets = get_datasets()
+
+    if datasets is None:
+        raise RuntimeError("Datasets could not be created.")
+
+    return datasets

@@ -7,7 +7,7 @@ from torch.utils.data import Subset
 
 from drytorch import DataLoader, Model, Test
 from drytorch.core import protocols as p
-from drytorch.lib.objectives import Metric, repr_metrics
+from drytorch.lib.objectives import Metric, compute_metrics
 
 from src.autoencoder import CounterfactualVQVAE
 from src.classifier import DGCNN
@@ -204,7 +204,7 @@ def evaluate_class_specific_counterfactuals(
 
 def print_metrics(metrics: p.ObjectiveProtocol) -> None:
     """Print metrics."""
-    for metric_name, metric_value in repr_metrics(metrics).items():
+    for metric_name, metric_value in compute_metrics(metrics).items():
         print(f'{metric_name}: {round(metric_value, 3)}')
 
 
@@ -225,7 +225,6 @@ def evaluate_counterfactuals(classifier: Model[Inputs, torch.Tensor], vqvae: Cou
     num_classes = cfg.data.dataset.n_classes
     batch_size = cfg.classifier.train.batch_size
     test_dataset = get_dataset(Partitions.test if cfg.final else Partitions.val)
-
     test_original = evaluate_original_performance(classifier, test_dataset, batch_size)
     labels = get_label_distribution(test_original.loader, num_classes)
 
