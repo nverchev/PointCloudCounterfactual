@@ -71,11 +71,11 @@ def get_chamfer_loss() -> LossBase[Outputs, Targets]:
 
 def get_recon_loss() -> LossBase[Outputs, Targets]:
     """Calculate reconstruction loss based on configuration settings."""
-    cfg = Experiment.get_config().autoencoder
-    cfg_user = Experiment.get_config().user
-    recon_loss = cfg.objective.recon_loss
+    cfg = Experiment.get_config()
+    cfg_autoencoder = cfg.autoencoder
+    recon_loss = cfg_autoencoder.objective.recon_loss
     chamfer_loss = get_chamfer_loss()
-    if recon_loss == ReconLosses.ChamferEMD and torch.cuda.is_available():
+    if recon_loss == ReconLosses.ChamferEMD and torch.cuda.is_available() and not cfg.user.cpu:
         return chamfer_loss + get_emd_loss()
 
     return chamfer_loss
