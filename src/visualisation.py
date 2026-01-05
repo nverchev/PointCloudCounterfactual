@@ -1,13 +1,12 @@
 """A module for visualizing point clouds and latent spaces using PyVista and Visdom."""
 
 import pathlib
-from typing import Literal, Optional, Sequence
+from typing import Literal, Optional, Sequence, TYPE_CHECKING
 
 import numpy as np
 from numpy import typing as npt
 import torch
 from sklearn.decomposition import PCA  # type: ignore
-from matplotlib import pyplot as plt
 
 from src.config_options import Experiment
 from src.data_structures import Inputs
@@ -20,6 +19,11 @@ VIOLET = np.array([0.6, 0.0, 0.9])
 ORANGE = np.array([0.9, 0.6, 0.0])
 COLOR_TUPLE = (BLUE, RED, GREEN, VIOLET, ORANGE)
 
+
+if TYPE_CHECKING:
+    import matplotlib.pyplot as plt
+else:
+    plt = None
 
 def render_scan(clouds: Sequence[npt.NDArray],
                 colorscale: Literal['blue_red', 'sequence'] = 'sequence',
@@ -225,8 +229,9 @@ def plot_confusion_matrix_heatmap(cm_array: npt.NDArray,
     """Plots the confusion matrix as a heatmap using Matplotlib and Seaborn."""
     try:
         import seaborn as sns
+        from matplotlib import pyplot as plt
     except ImportError:
-        return
+        return None
 
     num_classes = len(class_names)
     plt.figure(figsize=(num_classes + 2, num_classes + 2), dpi=dpi)

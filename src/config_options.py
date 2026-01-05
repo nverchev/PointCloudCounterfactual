@@ -778,6 +778,8 @@ def get_current_hydra_dir() -> pathlib.Path:
 def get_trackers(cfg: ConfigAll, hydra_dir: pathlib.Path) -> list[drytorch.Tracker]:
     """Get trackers from according to the user configuration."""
     cfg_trackers = cfg.user.trackers
+    hydra.core.utils.configure_log(None)
+    drytorch.init_trackers(mode='hydra')
     tracker_list: list[drytorch.Tracker] = []
     if sys.gettrace():  # skip in debug mode
         return tracker_list
@@ -825,7 +827,6 @@ def hydra_main(func: Callable[[ConfigAll], None]) -> Callable[[], None]:
         cfg = cast(ConfigAll, OmegaConf.to_object(dict_cfg))
         overrides = HydraConfig.get().overrides.task
         update_exp_name(cfg, overrides)
-        drytorch.init_trackers(mode='hydra')
         return func(cfg)
 
     return wrapper.__call__

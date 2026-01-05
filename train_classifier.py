@@ -8,7 +8,6 @@ from drytorch.core. exceptions import TrackerNotActiveError
 from drytorch import DataLoader, Model, Test, Trainer
 from drytorch.lib.hooks import EarlyStoppingCallback, call_every, saving_hook
 from drytorch.utils.average import get_trailing_mean
-from drytorch.trackers.tensorboard import TensorBoard
 from torchmetrics import ConfusionMatrix
 
 from src.metrics_and_losses import get_classification_loss
@@ -73,8 +72,12 @@ def train_classifier() -> None:
         title='Model Confusion Matrix'
     )
     try:
+        from drytorch.trackers.tensorboard import TensorBoard
+
         tensorboard_tracker = TensorBoard.get_current()
     except TrackerNotActiveError:
+        pass
+    except (ModuleNotFoundError, ImportError):
         pass
     else:
         writer = tensorboard_tracker.writer
