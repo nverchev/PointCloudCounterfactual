@@ -654,7 +654,7 @@ def get_dataset_multiprocess_safe() -> tuple[PointCloudDataset, PointCloudDatase
             if rank == i:
                 datasets = get_datasets()
 
-            dist.barrier()
+            dist.barrier(device_ids=[rank])
     else:
         datasets = get_datasets()
 
