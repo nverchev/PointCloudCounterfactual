@@ -599,9 +599,9 @@ class UserSettings:
     """User-specific options and preferences.
 
     Attributes:
-        cuda (bool): Whether to run computations on `cuda:0`
+        cpu (bool): Whether to run computations on `cpu`, otherwise defaults to local accelerator
         n_workers: The number of workers for data loading
-        n_parallel_training_processes: The number of parallel training processes
+        n_parallel_training_processes: The number of parallel training processes started
         generate (GenerationOptions): Options for generating a point cloud
         path (PathSpecs): Specifications for paths that override .env settings
         plot (PlottingOptions): Options for plotting and visualization
@@ -612,7 +612,7 @@ class UserSettings:
         counterfactual_value (PositiveFloat): The value for counterfactual strength
     """
 
-    cuda: bool
+    cpu: bool
     n_workers: PositiveInt
     n_parallel_training_processes: PositiveInt
     generate: GenerationOptions
@@ -638,9 +638,9 @@ class UserSettings:
         return
 
     @property
-    def device(self) -> torch.device:
-        """The device where the model should run."""
-        return torch.device('cuda:0' if self.cuda else 'cpu')
+    def device(self) -> torch.device | None:
+        """The device where the model should run (None for default)."""
+        return torch.device('cpu') if self.cpu else None
 
 
 @dataclass

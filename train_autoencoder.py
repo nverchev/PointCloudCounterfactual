@@ -31,7 +31,7 @@ def train_autoencoder(trial: Optional[optuna.Trial] = None) -> None:
     cfg_user = cfg.user
     cfg_early = cfg_ae.train.early_stopping
     ae = get_autoencoder()
-    model = Model(ae, name=cfg_ae.architecture.name)
+    model = Model(ae, name=cfg_ae.architecture.name, device=cfg_user.device)
     train_dataset, test_dataset = get_dataset_multiprocess_safe()  # test is validation unless final=True
     train_loader = DataLoader(dataset=train_dataset, batch_size=cfg_ae.train.batch_size, n_workers=cfg_user.n_workers)
     test_loader = DataLoader(dataset=test_dataset, batch_size=cfg_ae.train.batch_size, n_workers=cfg_user.n_workers)
