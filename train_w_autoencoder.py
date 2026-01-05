@@ -105,7 +105,7 @@ def main(cfg: ConfigAll) -> None:
     n_processes = cfg.user.n_parallel_training_processes
     hydra_dir = get_current_hydra_dir()
     if n_processes:
-        DistributedWorker(setup_and_train, n_processes).process(cfg, hydra_dir)
+        DistributedWorker(setup_and_train, n_processes).spawn(cfg, hydra_dir)
     else:
         setup_and_train(cfg, hydra_dir)
 

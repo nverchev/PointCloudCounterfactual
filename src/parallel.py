@@ -1,8 +1,7 @@
 """Module where the parallelism is defined: change according to your needs."""
-import logging
+
 import os
 from typing import Callable, Generic, ParamSpec, TypeVar
-from multiprocessing import managers
 import torch.multiprocessing as mp
 import socket
 
