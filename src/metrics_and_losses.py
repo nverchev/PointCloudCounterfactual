@@ -61,7 +61,7 @@ def get_chamfer_loss() -> LossBase[Outputs, Targets]:
     cfg_user = Experiment.get_config().user
     device = cfg_user.device
 
-    chamfer_backend = pykeops_chamfer if device.type == 'cuda' else torch_chamfer
+    chamfer_backend = pykeops_chamfer if torch.cuda.is_available() else torch_chamfer
 
     def _chamfer(data: Outputs, targets: Targets) -> torch.Tensor:
         return chamfer_backend(data.recon, targets.ref_cloud)
@@ -74,10 +74,10 @@ def get_recon_loss() -> LossBase[Outputs, Targets]:
     cfg = Experiment.get_config().autoencoder
     cfg_user = Experiment.get_config().user
     recon_loss = cfg.objective.recon_loss
-    device = cfg_user.device
     chamfer_loss = get_chamfer_loss()
-    if recon_loss == ReconLosses.ChamferEMD and device.type == 'cuda':
+    if recon_loss == ReconLosses.ChamferEMD and torch.cuda.is_available():
         return chamfer_loss + get_emd_loss()
+
     return chamfer_loss
 
 
