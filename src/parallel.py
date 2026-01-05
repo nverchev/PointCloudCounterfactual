@@ -1,5 +1,5 @@
 """Module where the parallelism is defined: change according to your needs."""
-
+import logging
 import os
 from typing import Callable, Generic, ParamSpec, TypeVar
 from multiprocessing import managers
@@ -27,11 +27,8 @@ class DistributedWorker(Generic[P, T]):
     ) -> None:
         """Run the worker in a distributed environment."""
         self._setup_distributed(rank)
-        try:
-            return_dict[rank] = self.worker(*args)
-        finally:
-            self._cleanup_distributed()
-
+        return_dict[rank] = self.worker(*args)
+        self._cleanup_distributed()
         return
 
     def process(self, *args: P.args) -> tuple[list[int], dict[int, T]]:
@@ -47,7 +44,13 @@ class DistributedWorker(Generic[P, T]):
             processes.append(p)
 
         for p in processes:
-            p.join()
+            p.join(timeout=30)
+            if p.is_alive():
+                logging.error(f"Process {p.pid} hung - terminating")
+                p.terminate()
+                p.join(timeout=5)
+                if p.is_alive():
+                    p.kill()
 
         return [p.exitcode for p in processes], dict(return_dict)
 
@@ -76,4 +79,3 @@ class DistributedWorker(Generic[P, T]):
         """Clean up the distributed environment."""
         dist.destroy_process_group()
         return
-
