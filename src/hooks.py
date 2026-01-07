@@ -2,7 +2,6 @@
 
 import numpy as np
 import torch
-import wandb
 from torch.utils import data
 import torch.distributed as dist
 
