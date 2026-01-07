@@ -21,9 +21,9 @@ COLOR_TUPLE = (BLUE, RED, GREEN, VIOLET, ORANGE)
 
 
 if TYPE_CHECKING:
-    import matplotlib.pyplot as plt
+    from matplotlib.pyplot import Figure
 else:
-    plt = Any
+    Figure = Any
 
 def render_scan(clouds: Sequence[npt.NDArray],
                 colorscale: Literal['blue_red', 'sequence'] = 'sequence',
@@ -225,7 +225,7 @@ def show_latent(mu: npt.NDArray, pseudo_mu: npt.NDArray, model_name: str) -> Non
 def plot_confusion_matrix_heatmap(cm_array: npt.NDArray,
                                   class_names: list[str],
                                   title: str = 'Confusion Matrix',
-                                  dpi: int = 300) -> plt.Figure | None:
+                                  dpi: int = 300) -> Figure | None:
     """Plots the confusion matrix as a heatmap using Matplotlib and Seaborn."""
     try:
         import seaborn as sns
