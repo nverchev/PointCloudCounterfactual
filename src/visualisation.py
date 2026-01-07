@@ -1,7 +1,7 @@
 """A module for visualizing point clouds and latent spaces using PyVista and Visdom."""
 
 import pathlib
-from typing import Literal, Optional, Sequence, TYPE_CHECKING
+from typing import Literal, Optional, Sequence, TYPE_CHECKING, Any
 
 import numpy as np
 from numpy import typing as npt
@@ -23,7 +23,7 @@ COLOR_TUPLE = (BLUE, RED, GREEN, VIOLET, ORANGE)
 if TYPE_CHECKING:
     import matplotlib.pyplot as plt
 else:
-    plt = None
+    plt = Any
 
 def render_scan(clouds: Sequence[npt.NDArray],
                 colorscale: Literal['blue_red', 'sequence'] = 'sequence',
