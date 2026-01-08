@@ -83,8 +83,9 @@ def train_autoencoder(trial: Optional[optuna.Trial] = None) -> None:
 
 def setup_and_train(cfg: ConfigAll, hydra_dir: pathlib.Path) -> None:
     """Set up experiment and start training cycle."""
+    trackers = get_trackers(cfg, hydra_dir)
     exp = Experiment(cfg, name=cfg.name, par_dir=cfg.user.path.version_dir, tags=cfg.tags)
-    for tracker in get_trackers(cfg, hydra_dir):
+    for tracker in trackers:
         exp.trackers.subscribe(tracker)
 
     with exp.create_run(resume=True):

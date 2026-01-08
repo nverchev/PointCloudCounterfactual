@@ -83,8 +83,9 @@ def train_w_autoencoder(vqvae: CounterfactualVQVAE,
 
 def setup_and_train(cfg: ConfigAll, hydra_dir: pathlib.Path) -> None:
     """Set up the experiment, load the classifier and the autoencoder, and train the w-autoencoder."""
+    trackers = get_trackers(cfg, hydra_dir)
     exp = Experiment(cfg, name=cfg.name, par_dir=cfg.user.path.version_dir, tags=cfg.tags)
-    for tracker in get_trackers(cfg, hydra_dir):
+    for tracker in trackers:
         exp.trackers.subscribe(tracker)
 
     with exp.create_run(resume=True):
