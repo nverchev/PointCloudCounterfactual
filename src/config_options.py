@@ -490,7 +490,7 @@ class TrainingConfig:
     """Configuration for the training process.
 
     Attributes:
-        batch_size (StrictlyPositiveInt): The batch size for training
+        batch_size (StrictlyPositiveInt): The batch size for training of all the processes combined
         learn (LearningConfig): The learning configuration for training
         n_epochs (StrictlyPositiveInt): The total number of epochs for training
         early_stopping (EarlyStoppingConfig): The configuration for early stopping
@@ -499,6 +499,23 @@ class TrainingConfig:
     learn: LearningConfig
     n_epochs: StrictlyPositiveInt
     early_stopping: EarlyStoppingConfig
+    _n_subprocesses: PositiveInt
+
+    @model_validator(mode='after')
+    def _check_length_dropout(self) -> Self:
+        if self._n_subprocesses and self.batch_size % self._n_subprocesses != 0:
+            msg = 'Global batch size {} not divisible by number of devices {}.'
+            raise ValueError(msg.format(self.batch_size, self._n_subprocesses))
+
+        return self
+
+    @property
+    def batch_size_per_device(self) -> int:
+        """The batch size per device."""
+        if self._n_subprocesses == 0:
+            return self.batch_size
+
+        return self.batch_size // self._n_subprocesses
 
 
 @dataclass
@@ -609,7 +626,7 @@ class UserSettings:
     Attributes:
         cpu (bool): Whether to run computations on `cpu`, otherwise defaults to local accelerator
         n_workers: The number of workers for data loading
-        n_parallel_training_processes: The number of parallel training processes started
+        n_subprocesses: The number of subprocesses for training
         generate (GenerationOptions): Options for generating a point cloud
         plot (PlottingOptions): Options for plotting and visualization
         path (PathSpecs): Specifications for paths that override .env settings
@@ -622,7 +639,7 @@ class UserSettings:
 
     cpu: bool
     n_workers: PositiveInt
-    n_parallel_training_processes: PositiveInt
+    n_subprocesses: PositiveInt
     generate: GenerationOptions
     path: PathSpecs
     trackers: TrackerList

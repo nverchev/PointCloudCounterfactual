@@ -33,8 +33,8 @@ def train_autoencoder(trial: Optional[optuna.Trial] = None) -> None:
     ae = get_autoencoder()
     model = Model(ae, name=cfg_ae.architecture.name, device=cfg_user.device)
     train_dataset, test_dataset = get_dataset_multiprocess_safe()  # test is validation unless final=True
-    train_loader = DataLoader(dataset=train_dataset, batch_size=cfg_ae.train.batch_size, n_workers=cfg_user.n_workers)
-    test_loader = DataLoader(dataset=test_dataset, batch_size=cfg_ae.train.batch_size, n_workers=cfg_user.n_workers)
+    train_loader = DataLoader(dataset=train_dataset, batch_size=cfg_ae.train.batch_size_per_device, n_workers=cfg_user.n_workers)
+    test_loader = DataLoader(dataset=test_dataset, batch_size=cfg_ae.train.batch_size_per_device, n_workers=cfg_user.n_workers)
     with cfg.focus(cfg.autoencoder):
         learning_schema = get_learning_schema()
 
@@ -97,7 +97,7 @@ def setup_and_train(cfg: ConfigAll, hydra_dir: pathlib.Path) -> None:
 @hydra_main
 def main(cfg: ConfigAll) -> None:
     """Main entry point for module that creates subprocesses in parallel mode."""
-    n_processes = cfg.user.n_parallel_training_processes
+    n_processes = cfg.user.n_subprocesses
     hydra_dir = get_current_hydra_dir()
     if n_processes:
         DistributedWorker(setup_and_train, n_processes).spawn(cfg, hydra_dir)

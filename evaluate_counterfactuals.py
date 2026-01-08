@@ -223,7 +223,7 @@ def evaluate_counterfactuals(classifier: Model[Inputs, torch.Tensor], vqvae: Cou
     """Evaluate the counterfactuals according to different metrics."""
     cfg = Experiment.get_config()
     num_classes = cfg.data.dataset.n_classes
-    batch_size = cfg.classifier.train.batch_size
+    batch_size = cfg.classifier.train.batch_size_per_device
     test_dataset = get_dataset(Partitions.test if cfg.final else Partitions.val)
     test_original = evaluate_original_performance(classifier, test_dataset, batch_size)
     labels = get_label_distribution(test_original.loader, num_classes)

@@ -648,9 +648,9 @@ def get_dataset_multiprocess_safe() -> tuple[PointCloudDataset, PointCloudDatase
     """Get the correct datasets for training and testing, but in a multiprocess safe way."""
     cfg = Experiment.get_config()
     datasets: tuple[PointCloudDataset, PointCloudDataset] | None = None
-    if cfg.user.n_parallel_training_processes:
+    if cfg.user.n_subprocesses:
         rank = dist.get_rank()
-        for i in range(cfg.user.n_parallel_training_processes):
+        for i in range(cfg.user.n_subprocesses):
             if rank == i:
                 datasets = get_datasets()
 

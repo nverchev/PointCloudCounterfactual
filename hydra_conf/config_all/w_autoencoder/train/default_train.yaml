@@ -5,3 +5,4 @@ defaults:
 
 batch_size : 32
 n_epochs: 500
+_n_subprocesses: ${user.n_subprocesses}

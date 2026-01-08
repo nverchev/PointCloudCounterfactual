@@ -5,7 +5,7 @@ seed:  # random seed
 # Options for training efficiency (should not impact the training of the model)
 cpu: false  # false enables acceleration
 n_workers: 0  # 0 means that the data will be loaded in the main process
-n_parallel_training_processes: 0  # number of processes used for training
+n_subprocesses: 0  # number of subprocesses used for training (0 for no parallelism)
 checkpoint_every: 100  # save a checkpoint of the model after every n epochs
 load_checkpoint: 0  # load a checkpoint from the experiments folder, -1 indicates loading the latest checkpoint
 

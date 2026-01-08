@@ -49,13 +49,13 @@ def train_w_autoencoder(vqvae: CounterfactualVQVAE,
 
     train_w_dataset = WDatasetWithLogitsFrozen(train_dataset, vqvae, classifier)
     test_w_dataset = WDatasetWithLogitsFrozen(test_dataset, vqvae, classifier)
-    test_loader = DataLoader(dataset=test_w_dataset, batch_size=cfg_w_ae.train.batch_size, pin_memory=False)
+    test_loader = DataLoader(dataset=test_w_dataset, batch_size=cfg_w_ae.train.batch_size_per_device, pin_memory=False)
     loss_calc = get_w_encoder_loss()
 
     with cfg.focus(cfg.w_autoencoder):
         learning_schema = get_learning_schema()
 
-    train_loader = DataLoader(dataset=train_w_dataset, batch_size=cfg_w_ae.train.batch_size, pin_memory=False)
+    train_loader = DataLoader(dataset=train_w_dataset, batch_size=cfg_w_ae.train.batch_size_per_device, pin_memory=False)
     trainer = Trainer(w_encoder_model,
                       loader=train_loader,
                       loss=loss_calc,
@@ -103,7 +103,7 @@ def setup_and_train(cfg: ConfigAll, hydra_dir: pathlib.Path) -> None:
 @hydra_main
 def main(cfg: ConfigAll) -> None:
     """Main entry point for module that creates subprocesses in parallel mode."""
-    n_processes = cfg.user.n_parallel_training_processes
+    n_processes = cfg.user.n_subprocesses
     hydra_dir = get_current_hydra_dir()
     if n_processes:
         DistributedWorker(setup_and_train, n_processes).spawn(cfg, hydra_dir)
