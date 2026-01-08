@@ -76,7 +76,9 @@ def train_w_autoencoder(vqvae: CounterfactualVQVAE,
                                    metric=loss_calc)
         trainer.post_epoch_hooks.register(prune_hook)
 
-    trainer.train_until(cfg_w_ae.train.n_epochs)
+    if cfg_user.load_checkpoint >= 0:
+        trainer.train_until(cfg_w_ae.train.n_epochs)
+
     test_encoding()
     return
 
