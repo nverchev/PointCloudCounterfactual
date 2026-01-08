@@ -43,7 +43,7 @@ class PosteriorDecoder(nn.Module):
         self.embedding_dim = cfg_ae_arc.embedding_dim
         self.n_classes = cfg.data.dataset.n_classes
         self.n_codes = cfg_ae_arc.n_codes
-        self.z_dim = cfg_ae_arc.z2_dim
+        self.z2_dim = cfg_ae_arc.z2_dim
         self.h_dims = cfg_posterior.hidden_dims
         self.dropout = cfg_posterior.dropout
         self.act_cls = cfg_posterior.act_cls
@@ -65,7 +65,7 @@ class PosteriorDecoder(nn.Module):
             transformer_layers.append(encoder_layer)
 
         self.transformer = nn.ModuleList(transformer_layers)
-        self.to_latent = LinearLayer(self.proj_dim, 2 * self.z_dim, batch_norm=False, act_cls=nn.Identity)
+        self.to_latent = LinearLayer(self.proj_dim, 2 * self.z2_dim, batch_norm=False, act_cls=nn.Identity)
         return
 
     def forward(self, probs: torch.Tensor, x: torch.Tensor) -> torch.Tensor:

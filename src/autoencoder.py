@@ -20,11 +20,8 @@ class GaussianSampler:
     """Handles Gaussian sampling logic."""
 
     @staticmethod
-    def sample(mu: torch.Tensor, log_var: torch.Tensor, training: bool = True) -> torch.Tensor:
+    def sample(mu: torch.Tensor, log_var: torch.Tensor) -> torch.Tensor:
         """Gaussian sample given mean and variance (returns mean if not training)."""
-        if not training:
-            return mu
-
         std = torch.exp(0.5 * log_var)
         eps = torch.randn_like(std)
         return eps.mul(std).add_(mu)
@@ -43,11 +40,9 @@ class DistanceCalculator:
         x = x.view(batch * dim_codes, 1, embedding_dim)
         book = codebook.detach().repeat(batch, 1, 1)
         dist = pykeops_square_distance(x, book)
-
         idx = dist.argmin(axis=2)
         dist_sum = dist.sum(1).view(batch, dim_codes, codebook.shape[1])
         idx_reshaped = idx.view(batch, dim_codes, 1)
-
         return dist_sum, idx_reshaped
 
 
@@ -189,10 +184,9 @@ class WAutoEncoder(BaseWAutoEncoder):
 
     def decode(self, data: Outputs) -> Outputs:
         """Decode with counterfactual generation."""
-        data.z1 = self.sampler.sample(data.mu1, data.log_var1, self.training)
+        data.z1 = self.sampler.sample(data.mu1, data.log_var1)
         data.z2 = torch.randn((data.z1.shape[0], self.cfg_ae_arc.z2_dim))  # z2_dim should probably be equal 0 here
-        z_combined = self.bn(torch.cat((data.z1, data.z2), dim=1))
-        data.w_recon = self.decoder(z_combined)
+        data.w_recon = self.decoder(data.z1, data.z2)
         data.w_dist_2, data.idx = self.distance_calc.compute_distances(
             data.w_recon, self.codebook, self.dim_codes, self.embedding_dim
         )
@@ -237,7 +231,7 @@ class CounterfactualWAutoEncoder(BaseWAutoEncoder):
         # Adversarial predictions
         # data.y1 = self.adversarial(data.mu1.detach())
         # data.y2 = frozen_forward(self.adversarial, data.mu1)
-        data.z1 = self.sampler.sample(data.mu1, data.log_var1, self.training)
+        data.z1 = self.sampler.sample(data.mu1, data.log_var1)
         return data
 
     def decode(self, data: Outputs, logits: Optional[torch.Tensor] = None) -> Outputs:
@@ -245,7 +239,6 @@ class CounterfactualWAutoEncoder(BaseWAutoEncoder):
         probs = self._get_probabilities(data, logits)
         data.p_mu2, data.p_log_var2 = self.z2_inference(probs).chunk(2, 2)
         data.z2 = self._compute_z2(data, probs)
-        data.w_recon = self.decoder(data.z1, data.z2)
         data.w_dist_2, data.idx = self.distance_calc.compute_distances(
             data.w_recon, self.codebook, self.dim_codes, self.embedding_dim
         )
@@ -268,17 +261,18 @@ class CounterfactualWAutoEncoder(BaseWAutoEncoder):
         """Compute z2 latent variable."""
         if not hasattr(data, 'h'):
             # No features available, sample from prior
-            return self.sampler.sample(data.p_mu2, data.p_log_var2, self.training)
+            return self.sampler.sample(data.p_mu2, data.p_log_var2)
 
         # Use posterior with features
         data.d_mu2, data.d_log_var2 = self.posterior(probs, data.h).chunk(2, 2)
         mu_combined = data.d_mu2 + data.p_mu2
         log_var_combined = data.d_log_var2 + data.p_log_var2
-        return self.sampler.sample(mu_combined, log_var_combined, self.training)
+        return data.d_mu2
 
     def forward(self, x: WInputs) -> Outputs:
         """Forward pass with logits."""
         data = self.encode(x.w_q)
+        data.w_q = x.w_q
         return self.decode(data, x.logits)
 
     @torch.inference_mode()
@@ -355,7 +349,6 @@ class AE(AutoEncoder):
     def encode(self, inputs: Inputs) -> Outputs:
         """Encode point cloud to latent representation."""
         data = Outputs()
-        data.w = self.encoder(inputs.cloud, inputs.indices)
         return data
 
     def decode(self, data: Outputs, inputs: Inputs) -> Outputs:

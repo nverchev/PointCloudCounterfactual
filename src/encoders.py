@@ -102,7 +102,7 @@ class WEncoderTransformers(BaseWEncoder):
 
     def __init__(self) -> None:
         super().__init__()
-        self.input_proj = LinearLayer(self.embedding_dim, self.proj_dim, batch_norm=False)
+        self.input_proj = LinearLayer(self.embedding_dim, self.proj_dim, batch_norm=False, act_cls=nn.Identity)
         self.positional_encoding = nn.Parameter(torch.randn(1, self.n_codes, self.proj_dim))
         transformer_layers: list[nn.Module] = []
         for hidden_dim, do in zip(self.h_dims_lin, self.dropout):
