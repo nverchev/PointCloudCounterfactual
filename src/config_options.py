@@ -3,14 +3,12 @@
 import enum
 import functools
 import pathlib
-import os
 import sys
 from collections.abc import Iterator
 from contextlib import contextmanager
 from dataclasses import field
 from typing import Optional, Self, Annotated, Callable, TypeAlias, cast
 
-import dotenv
 import hydra
 import numpy as np
 from hydra.core.global_hydra import GlobalHydra
@@ -18,14 +16,10 @@ from hydra.core.hydra_config import HydraConfig
 from omegaconf import OmegaConf, DictConfig
 from pydantic import model_validator, Field
 from pydantic.dataclasses import dataclass
+from pydantic_settings import BaseSettings, SettingsConfigDict
 import torch
 
 import drytorch
-
-dotenv.load_dotenv()
-DATASET_DIR = pathlib.Path(os.getenv('DATASET_DIR', ''))
-EXPERIMENT_DIR = pathlib.Path(os.getenv('EXPERIMENT_DIR', './'))
-METADATA_DIR = pathlib.Path(os.getenv('METADATA_DIR', './'))
 
 PositiveInt = Annotated[int, Field(ge=0)]
 StrictlyPositiveInt = Annotated[int, Field(gt=0)]
@@ -33,6 +27,13 @@ PositiveFloat = Annotated[float, Field(ge=0)]
 ActClass: TypeAlias = Callable[[], torch.nn.Module]
 
 ACT: ActClass = functools.partial(torch.nn.LeakyReLU, negative_slope=0.2)
+
+
+class EnvSettings(BaseSettings):
+    dataset_dir: pathlib.Path = pathlib.Path('./datasets')
+    root_exp_dir: pathlib.Path = pathlib.Path('./experiments')
+    metadata_dir: pathlib.Path = pathlib.Path('./dataset_metadata')
+    model_config = SettingsConfigDict(env_file='.env')
 
 
 class ConfigPath(enum.StrEnum):
@@ -550,14 +551,21 @@ class PathSpecs:
     """Path specifications for directories.
 
     Attributes:
-        exp_par_dir (pathlib.Path): The directory for containing the experiment. Default is the path in the .env file
+        root_exp_dir (pathlib.Path): The directory for containing the experiment. Default is the path in the .env file
         data_dir (pathlib.Path): The directory for datasets. Default is the path specified in the .env file
         metadata_dir (pathlib.Path): The directory for dataset metadata. Default is the path specified in the .env file
     """
+    _env = EnvSettings()
 
-    exp_par_dir: pathlib.Path = EXPERIMENT_DIR
-    data_dir: pathlib.Path = DATASET_DIR
-    metadata_dir: pathlib.Path = METADATA_DIR
+    version_folder: str
+    root_exp_dir: pathlib.Path = _env.root_exp_dir
+    data_dir: pathlib.Path = _env.dataset_dir
+    metadata_dir: pathlib.Path = _env.metadata_dir
+
+    @property
+    def version_dir(self) -> pathlib.Path:
+        """The full path for the version directory."""
+        return self.root_exp_dir / self.version_folder
 
 
 @dataclass
@@ -603,13 +611,13 @@ class UserSettings:
         n_workers: The number of workers for data loading
         n_parallel_training_processes: The number of parallel training processes started
         generate (GenerationOptions): Options for generating a point cloud
-        path (PathSpecs): Specifications for paths that override .env settings
         plot (PlottingOptions): Options for plotting and visualization
+        path (PathSpecs): Specifications for paths that override .env settings
         seed (Optional[int]): The seed for PyTorch/NumPy randomness. If None, no seed is set
         checkpoint_every (PositiveInt): The number of epochs between saving checkpoints
         n_generated_output_points (int): The number of points to generate during inference
         load_checkpoint (int): The checkpoint to load if available. Default is the last one (-1)
-        counterfactual_value (PositiveFloat): The value for counterfactual strength
+        counterfactual_value (PositiveFloat): The counterfactual strength value
     """
 
     cpu: bool
@@ -809,8 +817,8 @@ def get_trackers(cfg: ConfigAll, hydra_dir: pathlib.Path) -> list[drytorch.Track
         import sqlalchemy
         from drytorch.trackers.sqlalchemy import SQLConnection
 
-        engine_path = cfg.user.path.exp_par_dir / 'metrics.db'
-        cfg.user.path.exp_par_dir.mkdir(exist_ok=True)
+        engine_path = cfg.user.path.version_dir / 'metrics.db'
+        cfg.user.path.version_dir.mkdir(exist_ok=True)
         engine = sqlalchemy.create_engine(f'sqlite:///{engine_path}')
         tracker_list.append(SQLConnection(engine=engine))
 

@@ -248,7 +248,7 @@ def evaluate_counterfactuals(classifier: Model[Inputs, torch.Tensor], vqvae: Cou
 @hydra_main
 def main(cfg: ConfigAll) -> None:
     """Set up the experiment and launch the counterfactual evaluation."""
-    exp = Experiment(cfg, name=cfg.name, par_dir=cfg.user.path.exp_par_dir, tags=cfg.tags)
+    exp = Experiment(cfg, name=cfg.name, par_dir=cfg.user.path.version_dir, tags=cfg.tags)
     with exp.create_run(resume=True):
         dgcnn_module = DGCNN()
         classifier = Model(dgcnn_module, name=cfg.classifier.architecture.name, device=cfg.user.device)

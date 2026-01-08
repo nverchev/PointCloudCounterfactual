@@ -93,7 +93,7 @@ def visualize_counterfactuals() -> None:
 @hydra_main
 def main(cfg: ConfigAll) -> None:
     """Set up the experiment and launch the counterfactual visualization."""
-    exp = Experiment(cfg, name=cfg.name, par_dir=cfg.user.path.exp_par_dir, tags=cfg.tags)
+    exp = Experiment(cfg, name=cfg.name, par_dir=cfg.user.path.version_dir, tags=cfg.tags)
     with exp.create_run(resume=True):
 
         visualize_counterfactuals()

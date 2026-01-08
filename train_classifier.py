@@ -101,7 +101,7 @@ def train_classifier() -> None:
 
 def setup_and_train(cfg: ConfigAll, hydra_dir: pathlib.Path) -> None:
     """Set up the experiment and launch the classifier training."""
-    exp = Experiment(cfg, name=cfg.name, par_dir=cfg.user.path.exp_par_dir, tags=cfg.tags)
+    exp = Experiment(cfg, name=cfg.name, par_dir=cfg.user.path.version_dir, tags=cfg.tags)
     resume = cfg.user.load_checkpoint != 0
     for tracker in get_trackers(cfg, hydra_dir):
         exp.trackers.subscribe(tracker)

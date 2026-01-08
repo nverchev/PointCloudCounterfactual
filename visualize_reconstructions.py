@@ -53,7 +53,7 @@ def visualize_reconstructions() -> None:
 @hydra_main
 def main(cfg: ConfigAll) -> None:
     """Visualize reconstructions of the autoencoder."""
-    exp = Experiment(cfg, name=cfg.name, par_dir=cfg.user.path.exp_par_dir, tags=cfg.tags)
+    exp = Experiment(cfg, name=cfg.name, par_dir=cfg.user.path.version_dir, tags=cfg.tags)
     with exp.create_run(resume=True):
         visualize_reconstructions()
     return

@@ -122,7 +122,7 @@ def set_objective(tune_cfg: DictConfig) -> Callable[[optuna.Trial], float]:
 @hydra.main(version_base=None, config_path=ConfigPath.TUNE_W_AUTOENCODER.absolute(), config_name='defaults')
 def tune(tune_cfg: DictConfig):
     """Set up the study and launch the optimization."""
-    init_trackers(mode='tuning')
+    init_trackers(mode='minimal')
     pathlib.Path(tune_cfg.db_location).mkdir(exist_ok=True)
     pruner = optuna.pruners.MedianPruner(n_startup_trials=tune_cfg.tune.n_startup_trials,
                                          n_warmup_steps=tune_cfg.tune.n_warmup_steps,

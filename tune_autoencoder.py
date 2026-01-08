@@ -24,7 +24,7 @@ def set_objective(tune_cfg: DictConfig) -> Callable[[optuna.Trial], float]:
         """Set up the experiment and launches the training cycle."""
         overrides = suggest_overrides(tune_cfg, trial)
         cfg = get_config_all(overrides)
-        exp = Experiment(cfg, name=cfg.name, par_dir=cfg.user.path.exp_par_dir, tags=cfg.tags)
+        exp = Experiment(cfg, name=cfg.name, par_dir=cfg.user.path.version_dir, tags=cfg.tags)
         with exp.create_run(record=False):
             train_autoencoder(trial)
         return get_final_value(trial)
@@ -35,7 +35,7 @@ def set_objective(tune_cfg: DictConfig) -> Callable[[optuna.Trial], float]:
 @hydra.main(version_base=None, config_path=ConfigPath.TUNE_AUTOENCODER.absolute(), config_name='defaults')
 def main(tune_cfg: DictConfig):
     """Set up the study and launch the optimization."""
-    init_trackers(mode='tuning')
+    init_trackers(mode='minimal')
     pathlib.Path(tune_cfg.db_location).mkdir(exist_ok=True)
     pruner = optuna.pruners.MedianPruner(n_startup_trials=tune_cfg.tune.n_startup_trials,
                                          n_warmup_steps=tune_cfg.tune.n_warmup_steps,

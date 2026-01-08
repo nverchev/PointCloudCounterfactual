@@ -36,7 +36,7 @@ def generate_random_samples() -> None:
 @hydra_main
 def main(cfg: ConfigAll) -> None:
     """Generate random samples from the autoencoder."""
-    exp = Experiment(cfg, name=cfg.name, par_dir=cfg.user.path.exp_par_dir, tags=cfg.tags)
+    exp = Experiment(cfg, name=cfg.name, par_dir=cfg.user.path.version_dir, tags=cfg.tags)
     with exp.create_run(resume=True):
         generate_random_samples()
     return

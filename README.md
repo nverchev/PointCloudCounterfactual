@@ -6,7 +6,7 @@ Code from the paper published at EUSIPCO 2025. To replicate the results, please 
 - install the packages in the external folder.
 - write a .env file with:
   DATASET_DIR={your dataset directory} 
-  EXPERIMENT_DIR={the directory for your experiments} 
+  ROOT_EXP_DIR={the directory for your experiments} 
   METADATA_DIR=./dataset_metadata
 - modify the /hydra_conf/config_all/user/user_settings.yaml file to match your environment.
 - the datasets should download automatically.

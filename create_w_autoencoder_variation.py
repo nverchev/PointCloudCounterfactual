@@ -14,7 +14,7 @@ def create_variation() -> None:
     cfg = Experiment.get_config()
 
     # Copy the autoencoder state
-    main_exp_dir = cfg.user.path.exp_par_dir / 'checkpoints' / 'main'
+    main_exp_dir = cfg.user.path.version_dir / 'checkpoints' / 'main'
     checkpoint_dir = sorted(sorted(main_exp_dir.iterdir())[-1].iterdir())[-1]  # get the latest checkpoint
 
     vqvae_module = CounterfactualVQVAE()
@@ -43,7 +43,7 @@ def create_variation() -> None:
 @hydra_main
 def main(cfg: ConfigAll) -> None:
     """Set up the experiment and launches the variation creation."""
-    exp = Experiment(cfg, name=cfg.name, par_dir=cfg.user.path.exp_par_dir, tags=cfg.tags)
+    exp = Experiment(cfg, name=cfg.name, par_dir=cfg.user.path.version_dir, tags=cfg.tags)
     with exp.create_run():
         create_variation()
     return

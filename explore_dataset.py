@@ -19,7 +19,7 @@ def visualize_dataset(dataset: PointCloudDataset) -> None:
 @hydra_main
 def main(cfg: ConfigAll) -> None:
     """Visualize the dataset after pre-processing."""
-    exp = Experiment(cfg, name=cfg.name, par_dir=cfg.user.path.exp_par_dir, tags=cfg.tags)
+    exp = Experiment(cfg, name=cfg.name, par_dir=cfg.user.path.version_dir, tags=cfg.tags)
     with exp.create_run(resume=True):
         dataset = get_dataset(Partitions.test if cfg.final else Partitions.val)
         visualize_dataset(dataset)

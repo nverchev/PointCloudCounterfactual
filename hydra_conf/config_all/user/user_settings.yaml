@@ -11,7 +11,7 @@ load_checkpoint: 0  # load a checkpoint from the experiments folder, -1 indicate
 
 # Options for logging
 path:
-    exp_par_dir: experiments/${version}/  # main folder for storing experiments
+  version_folder: ${version}  # subfolder for versioning the experiments
 
 trackers:   # optional trackers for monitoring the experiment
   hydra: true  # saves a local copy of the config file
