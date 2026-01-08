@@ -741,7 +741,6 @@ class ConfigAll:
     w_autoencoder: ConfigTrainWAE
     user: UserSettings
     data: DataConfig
-    variant: str = 'default'
     tags: list[str] = field(default_factory=list)
     _lens: ConfigTrain | None = None
 
