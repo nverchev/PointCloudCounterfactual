@@ -23,7 +23,7 @@ from train_w_autoencoder import train_w_autoencoder
 def set_objective(tune_cfg: DictConfig) -> Callable[[optuna.Trial], float]:
     """Set the objective function following the study configuration."""
     main_cfg = get_config_all()
-    main_exp = Experiment(main_cfg, name=main_cfg.name, par_dir=main_cfg.user.path.exp_par_dir, tags=main_cfg.tags)
+    main_exp = Experiment(main_cfg, name=main_cfg.name, par_dir=main_cfg.user.path.version_dir, tags=main_cfg.tags)
 
     with main_exp.create_run(resume=True):
         classifier_module = DGCNN()
@@ -40,7 +40,7 @@ def set_objective(tune_cfg: DictConfig) -> Callable[[optuna.Trial], float]:
     def _objective(trial: optuna.Trial) -> float:
         overrides = suggest_overrides(tune_cfg, trial)
         trial_cfg = get_config_all(overrides)
-        trial_exp = Experiment(trial_cfg, name='Trial', par_dir=trial_cfg.user.path.exp_par_dir, tags=overrides)
+        trial_exp = Experiment(trial_cfg, name='Trial', par_dir=trial_cfg.user.path.version_dir, tags=overrides)
 
         # uses overridden settings for the architecture of the w_autoencoder
         with (trial_exp.create_run(record=False)):
