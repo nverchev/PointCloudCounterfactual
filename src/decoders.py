@@ -94,6 +94,7 @@ class BaseWDecoder(nn.Module, metaclass=abc.ABCMeta):
         self.book_size = cfg_ae_arc.book_size
         self.z1_dim = cfg_ae_arc.z1_dim
         self.z2_dim = cfg_ae_arc.z2_dim
+        self.z_dim = self.z1_dim + self.z2_dim
         self.proj_dim = cfg_w_decoder.proj_dim
         self.n_heads = cfg_w_decoder.n_heads
         self.h_dims = cfg_w_decoder.hidden_dims
@@ -165,7 +166,8 @@ class WDecoderTransformers(BaseWDecoder):
 
     def __init__(self) -> None:
         super().__init__()
-        self.z1_proj = LinearLayer(self.z_dim, self.proj_dim, batch_norm=False)
+        self.z_proj = LinearLayer(self.z_dim, self.proj_dim, batch_norm=False)
+        self.w_proj = LinearLayer(self.embedding_dim, self.proj_dim, batch_norm=False)
         self.query_tokens = nn.Parameter(torch.randn(1, self.n_codes, self.proj_dim))
         self.key_tokens = nn.Parameter(torch.randn(1, self.n_codes, self.proj_dim))
         transformer_layers: list[nn.Module] = []
@@ -180,21 +182,46 @@ class WDecoderTransformers(BaseWDecoder):
                 norm_first=True,
             )
             transformer_layers.append(layer)
-
+        self.init_token = nn.Parameter(torch.randn(1, 1, self.proj_dim))
         self.transformer = nn.ModuleList(transformer_layers)
         self.compress = LinearLayer(self.proj_dim, self.embedding_dim, batch_norm=False, act_cls=nn.Identity)
+        return
 
-    def forward(self, z1: torch.Tensor, w_q: torch.Tensor) -> torch.Tensor:
-        """Forward pass through transformer encoder."""
-        batch_size = z1.shape[0]
-        z1_proj = self.z1_proj(z1).view(batch_size, self.n_codes, self.proj_dim)
-        x = z1_proj + self.query_tokens.expand(batch_size, -1, -1)
-        mask = torch.triu(torch.ones(self.n_codes, self.n_codes), diagonal=1).bool().to(x.device)
+    def forward(self, z: torch.Tensor, w_q: torch.Tensor) -> torch.Tensor:
+        batch_size = z.shape[0]
+        z_proj = self.z_proj(z).view(batch_size, self.n_codes, self.proj_dim)
+        memory = z_proj + self.key_tokens.expand(batch_size, -1, -1)
+
+        w_proj = self.w_proj(w_q.view(batch_size, self.n_codes, self.embedding_dim))
+        tgt = w_proj + self.query_tokens.expand(batch_size, -1, -1)
+        mask = torch.triu(torch.ones(self.n_codes, self.n_codes), diagonal=1).bool().to(tgt.device)
         for layer in self.transformer:
-            x = layer(x, w_q, tgt_mask=mask)
+            tgt = layer(tgt, memory, tgt_mask=mask)
 
+        x = tgt
         x = self.compress(x)
-        return x.view(batch_size, self.n_codes * self.embedding_dim)
+
+        w_proj = self.w_proj(w_q.view(batch_size, self.n_codes, self.embedding_dim)[:, :1, :])
+        first_token = w_proj + self.query_tokens[:, :1, :]
+        current_tgt = first_token
+        outputs_compressed = self.compress(first_token)
+        for i in range(1, self.n_codes):
+            seq_len = current_tgt.shape[1]
+            mask = torch.triu(torch.ones(seq_len, seq_len), diagonal=1).bool().to(current_tgt.device)
+            tgt_i = current_tgt
+            for layer in self.transformer:
+                tgt_i = layer(tgt_i, memory, tgt_mask=mask)  # <-- ADD MASK
+
+            out_i = tgt_i[:, -1:, :]
+            out_compressed = self.compress(out_i)
+            outputs_compressed = torch.cat([outputs_compressed, out_compressed], dim=1)
+            if i < self.n_codes - 1:
+                next_input = self.w_proj(out_compressed) + self.query_tokens[:, i:i + 1, :]
+                current_tgt = torch.cat([current_tgt, next_input], dim=1)
+
+        x = outputs_compressed
+
+        return x.view(batch_size, self.w_dim)
 
 
 class BasePointDecoder(nn.Module, metaclass=abc.ABCMeta):
