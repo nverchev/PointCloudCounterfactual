@@ -219,6 +219,7 @@ def compute_overall_metric(metrics: list[Metric] | None = None) -> Metric | None
     return overall_metric
 
 
+torch.inference_mode()
 def evaluate_counterfactuals(classifier: Model[Inputs, torch.Tensor], vqvae: CounterfactualVQVAE) -> None:
     """Evaluate the counterfactuals according to different metrics."""
     cfg = Experiment.get_config()

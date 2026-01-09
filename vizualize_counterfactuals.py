@@ -11,7 +11,7 @@ from src.config_options import Experiment, ConfigAll, hydra_main
 from src.visualisation import render_cloud
 from drytorch import Model
 
-
+torch.inference_mode()
 def visualize_counterfactuals() -> None:
     """Visualize the selected point clouds in the dataset."""
     cfg = Experiment.get_config()
@@ -32,11 +32,9 @@ def visualize_counterfactuals() -> None:
 
     for i in cfg_user.plot.indices_to_reconstruct:
         assert i < len(test_dataset), 'Index is too large for the selected dataset'
-        # inference mode prevents random augmentation
-        with torch.inference_mode():
-            input_pc = test_dataset[i][0].cloud
-            indices = test_dataset[i][0].indices
-            label = test_dataset[i][1].label
+        input_pc = test_dataset[i][0].cloud
+        indices = test_dataset[i][0].indices
+        label = test_dataset[i][1].label
 
         render_cloud((input_pc.numpy(),), title=f'sample_{i}', interactive=cfg_user.plot.interactive)
         input_pc = input_pc.to(model.device)

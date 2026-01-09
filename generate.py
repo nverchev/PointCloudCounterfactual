@@ -7,7 +7,7 @@ from src.config_options import Experiment, hydra_main, ConfigAll
 from src.visualisation import render_cloud
 from drytorch import Model
 
-
+torch.inference_mode()
 def generate_random_samples() -> None:
     """Generate random samples from the autoencoder."""
     cfg = Experiment.get_config()

@@ -8,7 +8,7 @@ from src.autoencoder import CounterfactualVQVAE
 from src.classifier import DGCNN
 from src.config_options import ConfigAll, Experiment, hydra_main
 
-
+torch.inference_mode()
 def create_variation() -> None:
     """Convenience method that copies the autoencoder and classifier state from the main experiment to a new one."""
     cfg = Experiment.get_config()

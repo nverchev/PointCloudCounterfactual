@@ -1,10 +1,13 @@
 """Visualize the dataset after pre-processing."""
 
+import torch
+
 from src.datasets import get_dataset, Partitions, PointCloudDataset
 from src.config_options import Experiment, hydra_main, ConfigAll
 from src.visualisation import render_cloud
 
 
+torch.inference_mode()
 def visualize_dataset(dataset: PointCloudDataset) -> None:
     """Visualize the first point cloud in the dataset."""
     cfg_user = Experiment.get_config().user

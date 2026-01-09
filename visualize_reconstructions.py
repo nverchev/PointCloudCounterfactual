@@ -10,6 +10,7 @@ from src.visualisation import render_cloud
 from drytorch import Model
 
 
+torch.inference_mode()
 def visualize_reconstructions() -> None:
     """Visualize the selected point clouds in the dataset."""
     cfg = Experiment.get_config()
