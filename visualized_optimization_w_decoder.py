@@ -14,10 +14,12 @@ def tune(tune_cfg: DictConfig):
     """Set up the study and launch the optimization."""
     pathlib.Path(tune_cfg.db_location).mkdir(exist_ok=True)
     with (ConfigPath.CONFIG_ALL.get_path() / 'defaults').with_suffix('.yaml').open() as f:
-        version = f'v{yaml.safe_load(f)['version']}'
+        loaded_cfg = yaml.safe_load(f)
+        version = loaded_cfg['version']
+        variation = loaded_cfg['variation']
 
-    study = optuna.load_study(study_name=tune_cfg.tune.study_name + '_'.join(['', version] + tune_cfg.overrides[1:]),
-                              storage=tune_cfg.storage)
+    study_name = '_'.join([tune_cfg.tune.study_name, version, variation] + tune_cfg.overrides[1:])
+    study = optuna.load_study(study_name=study_name, storage=tune_cfg.storage)
     visualization.plot_optimization_history(study).show(renderer=tune_cfg.renderer)
     visualization.plot_slice(study).show(renderer=tune_cfg.renderer)
     visualization.plot_contour(study).show(renderer=tune_cfg.renderer)
