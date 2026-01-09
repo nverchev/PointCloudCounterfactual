@@ -89,12 +89,12 @@ class PseudoInputManager:
 class BaseWAutoEncoder(nn.Module, abc.ABC):
     """Base class for W autoencoders with common functionality."""
 
-    def __init__(self, codebook: torch.Tensor):
+    def __init__(self):
         super().__init__()
-
         self.cfg_ae_arc = Experiment.get_config().autoencoder.architecture
-        self.register_buffer("codebook", codebook)
-        self.dim_codes, self.book_size, self.embedding_dim = codebook.shape
+        self.dim_codes = self.cfg_ae_arc.n_codes
+        self.book_size = self.cfg_ae_arc.book_size
+        self.embedding_dim = self.cfg_ae_arc.embedding_dim
         self.encoder = get_w_encoder()
         self.decoder = get_w_decoder()
         self.sampler = GaussianSampler()
@@ -109,6 +109,18 @@ class BaseWAutoEncoder(nn.Module, abc.ABC):
             )
         else:
             self.pseudo_manager = None
+
+    @property
+    def codebook(self) -> torch.Tensor:
+        """Codebook tensor."""
+        if self._codebook is None:
+            raise AttributeError("Codebook not initialized.")
+
+        return self._codebook
+
+    def update_codebook(self, codebook: torch.Tensor) -> None:
+        """Update codebook tensor."""
+        self.register_buffer("_codebook", codebook.data, persistent=False)
 
     def forward(self, x: WInputs) -> Outputs:
         """Forward pass."""
@@ -163,9 +175,9 @@ class BaseWAutoEncoder(nn.Module, abc.ABC):
 class WAutoEncoder(BaseWAutoEncoder):
     """W autoencoder implementation."""
 
-    def __init__(self, codebook: torch.Tensor):
+    def __init__(self):
+        super().__init__()
         cfg = Experiment.get_config()
-        super().__init__(codebook)
         self.n_classes = cfg.data.dataset.n_classes
 
     def encode(self, x: Optional[torch.Tensor]) -> Outputs:
@@ -196,11 +208,11 @@ class WAutoEncoder(BaseWAutoEncoder):
 class CounterfactualWAutoEncoder(BaseWAutoEncoder):
     """Counterfactual W autoencoder with adversarial components."""
 
-    def __init__(self, codebook: torch.Tensor):
+    def __init__(self):
+        super().__init__()
         cfg = Experiment.get_config()
         cfg_ae_arc = cfg.autoencoder.architecture
         cfg_wae = cfg_ae_arc.encoder.w_encoder
-        super().__init__(codebook)
         self.n_classes = cfg.data.dataset.n_classes
 
         # Counterfactual-specific components
@@ -239,6 +251,7 @@ class CounterfactualWAutoEncoder(BaseWAutoEncoder):
         probs = self._get_probabilities(data, logits)
         data.p_mu2, data.p_log_var2 = self.z2_inference(probs).chunk(2, 2)
         data.z2 = self._compute_z2(data, probs)
+        data.w_recon = self.decoder(data.z1, data.z2)
         data.w_dist_2, data.idx = self.distance_calc.compute_distances(
             data.w_recon, self.codebook, self.dim_codes, self.embedding_dim
         )
@@ -401,7 +414,6 @@ class AbstractVQVAE(AE, Generic[WA], abc.ABC):
         self.n_codes = cfg_ae_arc.n_codes
         self.book_size = cfg_ae_arc.book_size
         self.embedding_dim = cfg_ae_arc.embedding_dim
-
         self.double_encoding = UsuallyFalse()
         self.codebook = nn.Parameter(torch.randn(
             self.n_codes,
@@ -430,6 +442,7 @@ class AbstractVQVAE(AE, Generic[WA], abc.ABC):
     def decode(self, data: Outputs, inputs: Inputs) -> Outputs:
         """Decode with vector quantization."""
         if self.double_encoding:
+            self.w_autoencoder.update_codebook(self.codebook)
             self.w_autoencoder.decode(data)
             data.w_e = data.w = self._decode_from_indices(data)
         else:
@@ -475,14 +488,14 @@ class VQVAE(AbstractVQVAE[WAutoEncoder]):
     """Standard VQVAE implementation."""
 
     def _create_w_autoencoder(self) -> WAutoEncoder:
-        return WAutoEncoder(self.codebook)
+        return WAutoEncoder()
 
 
 class CounterfactualVQVAE(AbstractVQVAE[CounterfactualWAutoEncoder]):
     """Counterfactual VQVAE implementation."""
 
     def _create_w_autoencoder(self) -> CounterfactualWAutoEncoder:
-        return CounterfactualWAutoEncoder(self.codebook)
+        return CounterfactualWAutoEncoder()
 
     @torch.inference_mode()
     def generate(self,

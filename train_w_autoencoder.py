@@ -38,6 +38,7 @@ def train_w_autoencoder(vqvae: CounterfactualVQVAE,
     cfg_w_ae = cfg.w_autoencoder
     cfg_user = cfg.user
     module = vqvae.w_autoencoder
+    module.update_codebook(vqvae.codebook)
     for param in module.parameters():
         param.requires_grad = True
 
@@ -92,10 +93,19 @@ def setup_and_train(cfg: ConfigAll, hydra_dir: pathlib.Path) -> None:
 
     with exp.create_run(resume=True):
         classifier_module = DGCNN()
-        classifier = Model(classifier_module, name=cfg.classifier.architecture.name, device=cfg.user.device)
+        classifier = Model(
+            classifier_module,
+            name=cfg.classifier.architecture.name,
+            device=cfg.user.device,
+            should_compile=False,
+            should_distribute=False)
         classifier.load_state()
         module = CounterfactualVQVAE()
-        autoencoder = Model(module, name=cfg.autoencoder.architecture.name, device=cfg.user.device)
+        autoencoder = Model(module,
+                            name=cfg.autoencoder.architecture.name,
+                            device=cfg.user.device,
+                            should_compile=False,
+                            should_distribute=False)
         autoencoder.checkpoint.load()
         train_w_autoencoder(module, classifier, name=autoencoder.name)
         autoencoder.save_state()
