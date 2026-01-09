@@ -280,7 +280,7 @@ class CounterfactualWAutoEncoder(BaseWAutoEncoder):
         data.d_mu2, data.d_log_var2 = self.posterior(probs, data.h).chunk(2, 2)
         mu_combined = data.d_mu2 + data.p_mu2
         log_var_combined = data.d_log_var2 + data.p_log_var2
-        return data.d_mu2
+        return self.sampler.sample(mu_combined, log_var_combined)
 
     def forward(self, x: WInputs) -> Outputs:
         """Forward pass with logits."""
