@@ -185,41 +185,50 @@ class WDecoderTransformers(BaseWDecoder):
         self.init_token = nn.Parameter(torch.randn(1, 1, self.proj_dim))
         self.transformer = nn.ModuleList(transformer_layers)
         self.compress = LinearLayer(self.proj_dim, self.embedding_dim, batch_norm=False, act_cls=nn.Identity)
+        self.init_token = nn.Parameter(torch.randn(1, 1, self.embedding_dim))
         return
 
     def forward(self, z: torch.Tensor, w_q: torch.Tensor) -> torch.Tensor:
         batch_size = z.shape[0]
         z_proj = self.z_proj(z).view(batch_size, self.n_codes, self.proj_dim)
         memory = z_proj + self.key_tokens.expand(batch_size, -1, -1)
+        if self.training:
 
-        w_proj = self.w_proj(w_q.view(batch_size, self.n_codes, self.embedding_dim))
-        tgt = w_proj + self.query_tokens.expand(batch_size, -1, -1)
-        mask = torch.triu(torch.ones(self.n_codes, self.n_codes), diagonal=1).bool().to(tgt.device)
-        for layer in self.transformer:
-            tgt = layer(tgt, memory, tgt_mask=mask)
-
-        x = tgt
-        x = self.compress(x)
-
-        w_proj = self.w_proj(w_q.view(batch_size, self.n_codes, self.embedding_dim)[:, :1, :])
-        first_token = w_proj + self.query_tokens[:, :1, :]
-        current_tgt = first_token
-        outputs_compressed = self.compress(first_token)
-        for i in range(1, self.n_codes):
-            seq_len = current_tgt.shape[1]
-            mask = torch.triu(torch.ones(seq_len, seq_len), diagonal=1).bool().to(current_tgt.device)
-            tgt_i = current_tgt
+            target = w_q.view(batch_size, self.n_codes, self.embedding_dim)
+            target_plus_init = torch.cat([self.init_token.expand(batch_size, 1, -1), target], dim=1)
+            target_minus_end = target_plus_init[:, :-1, :]
+            tgt = self.w_proj(target_minus_end) + self.query_tokens.expand(batch_size, -1, -1)
+            mask = torch.triu(torch.ones(self.n_codes, self.n_codes), diagonal=1).bool().to(tgt.device)
             for layer in self.transformer:
-                tgt_i = layer(tgt_i, memory, tgt_mask=mask)  # <-- ADD MASK
+                tgt = layer(tgt, memory, tgt_mask=mask)
 
-            out_i = tgt_i[:, -1:, :]
-            out_compressed = self.compress(out_i)
-            outputs_compressed = torch.cat([outputs_compressed, out_compressed], dim=1)
-            if i < self.n_codes - 1:
-                next_input = self.w_proj(out_compressed) + self.query_tokens[:, i:i + 1, :]
-                current_tgt = torch.cat([current_tgt, next_input], dim=1)
+            x = tgt
+            x = self.compress(x)
+        else:
+            current_seq = self.w_proj(self.init_token.expand(batch_size, 1, -1)) + self.query_tokens[:, :1, :]
+            sequence = []
+            for i in range(self.n_codes):
+                seq_len = current_seq.size(1)
 
-        x = outputs_compressed
+                tgt_mask = torch.triu(
+                    torch.ones(seq_len, seq_len, device=current_seq.device),
+                    diagonal=1
+                ).bool()
+
+                out_i = current_seq
+                for layer in self.transformer:
+                    out_i = layer(out_i, memory, tgt_mask=tgt_mask)
+
+                out_compressed = self.compress(out_i[:, -1:, :])
+                sequence.append(out_compressed)
+                if i < self.n_codes - 1:
+                    next_input = (
+                            self.w_proj(out_compressed)
+                            + self.query_tokens[:, i + 1:i + 2, :]
+                    )
+                    current_seq = torch.cat([current_seq, next_input], dim=1)
+
+            x = torch.cat(sequence, dim=1)
 
         return x.view(batch_size, self.w_dim)
 
