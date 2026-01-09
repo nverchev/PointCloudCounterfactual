@@ -165,8 +165,7 @@ class WDecoderTransformers(BaseWDecoder):
 
     def __init__(self) -> None:
         super().__init__()
-        self.z1_proj = LinearLayer(self.z2_dim, self.proj_dim, batch_norm=False)
-        self.z2_proj = LinearLayer(self.z2_dim, self.proj_dim, batch_norm=False)
+        self.z1_proj = LinearLayer(self.z_dim, self.proj_dim, batch_norm=False)
         self.query_tokens = nn.Parameter(torch.randn(1, self.n_codes, self.proj_dim))
         self.key_tokens = nn.Parameter(torch.randn(1, self.n_codes, self.proj_dim))
         transformer_layers: list[nn.Module] = []
@@ -185,15 +184,14 @@ class WDecoderTransformers(BaseWDecoder):
         self.transformer = nn.ModuleList(transformer_layers)
         self.compress = LinearLayer(self.proj_dim, self.embedding_dim, batch_norm=False, act_cls=nn.Identity)
 
-    def forward(self, z1: torch.Tensor, z2: torch.Tensor) -> torch.Tensor:
+    def forward(self, z1: torch.Tensor, w_q: torch.Tensor) -> torch.Tensor:
         """Forward pass through transformer encoder."""
         batch_size = z1.shape[0]
         z1_proj = self.z1_proj(z1).view(batch_size, self.n_codes, self.proj_dim)
-        z2_proj = self.z2_proj(z2).view(batch_size, self.n_codes, self.proj_dim)
         x = z1_proj + self.query_tokens.expand(batch_size, -1, -1)
-        y = z2_proj + self.key_tokens.expand(batch_size, -1, -1)
+        mask = torch.triu(torch.ones(self.n_codes, self.n_codes), diagonal=1).bool().to(x.device)
         for layer in self.transformer:
-            x = layer(x, y)
+            x = layer(x, w_q, tgt_mask=mask)
 
         x = self.compress(x)
         return x.view(batch_size, self.n_codes * self.embedding_dim)

@@ -7,6 +7,6 @@ defaults:
   - data: default_data
   - _self_
 
-variation: main
-version: v1.7
+variation: autoregressive
+version: 1.7
 final: false
