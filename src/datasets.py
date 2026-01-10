@@ -333,7 +333,7 @@ class ShapeNetDatasetFlow(SplitCreator):
         return ShapenetFlowSplit(self.paths[split])
 
 
-class BaseVQDataset(Dataset, Generic[VQ], metaclass=ABCMeta):
+class BaseVQDataset(Dataset, Generic[VQ], metaclass=AbstractSingleton):
     """Base dataset for VQVAE models with common functionality."""
 
     max_batch = 64

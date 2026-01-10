@@ -66,7 +66,7 @@ def set_objective(tune_cfg: DictConfig) -> Callable[[optuna.Trial], float]:
             finally:
                 unregister_model(classifier)  # classifier can be safely reused for other experiments
                 if torch.accelerator.is_available():
-                    torch.cuda.empty_cache()
+                    torch.accelerator.empty_cache()
 
         return get_final_value(trial)
 
