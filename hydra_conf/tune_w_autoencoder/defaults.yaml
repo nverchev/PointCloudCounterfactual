@@ -7,11 +7,11 @@ db_name: w_autoencoder_optimization
 renderer: firefox
 storage: "sqlite:///${db_location}/${db_name}.db"
 overrides:
-  - w_autoencoder.train.n_epochs=500
+  - w_autoencoder.train.n_epochs=100
 
 tune:
   n_trials: 100
   n_startup_trials: 10
   n_warmup_steps: 15
   interval_steps: 500
-  n_min_trials: 500
+  n_min_trials: 10

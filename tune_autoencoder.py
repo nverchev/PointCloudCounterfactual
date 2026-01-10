@@ -3,7 +3,9 @@
 from typing import Callable
 import pathlib
 
+
 import optuna
+import torch
 from omegaconf import DictConfig
 from optuna.visualization import plot_param_importances
 import hydra
@@ -11,7 +13,9 @@ import yaml
 
 from drytorch import init_trackers
 from drytorch.contrib.optuna import suggest_overrides, get_final_value
+from drytorch.core.exceptions import ConvergenceError
 
+from src import tuning
 from src.config_options import Experiment, ConfigPath
 from src.config_options import get_config_all
 from train_autoencoder import train_autoencoder
@@ -26,7 +30,18 @@ def set_objective(tune_cfg: DictConfig) -> Callable[[optuna.Trial], float]:
         cfg = get_config_all(overrides)
         exp = Experiment(cfg, name=cfg.name, par_dir=cfg.user.path.version_dir, tags=cfg.tags)
         with exp.create_run(record=False):
-            train_autoencoder(trial)
+            try:
+                train_autoencoder(trial=trial)
+            except optuna.TrialPruned:
+                return tuning.impute_pruned_trial(trial)
+
+            except ConvergenceError:
+                return tuning.impute_failed_trial(trial)
+
+            finally:
+                if torch.accelerator.is_available():
+                    torch.cuda.empty_cache()
+
         return get_final_value(trial)
 
     return objective

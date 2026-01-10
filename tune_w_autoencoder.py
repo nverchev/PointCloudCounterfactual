@@ -3,16 +3,20 @@
 import pathlib
 from typing import Callable
 
-import drytorch.core.exceptions
 import hydra
 import optuna
 import yaml
+import torch
+
 from drytorch import Model, init_trackers
 from drytorch.contrib.optuna import suggest_overrides, get_final_value
 from drytorch.core.register import unregister_model, register_model
+from drytorch.core.exceptions import ConvergenceError
+
 from omegaconf import DictConfig
 from optuna.visualization import plot_param_importances
 
+from src import tuning
 from src.autoencoder import CounterfactualVQVAE
 from src.classifier import DGCNN
 from src.config_options import Experiment, ConfigPath
@@ -54,65 +58,15 @@ def set_objective(tune_cfg: DictConfig) -> Callable[[optuna.Trial], float]:
             try:
                 train_w_autoencoder(new_vqvae_module, classifier, name=new_autoencoder.name, trial=trial)
             except optuna.TrialPruned:
-                import sklearn
-                import numpy as np
-                study = trial.study
-                *past_trials, current_trial = study.get_trials(deepcopy=False)
-                current_step = current_trial.last_step
-                if current_step is None:
-                    return float('nan')
+                return tuning.impute_pruned_trial(trial)
 
-                real_completed_trials = [
-                    t for t in past_trials
-                    if t.state == optuna.trial.TrialState.COMPLETE
-                    and current_step in t.intermediate_values
-                    and t.value is not None
-                    and not t.user_attrs.get('imputed', False)
-                ]
-                if len(real_completed_trials) < 10:
-                    raise optuna.TrialPruned()
+            except ConvergenceError:
+                return tuning.impute_failed_trial(trial)
 
-                past_intermediate_values: list[float] = [
-                    t.intermediate_values[current_step] for t in real_completed_trials
-                ]
-                quadratic_predictors = np.array([[value, value ** 2] for value in past_intermediate_values])
-                past_final_values: list[float] = [
-                    trial.value for trial in real_completed_trials if trial.value is not None
-                ]
-                responses = np.array(past_final_values)
-                model = sklearn.linear_model.LinearRegression()
-                model.fit(quadratic_predictors, responses)
-                pruned_intermediate_value = current_trial.intermediate_values[current_step]
-                quadratic_trial_data = np.array([[pruned_intermediate_value, pruned_intermediate_value ** 2]])
-                imputed_value = model.predict(quadratic_trial_data)[0]
-                median_final_value = past_final_values[len(past_final_values) // 2]
-                worst_fn = min if study.direction == optuna.study.StudyDirection.MAXIMIZE else max
-                imputed_value = worst_fn(imputed_value, median_final_value)
-                trial.set_user_attr('imputed', True)
-                return imputed_value
-
-            except drytorch.core.exceptions.ConvergenceError:
-                trial.set_user_attr('imputed', True)  # treating the trial as complete
-                study = trial.study
-                *past_trials, current_trial = study.get_trials(deepcopy=False)
-
-                real_completed_trials = [
-                    t for t in past_trials
-                    if t.state == optuna.trial.TrialState.COMPLETE
-                    and t.value is not None
-                    and not t.user_attrs.get('imputed', False)
-                ]
-                if len(real_completed_trials) < 10:
-                    raise optuna.TrialPruned()
-
-                past_final_values = [
-                    trial.value for trial in real_completed_trials if trial.value is not None
-                ]
-                worst_fn = min if study.direction == optuna.study.StudyDirection.MAXIMIZE else max
-
-                return worst_fn(past_final_values)
             finally:
                 unregister_model(classifier)  # classifier can be safely reused for other experiments
+                if torch.accelerator.is_available():
+                    torch.cuda.empty_cache()
 
         return get_final_value(trial)
 
