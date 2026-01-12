@@ -25,63 +25,6 @@ if TYPE_CHECKING:
 else:
     Figure = Any
 
-def render_scan(clouds: Sequence[npt.NDArray],
-                colorscale: Literal['blue_red', 'sequence'] = 'sequence',
-                interactive: bool = True,
-                title: str = 'Cloud',
-                save_dir: pathlib.Path = pathlib.Path() / 'images',
-                ) -> None:
-    """Renders a sequence of point clouds using a scan-like visualization with PyVista."""
-    try:
-        import pyvista as pv
-    except ImportError:
-        print('pyvista not installed. Please install it using pip: pip install pyvista.')
-        return
-
-    plotter = pv.Plotter(lighting='three lights',
-                         window_size=(1024, 1024),
-                         notebook=False,
-                         off_screen=not interactive)
-    plotter.camera_position = pv.CameraPosition((-1, 1, 1.5), focal_point=(0, 0, 0), viewup=(0, 0, 1))
-
-    for light_point in ((3, -3, 2), (3, 3, 2)):
-        light = pv.Light(position=light_point, focal_point=(0, 0, 0), intensity=1, positional=True)
-        plotter.add_light(light)
-
-    for i, cloud in enumerate(clouds):
-        if not len(cloud):
-            continue
-        if colorscale == 'blue_red':
-            i_norm = i / (len(clouds) - 1)
-            color = (1 - i_norm) * BLUE + i_norm * RED
-        elif colorscale == 'sequence':
-            if len(clouds) > len(COLOR_TUPLE):
-                raise ValueError('Color scale sequence too short for the number of point clouds.')
-            color = COLOR_TUPLE[i]
-        else:
-            raise ValueError('Colorscale not available.')
-
-        plotter.add_mesh(pv.PolyData(cloud[:, :3]),
-                         color=color,
-                         point_size=15,
-                         render_points_as_spheres=True,
-                         smooth_shading=True,
-                         show_edges=False)
-    # effects
-    plotter.enable_eye_dome_lighting()
-    plotter.enable_shadows()
-
-    if interactive:
-        plotter.set_background(color='white')
-        plotter.show()
-    else:
-        save_dir.mkdir(exist_ok=True)
-        save_name = save_dir / title
-        plotter.screenshot(save_name.with_suffix('.png'), window_size=(1024, 1024), transparent_background=True)
-    plotter.close()
-    return
-
-
 def render_cloud(clouds: Sequence[npt.NDArray],
                  colorscale: Literal['blue_red', 'sequence'] = 'sequence',
                  interactive: bool = True,
@@ -149,56 +92,11 @@ def render_cloud(clouds: Sequence[npt.NDArray],
         plotter.set_background(color='white')
         plotter.show()
     else:
-        save_dir.mkdir(exist_ok=True)
+        save_dir.mkdir(exist_ok=True, parents=True)
         save_name = save_dir / title
         plotter.screenshot(save_name.with_suffix('.png'), window_size=(1024, 1024), transparent_background=True)
     plotter.close()
     return
-
-
-def infer_and_visualize(model: AutoEncoder,
-                        n_clouds: Optional[int] = None,
-                        mode: Literal['recon', 'gen'] = 'recon',
-                        z_bias: Optional[torch.Tensor] = None,
-                        input_pc: Optional[torch.Tensor] = None) -> None:
-    """Performs inference with an autoencoder and visualizes the results."""
-    cfg = Experiment.get_config()
-    cfg_user = cfg.user
-    cfg_ae_arc = cfg.autoencoder.architecture
-    n_clouds = len(input_pc) if input_pc is not None else n_clouds
-    if n_clouds is None:
-        raise ValueError('Number of clouds must be provided.')
-    s = torch.randn(n_clouds, cfg_ae_arc.decoder.sample_dim, cfg_ae_arc.training_output_points, device=cfg_user.device)
-    att = torch.empty(
-        n_clouds, cfg_ae_arc.training_output_points, cfg_ae_arc.decoder.n_components, device=cfg_user.device
-    )
-    components = torch.empty(n_clouds, 3, cfg_ae_arc.training_output_points, cfg_ae_arc.decoder.n_components)
-
-    if mode == 'recon':
-        assert z_bias is None
-        assert input_pc is not None
-        with torch.inference_mode():
-            model.eval()
-            inputs = Inputs(cloud=input_pc, initial_sampling=s)
-            samples_and_loop = model(inputs)
-    elif mode == 'gen':
-        assert z_bias is not None
-        assert input_pc is None
-        samples_and_loop = model.random_sampling(n_clouds, s, att, components, z_bias)
-    else:
-        raise ValueError('Mode can only be "recon" or "gen".')
-    samples_and_loop = samples_and_loop.recon.cpu()
-    samples, *loops = samples_and_loop.split(cfg_ae_arc.training_output_points, dim=1)
-
-    def _naming_syntax(num: int, viz_name: Optional[str] = None) -> str:
-        viz_name_list = [viz_name] if viz_name is not None else []
-        return '_'.join([mode] + viz_name_list + [str(num)])
-
-    for i, sample in enumerate(samples):
-        sample_np: npt.NDArray = sample.numpy()
-        sample_name = _naming_syntax(i)
-        render_cloud((sample_np,), title=sample_name, interactive=cfg_user.plot.interactive)
-        pass
 
 
 def show_latent(mu: npt.NDArray, pseudo_mu: npt.NDArray, model_name: str) -> None:

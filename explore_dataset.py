@@ -6,17 +6,20 @@ from src.datasets import get_dataset, Partitions, PointCloudDataset
 from src.config_options import Experiment, hydra_main, ConfigAll
 from src.visualisation import render_cloud
 
-
 torch.inference_mode()
+
+
 def visualize_dataset(dataset: PointCloudDataset) -> None:
     """Visualize the first point cloud in the dataset."""
-    cfg_user = Experiment.get_config().user
+    cfg = Experiment.get_config()
+    cfg_user = cfg.user
+    save_dir = cfg.user.path.version_dir / 'images' / cfg.name
 
     for i in range(len(dataset)):
         row = dataset[i]
         input_pc = row[0].cloud
         label = row[1].label + 1
-        render_cloud([input_pc.numpy()], title=f'{label=}', interactive=cfg_user.plot.interactive)
+        render_cloud([input_pc.numpy()], title=f'{label=}', interactive=cfg_user.plot.interactive, save_dir=save_dir)
 
 
 @hydra_main

@@ -297,10 +297,10 @@ class CounterfactualWAutoEncoder(BaseWAutoEncoder):
         """Generate samples with counterfactual probabilities."""
         data = super().sample_latent(z1_bias, batch_size)
         if probs is not None and probs.numel() > 0:
-            data.probs = probs.to(self.codebook.device)
+            data.probs = probs.to(z1_bias.device)
 
         else:
-            alpha = torch.ones(self.n_classes, device=self.codebook.device)
+            alpha = torch.ones(self.n_classes, device=z1_bias.device)
             data.probs = torch.distributions.Dirichlet(concentration=alpha).sample((batch_size,))
 
         return data

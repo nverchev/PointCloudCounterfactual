@@ -16,9 +16,9 @@ def visualize_reconstructions() -> None:
     cfg = Experiment.get_config()
     cfg_ae = cfg.autoencoder
     cfg_user = cfg.user
+    save_dir = cfg.user.path.version_dir / 'images' / cfg.name
 
     test_dataset = get_dataset(Partitions.train_val if cfg.final else Partitions.val)
-
     module = CounterfactualVQVAE().eval()
     autoencoder = Model(module, name=cfg_ae.architecture.name, device=cfg_user.device)
     autoencoder.load_state()
@@ -47,8 +47,8 @@ def visualize_reconstructions() -> None:
     np_input_cloud = input_clouds.cpu().numpy()
     np_recon = data.recon.detach().cpu().numpy()
     for input_cloud, recon, i in zip(np_input_cloud, np_recon, cfg_user.plot.indices_to_reconstruct):
-        render_cloud((input_cloud,), title=f'sample_{i}', interactive=cfg_user.plot.interactive)
-        render_cloud((recon,), title=f'recon_{i}', interactive=cfg_user.plot.interactive)
+        render_cloud((input_cloud,), title=f'sample_{i}', interactive=cfg_user.plot.interactive, save_dir=save_dir)
+        render_cloud((recon,), title=f'recon_{i}', interactive=cfg_user.plot.interactive, save_dir=save_dir)
 
 
 @hydra_main

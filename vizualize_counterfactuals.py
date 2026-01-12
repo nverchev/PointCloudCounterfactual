@@ -17,8 +17,9 @@ def visualize_counterfactuals() -> None:
     cfg = Experiment.get_config()
     cfg_ae = cfg.autoencoder
     cfg_user = cfg.user
-    value = cfg_user.counterfactual_value
+    save_dir = cfg.user.path.version_dir / 'images' / cfg.name
 
+    value = cfg_user.counterfactual_value
     dgcnn_module = DGCNN().eval()
     classifier = Model(dgcnn_module, name=cfg.classifier.architecture.name, device=cfg.user.device)
     classifier.load_state()
@@ -36,7 +37,7 @@ def visualize_counterfactuals() -> None:
         indices = test_dataset[i][0].indices
         label = test_dataset[i][1].label
 
-        render_cloud((input_pc.numpy(),), title=f'sample_{i}', interactive=cfg_user.plot.interactive)
+        render_cloud((input_pc.numpy(),), title=f'sample_{i}', interactive=cfg_user.plot.interactive, save_dir=save_dir)
         input_pc = input_pc.to(model.device)
         indices = indices.to(model.device)
         with torch.inference_mode():
@@ -59,7 +60,8 @@ def visualize_counterfactuals() -> None:
         np_recon = data.recon.detach().squeeze().cpu().numpy()
         render_cloud((np_recon,),
                      title=f'reconstruction_{i}',
-                     interactive=cfg_user.plot.interactive)
+                     interactive=cfg_user.plot.interactive,
+                     save_dir=save_dir)
         recon_probs = torch.softmax(logits, dim=1).cpu().numpy()
         print(f'Reconstruction {i}: (', end='')
         for prob in recon_probs[0]:
@@ -76,7 +78,8 @@ def visualize_counterfactuals() -> None:
                 np_recon = data.recon.detach().squeeze().cpu().numpy()
                 render_cloud((np_recon,),
                              title=f'counterfactual_{i}_to_{j}',
-                             interactive=cfg_user.plot.interactive)
+                             interactive=cfg_user.plot.interactive,
+                             save_dir=save_dir)
                 np_recons.append(np_recon)
                 with torch.inference_mode():
                     probs = torch.softmax(classifier(Inputs(cloud=data.recon)), dim=1).cpu().numpy()
@@ -85,7 +88,7 @@ def visualize_counterfactuals() -> None:
                     print(f'{prob:.2f}', end=' ')
                 print(')')
 
-        render_cloud(np_recons, title=f'counterfactuals_{i}', interactive=cfg_user.plot.interactive)
+        render_cloud(np_recons, title=f'counterfactuals_{i}', interactive=cfg_user.plot.interactive, save_dir=save_dir)
 
 
 @hydra_main
