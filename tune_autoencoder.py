@@ -15,8 +15,7 @@ from drytorch.contrib.optuna import suggest_overrides, get_final_value
 from drytorch.core.exceptions import ConvergenceError
 
 from src import tuning
-from src.config_options import Experiment, ConfigPath
-from src.config_options import get_config_all
+from src.config_options import Experiment, ConfigPath, get_config_all, VERSION
 from train_autoencoder import train_autoencoder
 
 
@@ -56,9 +55,9 @@ def main(tune_cfg: DictConfig):
                                          interval_steps=tune_cfg.tune.interval_steps,
                                          n_min_trials=tune_cfg.tune.n_min_trials)
     sampler = optuna.samplers.GPSampler(warn_independent_sampling=False)
+    version = f"v{VERSION}"
     with (ConfigPath.CONFIG_ALL.get_path() / 'defaults').with_suffix('.yaml').open() as f:
         loaded_cfg = yaml.safe_load(f)
-        version = loaded_cfg['version']
         variation = loaded_cfg['variation']
 
     study_name = '_'.join([tune_cfg.tune.study_name, version, variation] + tune_cfg.overrides[1:])

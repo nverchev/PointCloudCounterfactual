@@ -9,9 +9,6 @@ n_subprocesses: 0  # number of subprocesses used for training (0 for no parallel
 checkpoint_every: 100  # save a checkpoint of the model after every n epochs
 load_checkpoint: 0  # load a checkpoint from the experiments folder, -1 indicates loading the latest checkpoint
 
-# Options for logging
-path:
-  version_folder: ${version}  # subfolder for versioning the experiments
 
 trackers:   # optional trackers for monitoring the experiment
   hydra: true  # saves a local copy of the config file

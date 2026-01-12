@@ -8,6 +8,7 @@ from collections.abc import Iterator
 from contextlib import contextmanager
 from dataclasses import field
 from typing import Optional, Self, Annotated, Callable, TypeAlias, cast
+import tomllib
 
 import hydra
 import numpy as np
@@ -27,6 +28,10 @@ PositiveFloat = Annotated[float, Field(ge=0)]
 ActClass: TypeAlias = Callable[[], torch.nn.Module]
 
 ACT: ActClass = functools.partial(torch.nn.LeakyReLU, negative_slope=0.2)
+
+with open(pathlib.Path(__file__).resolve().parent.parent / 'pyproject.toml', 'rb') as f:
+    pyproject = tomllib.load(f)
+    VERSION = pyproject['project']['version']
 
 
 class EnvSettings(BaseSettings):
@@ -573,8 +578,6 @@ class PathSpecs:
         metadata_dir (pathlib.Path): The directory for dataset metadata. Default is the path specified in the .env file
     """
     _env = EnvSettings()
-
-    version_folder: str
     root_exp_dir: pathlib.Path = _env.root_exp_dir
     data_dir: pathlib.Path = _env.dataset_dir
     metadata_dir: pathlib.Path = _env.metadata_dir
@@ -582,7 +585,7 @@ class PathSpecs:
     @property
     def version_dir(self) -> pathlib.Path:
         """The full path for the version directory."""
-        return self.root_exp_dir / self.version_folder
+        return self.root_exp_dir / f'v{VERSION}'
 
 
 @dataclass
@@ -641,7 +644,6 @@ class UserSettings:
     n_workers: PositiveInt
     n_subprocesses: PositiveInt
     generate: GenerationOptions
-    path: PathSpecs
     trackers: TrackerList
     plot: PlottingOptions
     seed: Optional[int]
@@ -649,6 +651,7 @@ class UserSettings:
     n_generated_output_points: int
     load_checkpoint: int = -1
     counterfactual_value: PositiveFloat = 1.
+    path = PathSpecs()
 
     def __post_init__(self):
         self._set_seed()
@@ -735,13 +738,13 @@ class ConfigAll:
     """
     variation: str
     final: bool
-    version: str
     classifier: ConfigTrainClassifier
     autoencoder: ConfigTrainAE
     w_autoencoder: ConfigTrainWAE
     user: UserSettings
     data: DataConfig
     tags: list[str] = field(default_factory=list)
+    version = f"v{VERSION}"
     _lens: ConfigTrain | None = None
 
     @property
