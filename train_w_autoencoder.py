@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import pathlib
-from typing import Optional, TYPE_CHECKING
+from typing import Optional, TYPE_CHECKING, Any
 
 import torch
 
@@ -12,7 +12,6 @@ from drytorch.lib.hooks import EarlyStoppingCallback
 from drytorch.utils.average import get_moving_average, get_trailing_mean
 
 
-from drytorch.contrib.optuna import TrialCallback
 from src.classifier import DGCNN
 from src.data_structures import Inputs
 from src.metrics_and_losses import get_w_encoder_loss
@@ -25,13 +24,15 @@ from src.autoencoder import CounterfactualVQVAE
 from src.parallel import DistributedWorker
 
 if TYPE_CHECKING:
-    import optuna
+    from optuna import Trial
+else:
+    Trial = Any
 
 
 def train_w_autoencoder(vqvae: CounterfactualVQVAE,
                         classifier: Model[Inputs, torch.Tensor],
                         name: str,
-                        trial: Optional[optuna.Trial] = None) -> None:
+                        trial: Trial | None = None) -> None:
     """Train the w-autoencoder."""
     cfg = Experiment.get_config()
     cfg_w_ae = cfg.w_autoencoder
@@ -71,6 +72,8 @@ def train_w_autoencoder(vqvae: CounterfactualVQVAE,
                                                                 filter_fn=get_trailing_mean(cfg_early.window),
                                                                 patience=cfg_early.patience))
     if trial is not None:
+        from drytorch.contrib.optuna import TrialCallback
+
         prune_hook = TrialCallback(trial,
                                    filter_fn=get_moving_average(),
                                    metric=loss_calc)

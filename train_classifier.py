@@ -3,14 +3,13 @@
 import pathlib
 
 import torch
-
 import torch.distributed as dist
+from torchmetrics import ConfusionMatrix
 
 from drytorch.core. exceptions import TrackerNotActiveError
 from drytorch import DataLoader, Model, Test, Trainer
 from drytorch.lib.hooks import EarlyStoppingCallback, call_every, saving_hook
 from drytorch.utils.average import get_trailing_mean
-from torchmetrics import ConfusionMatrix
 
 from src.metrics_and_losses import get_classification_loss
 from src.config_options import Experiment, ConfigAll, get_current_hydra_dir, get_trackers
@@ -83,7 +82,9 @@ def train_classifier() -> None:
     except TrackerNotActiveError:
         pass
     except (ModuleNotFoundError, ImportError):
-        pass
+        print(f"Confusion Matrix for classes {class_names}")
+        print(cf_matrix_numpy)
+        print(f"Misclassified indices: {misclassified_indices_str}")
     else:
         writer = tensorboard_tracker.writer
         if fig_cm is not None:
