@@ -18,7 +18,7 @@ from src.data_structures import Inputs
 from src.metrics_and_losses import get_w_encoder_loss
 from src.config_options import Experiment, ConfigAll, get_current_hydra_dir, get_trackers
 from src.config_options import hydra_main
-from src.datasets import get_dataset_multiprocess_safe, WDatasetWithLogits, WDatasetWithLogitsFrozen
+from src.datasets import get_dataset_multiprocess_safe, WDatasetWithLogits
 from src.learning_schema import get_learning_schema
 from src.models import ModelEpoch
 from src.autoencoder import CounterfactualVQVAE
@@ -47,8 +47,8 @@ def train_w_autoencoder(vqvae: CounterfactualVQVAE,
 
     train_dataset, test_dataset = get_dataset_multiprocess_safe()  # test is validation unless final=True
 
-    train_w_dataset = WDatasetWithLogitsFrozen(train_dataset, vqvae, classifier)
-    test_w_dataset = WDatasetWithLogitsFrozen(test_dataset, vqvae, classifier)
+    train_w_dataset = WDatasetWithLogits(train_dataset, vqvae, classifier)
+    test_w_dataset = WDatasetWithLogits(test_dataset, vqvae, classifier)
     test_loader = DataLoader(dataset=test_w_dataset, batch_size=cfg_w_ae.train.batch_size_per_device, pin_memory=False)
     loss_calc = get_w_encoder_loss()
 
