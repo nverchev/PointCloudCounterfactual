@@ -1,7 +1,7 @@
 [project]
 name = "pointcloudcounterfactual"
-version = "0.1.0"
-description = "Add your description here"
+version = "0.1.7"
+description = 'Code to replicate the article "Towards Point Cloud Counterfactual Explanations" DOI: 10.23919/EUSIPCO63237.2025.11226754'
 readme = "README.md"
 requires-python = ">=3.13"
 dependencies = [
@@ -25,6 +25,7 @@ trackers = [
     "tensorboard>=2.20.0",
     "wandb>=0.23.1",
     "sqlalchemy>=2.0.0",
+    "tqdm"
 ]
 finetuning = [
     "optuna>=4.6.0",
