@@ -2,12 +2,13 @@
 
 import torch
 
+from drytorch import Model
+
 from src.data_structures import Inputs
 from src.datasets import get_dataset, Partitions
 from src.autoencoder import CounterfactualVQVAE
 from src.config_options import Experiment, ConfigAll, hydra_main
 from src.visualisation import render_cloud
-from drytorch import Model
 
 
 torch.inference_mode()

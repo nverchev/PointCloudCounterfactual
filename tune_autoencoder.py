@@ -3,13 +3,12 @@
 from typing import Callable
 import pathlib
 
-
 import optuna
 import torch
-from omegaconf import DictConfig
-from optuna.visualization import plot_param_importances
 import hydra
 import yaml
+from omegaconf import DictConfig
+from optuna.visualization import plot_param_importances
 
 from drytorch import init_trackers
 from drytorch.contrib.optuna import suggest_overrides, get_final_value

@@ -7,14 +7,13 @@ import hydra
 import optuna
 import yaml
 import torch
+from omegaconf import DictConfig
+from optuna.visualization import plot_param_importances
 
 from drytorch import Model, init_trackers
 from drytorch.contrib.optuna import suggest_overrides, get_final_value
 from drytorch.core.register import unregister_model, register_model
 from drytorch.core.exceptions import ConvergenceError
-
-from omegaconf import DictConfig
-from optuna.visualization import plot_param_importances
 
 from src import tuning
 from src.autoencoder import CounterfactualVQVAE

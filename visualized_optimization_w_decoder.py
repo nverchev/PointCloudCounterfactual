@@ -1,11 +1,13 @@
 """Visualize the hyperparameters' optimization's results for the w-autoencoder."""
 
 import pathlib
+
 import hydra
 import optuna
 import yaml
 from omegaconf import DictConfig
 from optuna import visualization
+
 from src.config_options import ConfigPath
 
 

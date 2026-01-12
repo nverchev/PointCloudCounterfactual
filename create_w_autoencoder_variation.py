@@ -1,6 +1,7 @@
 """Create a variation of an existing experiment allowing for a different w_autoencoder architecture."""
 
 import torch
+
 from drytorch import Model
 from drytorch.lib.checkpoints import LocalCheckpoint
 

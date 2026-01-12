@@ -1,9 +1,7 @@
 """ Train the w-autoencoder."""
 
-from __future__ import annotations
-
 import pathlib
-from typing import Optional, TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any
 
 import torch
 
