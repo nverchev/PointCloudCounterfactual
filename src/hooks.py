@@ -150,5 +150,5 @@ class TensorBoardLogReconstruction:
             self.writer.add_mesh(
                 tag=f'Recon {i}',
                 vertices=recon.unsqueeze(0),
-                global_step=0,
+                global_step=model.epoch,
             )
