@@ -23,7 +23,6 @@ from src.learning_schema import get_learning_schema
 from src.models import ModelEpoch
 from src.autoencoder import CounterfactualVQVAE
 from src.parallel import DistributedWorker
-# from src.visualisation import show_latent
 
 if TYPE_CHECKING:
     import optuna

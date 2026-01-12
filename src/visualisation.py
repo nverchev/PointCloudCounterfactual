@@ -8,10 +8,6 @@ from numpy import typing as npt
 import torch
 from sklearn.decomposition import PCA  # type: ignore
 
-from src.config_options import Experiment
-from src.data_structures import Inputs
-from src.autoencoder import AutoEncoder
-
 BLUE = np.array([0.3, 0.3, 0.9])
 RED = np.array([0.9, 0.3, 0.3])
 GREEN = np.array([0.3, 0.9, 0.3])
@@ -97,27 +93,6 @@ def render_cloud(clouds: Sequence[npt.NDArray],
         plotter.screenshot(save_name.with_suffix('.png'), window_size=(1024, 1024), transparent_background=True)
     plotter.close()
     return
-
-
-def show_latent(mu: npt.NDArray, pseudo_mu: npt.NDArray, model_name: str) -> None:
-    """Visualizes latent space embeddings using Visdom."""
-    try:
-        import visdom
-    except ImportError:
-        print('visdom not installed. Please install it using pip: pip install visdom.')
-        return
-    pca = PCA(3)
-    test_mu_pca = pca.fit_transform(mu)
-    test_labels = np.ones(test_mu_pca.shape[0])
-    pseudo_mu_pca = pca.transform(pseudo_mu)
-    pseudo_labels = 2 * np.ones(pseudo_mu_pca.shape[0])
-    mu_pca = np.vstack((test_mu_pca, pseudo_mu_pca))
-    labels = np.hstack((test_labels, pseudo_labels))
-    title = 'Continuous Latent Space'
-    exp_name = Experiment.get_config().name
-    vis = visdom.Visdom(env='_'.join((exp_name, model_name)), raise_exceptions=False)
-    vis.scatter(X=mu_pca, Y=labels, win=title,
-                opts=dict(title=title, markersize=5, legend=['Validation', 'Pseudo-Inputs']))
 
 
 def plot_confusion_matrix_heatmap(cm_array: npt.NDArray,
