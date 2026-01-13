@@ -2,14 +2,15 @@
 
 import abc
 import itertools
+
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
-from src.layers import PointsConvLayer, LinearLayer
-from src.neighbour_ops import graph_filtering
-from src.config_options import Decoders, WDecoders, Experiment
+from src.config_options import ActClass, Decoders, Experiment, WDecoders
 from src.data_structures import OUT_CHAN
+from src.layers import LinearLayer, PointsConvLayer
+from src.neighbour_ops import graph_filtering
 
 
 class PriorDecoder(nn.Module):
@@ -85,20 +86,20 @@ class BaseWDecoder(nn.Module, metaclass=abc.ABCMeta):
         super().__init__()
         cfg = Experiment.get_config()
         cfg_ae = cfg.autoencoder
-        self.num_classes = cfg.data.dataset.n_classes
+        self.n_classes: int = cfg.data.dataset.n_classes
         cfg_ae_arc = cfg_ae.architecture
         cfg_w_decoder = cfg_ae_arc.decoder.w_decoder
-        self.w_dim = cfg_ae_arc.w_dim
-        self.embedding_dim = cfg_ae_arc.embedding_dim
-        self.n_codes = cfg_ae_arc.n_codes
-        self.book_size = cfg_ae_arc.book_size
-        self.z1_dim = cfg_ae_arc.z1_dim
-        self.z2_dim = cfg_ae_arc.z2_dim
-        self.proj_dim = cfg_w_decoder.proj_dim
-        self.n_heads = cfg_w_decoder.n_heads
-        self.h_dims = cfg_w_decoder.hidden_dims
-        self.dropout = cfg_w_decoder.dropout
-        self.act_cls = cfg_w_decoder.act_cls
+        self.w_dim: int = cfg_ae_arc.w_dim
+        self.embedding_dim: int = cfg_ae_arc.embedding_dim
+        self.n_codes: int = cfg_ae_arc.n_codes
+        self.book_size: int = cfg_ae_arc.book_size
+        self.z1_dim: int = cfg_ae_arc.z1_dim
+        self.z2_dim: int = cfg_ae_arc.z2_dim
+        self.proj_dim: int = cfg_w_decoder.proj_dim
+        self.n_heads: int = cfg_w_decoder.n_heads
+        self.h_dims: tuple[int, ...] = cfg_w_decoder.hidden_dims
+        self.dropout: tuple[float, ...] = cfg_w_decoder.dropout
+        self.act_cls: ActClass = cfg_w_decoder.act_cls
 
     @abc.abstractmethod
     def forward(self, z1: torch.Tensor, z2: torch.Tensor) -> torch.Tensor:
@@ -111,7 +112,7 @@ class WDecoderLinear(BaseWDecoder):
     def __init__(self) -> None:
         super().__init__()
         modules: list[nn.Module] = []
-        self.dropout = tuple([0., *self.dropout])
+        self.dropout: tuple[float, ...] = tuple([0., *self.dropout])
         expanded_w_dim = self.w_dim * self.proj_dim
         dim_pairs = itertools.pairwise([self.z1_dim + self.z2_dim, *self.h_dims, expanded_w_dim])
         for (in_dim, out_dim), do in zip(dim_pairs, self.dropout):
@@ -139,7 +140,7 @@ class WDecoderConvolution(BaseWDecoder):
         super().__init__()
         modules: list[nn.Module] = []
         total_h_dims = [h_dim * self.n_codes for h_dim in self.h_dims]
-        dim_pairs = itertools.pairwise([self.z_dim * self.n_codes, *total_h_dims])
+        dim_pairs = itertools.pairwise([(self.z1_dim + self.z2_dim) * self.n_codes, *total_h_dims])
         for (in_dim, out_dim), do in zip(dim_pairs, self.dropout):
             modules.append(PointsConvLayer(in_dim, out_dim, groups=self.n_codes, act_cls=self.act_cls))
             modules.append(nn.Dropout(do))
@@ -227,7 +228,7 @@ class BasePointDecoder(nn.Module, metaclass=abc.ABCMeta):
 
 
 class PCGen(BasePointDecoder):
-    """Map points from a fixed distribution to a point cloud in parallel. """
+    """Map points from a fixed distribution to a point cloud in parallel."""
     concat: bool = False
 
     def __init__(self) -> None:

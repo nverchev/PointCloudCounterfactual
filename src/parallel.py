@@ -1,12 +1,15 @@
 """Module where the parallelism is defined: change according to your needs."""
 
 import os
-from typing import Callable, Generic, ParamSpec, TypeVar
-import torch.multiprocessing as mp
 import socket
+
+from collections.abc import Callable
+from typing import Generic, ParamSpec, TypeVar
 
 import torch
 import torch.distributed as dist
+import torch.multiprocessing as mp
+
 
 P = ParamSpec('P')
 T = TypeVar('T')
@@ -21,23 +24,27 @@ class DistributedWorker(Generic[P, T]):
         self.port = self._get_free_port()
         return
 
-    def __call__(self, rank: int, *args: P.args) -> None:
+    def __call__(self, rank: int, *args: P.args, **kwargs: P.kwargs) -> None:
         """Run the worker in a distributed environment."""
         self._setup_distributed(rank)
         try:
-            return self.worker(*args)
+            self.worker(*args, **kwargs)
         finally:
             self._cleanup_distributed()
 
-    def spawn(self, *args: P.args) -> None:
+        return
+
+    def spawn(self, *args: P.args, **kwargs: P.kwargs) -> None:
         """Spawn the worker in multiple processes."""
-        return mp.spawn(self, args=args, nprocs=self.world_size)
+        mp.spawn(self, args=args, nprocs=self.world_size)
+        return
 
     def _setup_distributed(self, rank: int) -> None:
         os.environ['MASTER_ADDR'] = 'localhost'
         os.environ['MASTER_PORT'] = '12355'
         torch.cuda.set_device(rank)
-        acc = torch.accelerator.current_accelerator()
+        acc_or_none = torch.accelerator.current_accelerator()
+        acc = torch.device('cpu') if acc_or_none is None else acc_or_none
         backend = torch.distributed.get_default_backend_for_device(acc)
         dist.init_process_group(backend,
                                 rank=rank,

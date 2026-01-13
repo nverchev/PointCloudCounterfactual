@@ -1,16 +1,17 @@
 """Hooks for model training and optimization."""
+from typing import cast
 
 import numpy as np
 import torch
-from torch.utils import data
 import torch.distributed as dist
+
+from torch.utils import data
 
 from drytorch.core import protocols as p
 from drytorch.lib.load import take_from_dataset
 from drytorch.lib.runners import ModelRunner
-
+from src.autoencoder import AbstractVQVAE, WAutoEncoder
 from src.config_options import Experiment
-from src.autoencoder import AbstractVQVAE
 from src.data_structures import Inputs, Outputs, Targets
 
 
@@ -21,8 +22,9 @@ class DiscreteSpaceOptimizer:
     to ensure efficient utilization of the discrete latent space. Unused codebook
     entries are reassigned based on the usage patterns of active entries.
     """
+    module: AbstractVQVAE[WAutoEncoder]
 
-    def __init__(self, model_runner: ModelRunner) -> None:
+    def __init__(self, model_runner: ModelRunner[Inputs, Targets, Outputs]) -> None:
         """Initialize the optimizer.
 
         Args:
@@ -30,9 +32,9 @@ class DiscreteSpaceOptimizer:
         """
         self.model_runner = model_runner
         if isinstance(model_runner.model.module, torch.nn.parallel.DistributedDataParallel):
-            self.module = model_runner.model.module.module
+            self.module = cast(AbstractVQVAE[WAutoEncoder], model_runner.model.module.module)
         else:
-            self.module = model_runner.model.module
+            self.module = cast(AbstractVQVAE[WAutoEncoder], model_runner.model.module)
 
         if not isinstance(self.module, AbstractVQVAE):
             raise ValueError('Model not supported for VQ optimization.')
@@ -83,6 +85,8 @@ class WandbLogReconstruction:
             dataset: Dataset containing input samples to visualize.
             num_samples: Number of samples to log in each iteration.
         """
+        import wandb
+
         from drytorch.trackers.wandb import Wandb
 
         self._dataset = dataset
@@ -100,6 +104,8 @@ class WandbLogReconstruction:
         Args:
             trainer: Training protocol containing the model to evaluate.
         """
+        import wandb
+
         model = trainer.model
 
         # Get samples and generate reconstructions

@@ -1,24 +1,18 @@
 """A utility module providing various helper functions and classes for data processing and manipulation."""
 
-from typing import Any
-
 import logging
 import pathlib
 import zipfile
+
+from typing import Any, cast
+
+import h5py
 import numpy as np
 import numpy.typing as npt
+import requests
 import torch
-import requests  # type: ignore
-import h5py  # type: ignore
-from sklearn.neighbors import KDTree  # type: ignore
 
-try:
-    from requests.packages.urllib3.exceptions import InsecureRequestWarning  # type: ignore
-
-    requests.packages.urllib3.disable_warnings(InsecureRequestWarning)
-except ImportError:
-    InsecureRequestWarning = None  # type: ignore
-    pass
+from sklearn.neighbors import KDTree
 
 
 class Singleton(type):
@@ -48,18 +42,30 @@ class UsuallyFalse:
 
 def download_zip(target_folder: pathlib.Path, url: str) -> None:
     """Downloads and extracts a zip file from a URL to a target folder."""
-    # check the folder already exists
+    logging.info(f"Checking if folder exists: {target_folder}")
+
     if not target_folder.exists():
-        r = requests.get(url, verify=False)
+        logging.info(f"Folder does not exist. Starting download from: {url}")
+        r = requests.get(url)
+        logging.info(f"Download complete. Size: {len(r.content)} bytes")
         zip_path = target_folder.with_suffix('.zip')
+        logging.info(f"Saving zip file to: {zip_path}")
+
         with zip_path.open('wb') as zip_file:
             zip_file.write(r.content)
+
+        logging.info(f"Zip file saved successfully. Extracting to: {target_folder.parent}")
         with zipfile.ZipFile(zip_path) as zip_ref:
             zip_ref.extractall(target_folder.parent)
+
+        logging.info("Extraction complete")
+    else:
+        logging.info(f"Folder already exists at {target_folder}. Skipping download.")
+
     return
 
 
-def index_k_neighbours(pcs: list[npt.NDArray], k: int) -> npt.NDArray:
+def index_k_neighbours(pcs: list[npt.NDArray[Any]], k: int) -> npt.NDArray[Any]:
     """Finds the k nearest neighbors for each point in a list of point clouds."""
     indices_list = []
     for pc in pcs:
@@ -72,21 +78,28 @@ def index_k_neighbours(pcs: list[npt.NDArray], k: int) -> npt.NDArray:
 def load_h5_modelnet(path: pathlib.Path,
                      wild_str: str,
                      input_points: int,
-                     k: int) -> tuple[npt.NDArray, npt.NDArray, npt.NDArray]:
+                     k: int) -> tuple[npt.NDArray[Any], npt.NDArray[Any], npt.NDArray[Any]]:
     """Loads and processes ModelNet data from H5 files, including point clouds, indices and labels."""
-    pcd_list: list[npt.NDArray] = []
-    indices_list: list[npt.NDArray] = []
-    labels_list: list[npt.NDArray] = []
+    pcd_list: list[npt.NDArray[Any]] = []
+    indices_list: list[npt.NDArray[Any]] = []
+    labels_list: list[npt.NDArray[Any]] = []
+
     for h5_name in path.glob(wild_str):
         with h5py.File(h5_name, 'r+') as f:
             logging.info('Load: %s', h5_name)
-            # Dataset is already normalized
-            pcs = f['data'][:].astype('float32')
+
+            # Use cast to resolve Dataset ambiguity
+            pcs_ds = cast(h5py.Dataset, f['data'])
+            pcs = pcs_ds[:].astype('float32')
             pcs = pcs[:, :input_points, :]
-            label = f['label'][:].astype('int64')
+
+            label_ds = cast(h5py.Dataset, f['label'])
+            label = label_ds[:].astype('int64')
+
             index_k = f'index_{k}'
-            if index_k in f.keys():
-                index = f[index_k][:].astype(np.short)
+            if index_k in f:
+                idx_ds = cast(h5py.Dataset, f[index_k])
+                index = idx_ds[:].astype(np.short)
             else:
                 index = index_k_neighbours(pcs, k).astype(np.short)
                 f.create_dataset(index_k, data=index)
@@ -94,6 +107,7 @@ def load_h5_modelnet(path: pathlib.Path,
         pcd_list.append(pcs)
         indices_list.append(index)
         labels_list.append(label)
+
     pcd = np.concatenate(pcd_list, axis=0)
     indices = np.concatenate(indices_list, axis=0)
     labels = np.concatenate(labels_list, axis=0)

@@ -2,7 +2,6 @@ from typing import Any
 
 import torch
 
-
 def ApproxMatch(tensor1: torch.Tensor,
                 tensor2: torch.Tensor) -> tuple[torch.Tensor, Any]:
     ...

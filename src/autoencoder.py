@@ -1,19 +1,21 @@
 """Autoencoder architecture."""
 
 import abc
-from typing import Generic, Optional, TypeVar, Any, Generator, Callable
+
+from collections.abc import Callable, Generator
+from typing import Any, Generic, TypeVar
 
 import numpy as np
 import torch
 import torch.nn as nn
 
-from src.data_structures import Inputs, Outputs, WInputs
-from src.encoders import get_encoder, get_w_encoder
-from src.decoders import PriorDecoder, PosteriorDecoder, get_decoder, get_w_decoder
-from src.neighbour_ops import pykeops_square_distance
-from src.layers import TransferGrad, TemperatureScaledSoftmax, frozen_forward
-from src.utils import UsuallyFalse
 from src.config_options import Experiment, ModelHead
+from src.data_structures import Inputs, Outputs, WInputs
+from src.decoders import PosteriorDecoder, PriorDecoder, get_decoder, get_w_decoder
+from src.encoders import get_encoder, get_w_encoder
+from src.layers import TemperatureScaledSoftmax, TransferGrad, reset_child_params
+from src.neighbour_ops import pykeops_square_distance
+from src.utils import UsuallyFalse
 
 
 class GaussianSampler:
@@ -71,7 +73,7 @@ class PseudoInputManager:
         self.updated = True
         return
 
-    def get_combined_input(self, x: Optional[torch.Tensor], dim_codes: int, embedding_dim: int) -> torch.Tensor:
+    def get_combined_input(self, x: torch.Tensor | None, dim_codes: int, embedding_dim: int) -> torch.Tensor:
         """Combine input with pseudo inputs."""
         if x is None:
             return self.pseudo_inputs
@@ -99,6 +101,7 @@ class BaseWAutoEncoder(nn.Module, abc.ABC):
         self.decoder = get_w_decoder()
         self.sampler = GaussianSampler()
         self.distance_calc = DistanceCalculator()
+        self._codebook: torch.Tensor | None = None
 
         if self.cfg_ae_arc.n_pseudo_inputs > 0:
             self.pseudo_manager: PseudoInputManager | None = PseudoInputManager(
@@ -128,7 +131,7 @@ class BaseWAutoEncoder(nn.Module, abc.ABC):
         return self.decode(data)
 
     @abc.abstractmethod
-    def encode(self, x: Optional[torch.Tensor]) -> Outputs:
+    def encode(self, x: torch.Tensor | None) -> Outputs:
         """Encode input to latent space."""
         pass
 
@@ -155,7 +158,7 @@ class BaseWAutoEncoder(nn.Module, abc.ABC):
         data.z1 = z1 + z1_bias
         return data
 
-    def _get_input(self, x: Optional[torch.Tensor]) -> torch.Tensor:
+    def _get_input(self, x: torch.Tensor | None) -> torch.Tensor:
         """Get input tensor, combining with pseudo inputs if available."""
         if self.pseudo_manager is None:
             return x if x is not None else torch.empty(0)
@@ -167,10 +170,8 @@ class BaseWAutoEncoder(nn.Module, abc.ABC):
         if self.pseudo_manager:
             self.pseudo_manager.initialize_parameters()
 
-        for module in self.modules():
-            if hasattr(module, 'reset_parameters') and module is not self.codebook:
-                module.reset_parameters()
-
+        reset_child_params(self)
+        return
 
 class WAutoEncoder(BaseWAutoEncoder):
     """W autoencoder implementation."""
@@ -180,7 +181,7 @@ class WAutoEncoder(BaseWAutoEncoder):
         cfg = Experiment.get_config()
         self.n_classes = cfg.data.dataset.n_classes
 
-    def encode(self, x: Optional[torch.Tensor]) -> Outputs:
+    def encode(self, x: torch.Tensor | None) -> Outputs:
         """Encode with adversarial features."""
         input_tensor = self._get_input(x)
         _, latent = self.encoder(input_tensor)
@@ -197,7 +198,7 @@ class WAutoEncoder(BaseWAutoEncoder):
     def decode(self, data: Outputs) -> Outputs:
         """Decode with counterfactual generation."""
         data.z1 = self.sampler.sample(data.mu1, data.log_var1)
-        data.z2 = torch.randn((data.z1.shape[0], self.cfg_ae_arc.z2_dim))  # z2_dim should probably be equal 0 here
+        data.z2 = torch.zeros((data.z1.shape[0], self.cfg_ae_arc.z2_dim))
         data.w_recon = self.decoder(data.z1, data.z2)
         data.w_dist_2, data.idx = self.distance_calc.compute_distances(
             data.w_recon, self.codebook, self.dim_codes, self.embedding_dim
@@ -224,7 +225,7 @@ class CounterfactualWAutoEncoder(BaseWAutoEncoder):
 
         return
 
-    def encode(self, x: Optional[torch.Tensor]) -> Outputs:
+    def encode(self, x: torch.Tensor | None) -> Outputs:
         """Encode with adversarial features."""
         input_tensor = self._get_input(x)
         features, latent = self.encoder(input_tensor)
@@ -246,7 +247,7 @@ class CounterfactualWAutoEncoder(BaseWAutoEncoder):
         data.z1 = self.sampler.sample(data.mu1, data.log_var1)
         return data
 
-    def decode(self, data: Outputs, logits: Optional[torch.Tensor] = None) -> Outputs:
+    def decode(self, data: Outputs, logits: torch.Tensor | None = None) -> Outputs:
         """Decode with counterfactual generation."""
         probs = self._get_probabilities(data, logits)
         data.p_mu2, data.p_log_var2 = self.z2_inference(probs).chunk(2, 2)
@@ -257,7 +258,7 @@ class CounterfactualWAutoEncoder(BaseWAutoEncoder):
         )
         return data
 
-    def _get_probabilities(self, data: Outputs, logits: Optional[torch.Tensor]) -> torch.Tensor:
+    def _get_probabilities(self, data: Outputs, logits: torch.Tensor | None) -> torch.Tensor:
         """Get probabilities from logits or stored probs."""
         if logits is not None:
             return self.relaxed_softmax(logits)
@@ -292,7 +293,7 @@ class CounterfactualWAutoEncoder(BaseWAutoEncoder):
     def sample_latent(self,
                       z1_bias: torch.Tensor,
                       batch_size: int = 1,
-                      probs: Optional[torch.Tensor] = None,
+                      probs: torch.Tensor | None = None,
                       ) -> Outputs:
         """Generate samples with counterfactual probabilities."""
         data = super().sample_latent(z1_bias, batch_size)
@@ -329,11 +330,10 @@ class AutoEncoder(nn.Module, abc.ABC):
         """Forward pass."""
         pass
 
-    def recursive_reset_parameters(self):
+    def recursive_reset_parameters(self) -> None:
         """Reset all parameters."""
-        for module in self.modules():
-            if hasattr(module, 'reset_parameters'):
-                module.reset_parameters()
+        reset_child_params(self)
+        return
 
 
 class Oracle(AutoEncoder):
@@ -502,10 +502,9 @@ class CounterfactualVQVAE(AbstractVQVAE[CounterfactualWAutoEncoder]):
                  batch_size: int = 1,
                  initial_sampling: torch.Tensor = torch.empty(0),
                  z1_bias: torch.Tensor = torch.tensor(0),
-                 probs: Optional[torch.Tensor] = None,
+                 probs: torch.Tensor | None = None,
                  **kwargs: Any) -> Outputs:
         """Generate counterfactual samples."""
-
         return super().generate(
             batch_size=batch_size,
             initial_sampling=initial_sampling,

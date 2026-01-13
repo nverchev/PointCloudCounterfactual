@@ -2,9 +2,10 @@
 
 import torch
 
-from src.datasets import get_dataset, Partitions, PointCloudDataset
-from src.config_options import Experiment, hydra_main, ConfigAll
+from src.config_options import ConfigAll, Experiment, hydra_main
+from src.datasets import Partitions, PointCloudDataset, get_dataset
 from src.visualisation import render_cloud
+
 
 @torch.inference_mode()
 def visualize_dataset(dataset: PointCloudDataset) -> None:

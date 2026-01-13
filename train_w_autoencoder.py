@@ -1,6 +1,7 @@
-""" Train the w-autoencoder."""
+"""Train the w-autoencoder."""
 
 import pathlib
+
 from typing import TYPE_CHECKING, Any
 
 import torch
@@ -8,18 +9,16 @@ import torch
 from drytorch import DataLoader, Model, Test, Trainer
 from drytorch.lib.hooks import EarlyStoppingCallback
 from drytorch.utils.average import get_moving_average, get_trailing_mean
-
-
-from src.classifier import DGCNN
-from src.data_structures import Inputs
-from src.metrics_and_losses import get_w_encoder_loss
-from src.config_options import Experiment, ConfigAll, get_current_hydra_dir, get_trackers
-from src.config_options import hydra_main
-from src.datasets import get_dataset_multiprocess_safe, WDatasetWithLogits
-from src.learning_schema import get_learning_schema
-from src.models import ModelEpoch
 from src.autoencoder import CounterfactualVQVAE
+from src.classifier import DGCNN
+from src.config_options import ConfigAll, Experiment, get_current_hydra_dir, get_trackers, hydra_main
+from src.data_structures import Inputs
+from src.datasets import WDatasetWithLogits, get_dataset_multiprocess_safe
+from src.learning_schema import get_learning_schema
+from src.metrics_and_losses import get_w_encoder_loss
+from src.models import ModelEpoch
 from src.parallel import DistributedWorker
+
 
 if TYPE_CHECKING:
     from optuna import Trial

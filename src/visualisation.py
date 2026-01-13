@@ -1,12 +1,15 @@
 """A module for visualizing point clouds and latent spaces using PyVista and Visdom."""
 
 import pathlib
-from typing import Literal, Optional, Sequence, TYPE_CHECKING, Any
+
+from collections.abc import Sequence
+from typing import TYPE_CHECKING, Any, Literal, cast
 
 import numpy as np
-from numpy import typing as npt
 import torch
-from sklearn.decomposition import PCA  # type: ignore
+
+from numpy import typing as npt
+
 
 BLUE = np.array([0.3, 0.3, 0.9])
 RED = np.array([0.9, 0.3, 0.3])
@@ -21,10 +24,10 @@ if TYPE_CHECKING:
 else:
     Figure = Any
 
-def render_cloud(clouds: Sequence[npt.NDArray],
+def render_cloud(clouds: Sequence[npt.NDArray[Any]],
                  colorscale: Literal['blue_red', 'sequence'] = 'sequence',
                  interactive: bool = True,
-                 arrows: Optional[torch.Tensor] = None,
+                 arrows: torch.Tensor | None = None,
                  title: str = 'Cloud',
                  save_dir: pathlib.Path = pathlib.Path() / 'images',
                  ) -> None:
@@ -36,7 +39,7 @@ def render_cloud(clouds: Sequence[npt.NDArray],
         return
 
     plotter = pv.Plotter(lighting='three lights',
-                         window_size=(1024, 1024),
+                         window_size=[1024, 1024],
                          notebook=False,
                          off_screen=not interactive)
     plotter.camera_position = pv.CameraPosition((-3, 1, -2.5), focal_point=(0, 0, 0), viewup=(0, 1, 0))
@@ -60,7 +63,7 @@ def render_cloud(clouds: Sequence[npt.NDArray],
         cloud_pv = pv.PolyData(cloud[:, :3])
         geom = pv.Sphere(theta_resolution=8, phi_resolution=8)
         cloud_pv["radius"] = .01 * np.ones(n)
-        glyphs = cloud_pv.glyph(scale='radius', geom=geom, orient=False)
+        glyphs = cast(pv.PolyData, cloud_pv.glyph(scale='radius', geom=geom, orient=False))
         plotter.add_mesh(glyphs,
                          color=color,
                          point_size=15,
@@ -73,7 +76,7 @@ def render_cloud(clouds: Sequence[npt.NDArray],
             geom = pv.Arrow(shaft_radius=.1, tip_radius=.2, scale=1)
             cloud_pv["vectors"] = arrows[:, [0, 2, 1]].numpy()
             cloud_pv.set_active_vectors("vectors")
-            arrows_glyph = cloud_pv.glyph(orient="vectors", geom=geom)
+            arrows_glyph = cast(pv.MultiBlock, cloud_pv.glyph(orient="vectors", geom=geom))
             plotter.add_mesh(arrows_glyph,
                              lighting=True,
                              line_width=10,
@@ -81,11 +84,11 @@ def render_cloud(clouds: Sequence[npt.NDArray],
                              show_scalar_bar=False,
                              edge_color=RED)
     # effects
-    plotter.enable_eye_dome_lighting()
-    plotter.enable_shadows()
+    pv.Plotter.enable_eye_dome_lighting(plotter)  # call unbound because of a type inference bug
+    pv.Plotter.enable_shadows(plotter)  # call unbound because of a type inference bug
 
     if interactive:
-        plotter.set_background(color='white')
+        pv.Plotter.set_background(plotter, color='white')  # call unbound because of a type inference bug
         plotter.show()
     else:
         save_dir.mkdir(exist_ok=True, parents=True)
@@ -95,13 +98,14 @@ def render_cloud(clouds: Sequence[npt.NDArray],
     return
 
 
-def plot_confusion_matrix_heatmap(cm_array: npt.NDArray,
+def plot_confusion_matrix_heatmap(cm_array: npt.NDArray[Any],
                                   class_names: list[str],
                                   title: str = 'Confusion Matrix',
                                   dpi: int = 300) -> Figure | None:
     """Plots the confusion matrix as a heatmap using Matplotlib and Seaborn."""
     try:
         import seaborn as sns
+
         from matplotlib import pyplot as plt
     except ImportError:
         return None

@@ -1,5 +1,8 @@
-from setuptools import setup #type: ignore
+"""Setup script for the EMD extension."""
+
+from setuptools import setup
 from torch.utils.cpp_extension import BuildExtension, CUDAExtension
+
 
 setup(
     name='emd',

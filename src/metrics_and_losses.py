@@ -4,17 +4,18 @@ import math
 
 import numpy as np
 import torch
-from torch import nn
 import torch.nn.functional as F
-from drytorch.lib.objectives import Metric, Loss, LossBase
+
 
 # from emd import emdModule
 from structural_losses import match_cost
+from torch import nn
 from torcheval.metrics.functional import multiclass_accuracy, multiclass_f1_score
 
-from src.neighbour_ops import pykeops_square_distance, torch_square_distance
+from drytorch.lib.objectives import Loss, LossBase, Metric
+from src.config_options import Experiment, ModelHead, ReconLosses
 from src.data_structures import Outputs, Targets, WTargets
-from src.config_options import ReconLosses, ModelHead, Experiment
+from src.neighbour_ops import pykeops_square_distance, torch_square_distance
 
 
 def pykeops_chamfer(t1: torch.Tensor, t2: torch.Tensor) -> torch.Tensor:
@@ -26,7 +27,8 @@ def pykeops_chamfer(t1: torch.Tensor, t2: torch.Tensor) -> torch.Tensor:
                     return (dist.min(axis = 2) + dist.min(axis = 1)).sum(axis=(1, 2)
         ```
 
-    We use the retrieved index on torch """
+    We use the retrieved index on torch
+    """
     dist = pykeops_square_distance(t1, t2)
     idx1 = dist.argmin(axis=1).expand(-1, -1, t1.shape[2])
     m1 = t1.gather(1, idx1)
@@ -58,9 +60,6 @@ def get_emd_loss() -> LossBase[Outputs, Targets]:
 
 def get_chamfer_loss() -> LossBase[Outputs, Targets]:
     """Calculate Chamfer distance between two point clouds using PyTorch backend."""
-    cfg_user = Experiment.get_config().user
-    device = cfg_user.device
-
     chamfer_backend = pykeops_chamfer if torch.cuda.is_available() else torch_chamfer
 
     def _chamfer(data: Outputs, targets: Targets) -> torch.Tensor:

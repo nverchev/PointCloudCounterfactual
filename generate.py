@@ -3,10 +3,10 @@
 import torch
 
 from drytorch import Model
-
 from src.autoencoder import CounterfactualVQVAE
-from src.config_options import Experiment, hydra_main, ConfigAll
+from src.config_options import ConfigAll, Experiment, hydra_main
 from src.visualisation import render_cloud
+
 
 torch.inference_mode()
 def generate_random_samples() -> None:
@@ -22,7 +22,7 @@ def generate_random_samples() -> None:
     model = Model(module, name=cfg_ae.architecture.name, device=cfg_user.device)
     model.load_state()
     if module.w_autoencoder.pseudo_manager is not None:
-        module.w_autoencoder.pseudo_manager.update_pseudo_latent()
+        module.w_autoencoder.pseudo_manager.update_pseudo_latent(module.w_autoencoder.encode)
 
     z1_bias = torch.zeros(cfg_generate.batch_size,
                           cfg_ae.architecture.n_codes,

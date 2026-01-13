@@ -1,17 +1,16 @@
 """EMD approximation module (based on auction algorithm)"""
 
 # memory complexity: O(n)
-# time complexity: O(n^2 * iter) 
+# time complexity: O(n^2 * iter)
 # author: Minghua Liu
 
-import time
 from typing import Any, cast, override
 
-import numpy as np
+import emd_backend
 import torch
+
 from torch import nn
 from torch.autograd import Function
-from emd import emd_backend
 
 
 class emdFunction(Function):
@@ -70,8 +69,7 @@ class emdModule(nn.Module):
 
     @override
     def forward(self, input1: torch.Tensor, input2: torch.Tensor, eps: float, iters: int) -> torch.Tensor:
-        """
-        Compute the earth mover's distance (EMD) between two point clouds normalized to [0, 1] and of the same size.
+        """Compute the earth mover's distance (EMD) between two point clouds normalized to [0, 1] and of the same size.
 
         Args:
             input1: predicted point cloud [#batch, #points, 3] | #batch <= 512 an #points is a multiple of 1024
@@ -84,22 +82,3 @@ class emdModule(nn.Module):
             assignment: [#batch, #points] index of the matched point in the ground truth point cloud
         """
         return cast(torch.Tensor, emdFunction.apply(input1, input2, eps, iters))
-
-
-def test_emd() -> None:
-    x1 = torch.rand(20, 8192, 3).cuda()
-    x2 = torch.rand(20, 8192, 3).cuda()
-    emd = emdModule()
-    start_time = time.perf_counter()
-    dis, assignment = emd(x1, x2, 0.05, 3000)
-    print("Input_size: ", x1.shape)
-    print("Runtime: %lfs" % (time.perf_counter() - start_time))
-    print("EMD: %lf" % np.sqrt(dis.cpu()).mean())
-    print("|set(assignment)|: %d" % assignment.unique().numel())
-    assignment = assignment.cpu().numpy()
-    assignment = np.expand_dims(assignment, -1)
-    x2_numpy = np.take_along_axis(x2.cpu().numpy(), assignment, axis=1)
-    d = (x1 - x2_numpy) * (x1 - x2_numpy)
-    print("Verified EMD: %lf" % np.sqrt(d.cpu().sum(-1)).mean())
-
-# test_emd()

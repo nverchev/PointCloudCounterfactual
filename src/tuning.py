@@ -1,8 +1,8 @@
 """Utilities for hyperparameter tuning."""
 
 import numpy as np
-
 import optuna
+
 
 def get_past_final_values(trial: optuna.Trial) -> list[float]:
     """Get final value from completed trials."""

@@ -1,5 +1,7 @@
 from typing import Any
+
 from torch.autograd import Function
+
 from structural_losses.structural_losses_backend import NNDistance, NNDistanceGrad
 
 
@@ -8,8 +10,7 @@ class NNDistanceFunction(Function):
     # Note that both forward and backward are static methods
     @staticmethod
     def forward(ctx: Any, *args: Any, **kwargs: Any) -> Any:
-        """
-        input:
+        """input:
             set1 : batch_size * #dataset_points * 3
             set2 : batch_size * #query_points * 3
         returns:

@@ -1,21 +1,21 @@
 """Train the outer encoder to learn a discrete representation."""
 
 import pathlib
+
 from typing import TYPE_CHECKING, Any
 
 from drytorch import DataLoader, Diagnostic, Model, Test, Trainer
 from drytorch.core.exceptions import TrackerNotActiveError
-from drytorch.lib.hooks import Hook, EarlyStoppingCallback, StaticHook, call_every, saving_hook
+from drytorch.lib.hooks import EarlyStoppingCallback, Hook, StaticHook, call_every, saving_hook
 from drytorch.utils.average import get_moving_average, get_trailing_mean
-
-from src.metrics_and_losses import get_autoencoder_loss, get_recon_loss, get_emd_loss
-from src.config_options import Experiment, ConfigAll, get_current_hydra_dir, get_trackers
-from src.config_options import hydra_main
+from src.autoencoder import AbstractVQVAE, get_autoencoder
+from src.config_options import ConfigAll, Experiment, get_current_hydra_dir, get_trackers, hydra_main
 from src.datasets import get_dataset_multiprocess_safe
 from src.hooks import DiscreteSpaceOptimizer
 from src.learning_schema import get_learning_schema
-from src.autoencoder import get_autoencoder, AbstractVQVAE
+from src.metrics_and_losses import get_autoencoder_loss, get_emd_loss, get_recon_loss
 from src.parallel import DistributedWorker
+
 
 if TYPE_CHECKING:
     from optuna import Trial

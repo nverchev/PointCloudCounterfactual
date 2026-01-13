@@ -5,13 +5,14 @@ import pathlib
 import hydra
 import optuna
 import yaml
+
 from omegaconf import DictConfig
 from optuna import visualization
 
-from src.config_options import ConfigPath, VERSION
+from src.config_options import VERSION, ConfigPath
 
 
-@hydra.main(version_base=None, config_path=ConfigPath.TUNE_W_AUTOENCODER.absolute(), config_name='defaults')
+@hydra.main(version_base=None, config_path=ConfigPath.TUNE_AUTOENCODER.absolute(), config_name='defaults')
 def tune(tune_cfg: DictConfig):
     """Set up the study and launch the optimization."""
     pathlib.Path(tune_cfg.db_location).mkdir(exist_ok=True)

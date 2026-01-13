@@ -1,24 +1,25 @@
 """Tune the hyperparameters of the w-autoencoder."""
 
 import pathlib
-from typing import Callable
+
+from collections.abc import Callable
 
 import hydra
 import optuna
-import yaml
 import torch
+import yaml
+
 from omegaconf import DictConfig
 from optuna.visualization import plot_param_importances
 
 from drytorch import Model, init_trackers
-from drytorch.contrib.optuna import suggest_overrides, get_final_value
-from drytorch.core.register import unregister_model, register_model
+from drytorch.contrib.optuna import get_final_value, suggest_overrides
 from drytorch.core.exceptions import ConvergenceError
-
+from drytorch.core.register import register_model, unregister_model
 from src import tuning
 from src.autoencoder import CounterfactualVQVAE
 from src.classifier import DGCNN
-from src.config_options import Experiment, ConfigPath, get_config_all, VERSION
+from src.config_options import VERSION, ConfigPath, Experiment, get_config_all
 from train_w_autoencoder import train_w_autoencoder
 
 

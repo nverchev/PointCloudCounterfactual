@@ -1,5 +1,6 @@
 from setuptools import setup  # type: ignore
-from torch.utils.cpp_extension import CUDAExtension, BuildExtension
+from torch.utils.cpp_extension import BuildExtension, CUDAExtension
+
 
 # Python interface
 setup(

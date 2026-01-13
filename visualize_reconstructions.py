@@ -1,13 +1,13 @@
 """Visualize reconstructions of the autoencoder."""
+from collections.abc import Sized
 
 import torch
 
 from drytorch import Model
-
-from src.data_structures import Inputs
-from src.datasets import get_dataset, Partitions
 from src.autoencoder import CounterfactualVQVAE
-from src.config_options import Experiment, ConfigAll, hydra_main
+from src.config_options import ConfigAll, Experiment, hydra_main
+from src.data_structures import Inputs
+from src.datasets import Partitions, get_dataset
 from src.visualisation import render_cloud
 
 
@@ -20,14 +20,17 @@ def visualize_reconstructions() -> None:
     save_dir = cfg.user.path.version_dir / 'images' / cfg.name
 
     test_dataset = get_dataset(Partitions.train_val if cfg.final else Partitions.val)
-    module = CounterfactualVQVAE().eval()
-    autoencoder = Model(module, name=cfg_ae.architecture.name, device=cfg_user.device)
+    vqvae_module = CounterfactualVQVAE().eval()
+    autoencoder = Model(vqvae_module, name=cfg_ae.architecture.name, device=cfg_user.device)
     autoencoder.load_state()
     extracted_clouds = list[torch.Tensor]()
     extracted_indices = list[torch.Tensor]()
 
     for i in cfg_user.plot.indices_to_reconstruct:
-        assert i < len(test_dataset), f'Index {i} is too large for the selected dataset of length {len(test_dataset)}'
+        assert isinstance(test_dataset, Sized)
+        if i < len(test_dataset):
+            raise ValueError(f'Index {i} is too large for the selected dataset of length {len(test_dataset)}')
+
         # inference mode prevents random augmentation
         with torch.inference_mode():
             input_pc = test_dataset[i][0].cloud
@@ -41,10 +44,10 @@ def visualize_reconstructions() -> None:
     batch = Inputs(cloud=input_clouds, indices=input_indices)
 
     if cfg.user.plot.double_encoding:
-        with autoencoder.module.double_encoding:
-            data = module(batch)
+        with vqvae_module.double_encoding:
+            data = vqvae_module(batch)
     else:
-        data = module(batch)
+        data = vqvae_module(batch)
     np_input_cloud = input_clouds.cpu().numpy()
     np_recon = data.recon.detach().cpu().numpy()
     for input_cloud, recon, i in zip(np_input_cloud, np_recon, cfg_user.plot.indices_to_reconstruct):

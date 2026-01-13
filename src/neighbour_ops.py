@@ -1,8 +1,10 @@
 """Module providing point cloud operations for nearest neighbor computations and graph feature extraction."""
 
-import torch
 import pykeops  # type: ignore
+import torch
+
 from pykeops.torch import LazyTensor  # type: ignore
+
 
 pykeops.set_verbose(False)
 
@@ -17,9 +19,9 @@ def square_distance(t1: torch.Tensor, t2: torch.Tensor) -> torch.Tensor | LazyTe
 
 def pykeops_square_distance(t1: torch.Tensor, t2: torch.Tensor) -> LazyTensor:
     """Compute the squared distance between two point clouds using PyKeOps backend."""
-    t1 = LazyTensor(t1[:, :, None, :])
-    t2 = LazyTensor(t2[:, None, :, :])
-    dist = ((t1 - t2) ** 2).sum(-1)
+    t1_lazy = LazyTensor(t1[:, :, None, :])
+    t2_lazy = LazyTensor(t2[:, None, :, :])
+    dist = ((t1_lazy - t2_lazy) ** 2).sum(-1)
     return dist
 
 

@@ -1,9 +1,9 @@
 """Module for learning scheme configuration."""
 
-from drytorch.lib import schedulers, gradient_ops
 from drytorch import LearningSchema
 from drytorch.core import protocols as p
-from src.config_options import Schedulers, SchedulerConfig, Experiment, LearningConfig, GradOp, ClipCriterion
+from drytorch.lib import gradient_ops, schedulers
+from src.config_options import ClipCriterion, Experiment, GradOp, LearningConfig, SchedulerConfig, Schedulers
 
 
 def get_scheduler(config: SchedulerConfig) -> schedulers.AbstractScheduler:
@@ -14,6 +14,8 @@ def get_scheduler(config: SchedulerConfig) -> schedulers.AbstractScheduler:
         scheduler = schedulers.CosineScheduler(**config.settings)
     elif config.function == Schedulers.Exponential:
         scheduler = schedulers.ExponentialScheduler(**config.settings)
+    else:
+        raise ValueError(f'Scheduler {config.function} not supported.')
 
     scheduler = scheduler.bind(schedulers.restart(
         restart_interval=config.restart_interval, restart_fraction=config.restart_fraction)

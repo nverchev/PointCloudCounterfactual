@@ -6,10 +6,10 @@ import itertools
 import torch
 import torch.nn as nn
 
-from src.layers import PointsConvLayer, LinearLayer, EdgeConvLayer
-from src.neighbour_ops import get_graph_features, graph_max_pooling
-from src.config_options import Experiment, Encoders, WEncoders
+from src.config_options import Encoders, Experiment, WEncoders
 from src.data_structures import IN_CHAN
+from src.layers import EdgeConvLayer, LinearLayer, PointsConvLayer
+from src.neighbour_ops import get_graph_features, graph_max_pooling
 
 
 class BaseWEncoder(nn.Module, metaclass=abc.ABCMeta):

@@ -1,15 +1,18 @@
 """Visualize counterfactuals."""
+from collections.abc import Sized
+from typing import Any
 
 import numpy.typing as npt
 import torch
 
-from src.classifier import DGCNN
-from src.data_structures import Inputs
-from src.datasets import get_dataset, Partitions
-from src.autoencoder import CounterfactualVQVAE
-from src.config_options import Experiment, ConfigAll, hydra_main
-from src.visualisation import render_cloud
 from drytorch import Model
+from src.autoencoder import CounterfactualVQVAE
+from src.classifier import DGCNN
+from src.config_options import ConfigAll, Experiment, hydra_main
+from src.data_structures import Inputs
+from src.datasets import Partitions, get_dataset
+from src.visualisation import render_cloud
+
 
 torch.inference_mode()
 def visualize_counterfactuals() -> None:
@@ -32,7 +35,10 @@ def visualize_counterfactuals() -> None:
     model.load_state()
 
     for i in cfg_user.plot.indices_to_reconstruct:
-        assert i < len(test_dataset), 'Index is too large for the selected dataset'
+        assert isinstance(test_dataset, Sized)
+        if i < len(test_dataset):
+            raise ValueError(f'Index {i} is too large for the selected dataset of length {len(test_dataset)}')
+
         input_pc = test_dataset[i][0].cloud
         indices = test_dataset[i][0].indices
         label = test_dataset[i][1].label
@@ -66,11 +72,12 @@ def visualize_counterfactuals() -> None:
         print(f'Reconstruction {i}: (', end='')
         for prob in recon_probs[0]:
             print(f'{prob:.2f}', end=' ')
+
         print(')')
 
-        np_recons = list[npt.NDArray]()
+        np_recons = list[npt.NDArray[Any]]()
         for j in range(num_classes):
-            with model.module.double_encoding:
+            with vqvae_module.double_encoding:
                 target = torch.zeros_like(relaxed_probs)
                 target[:, j] = 1
                 data.probs = (1 - value) * relaxed_probs + value * target
@@ -83,6 +90,7 @@ def visualize_counterfactuals() -> None:
                 np_recons.append(np_recon)
                 with torch.inference_mode():
                     probs = torch.softmax(classifier(Inputs(cloud=data.recon)), dim=1).cpu().numpy()
+
                 print(f'Counterfactual {i} to {j}: (', end='')
                 for prob in probs[0]:
                     print(f'{prob:.2f}', end=' ')

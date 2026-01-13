@@ -1,17 +1,18 @@
 """Classes containing data samples and outputs."""
 
 import dataclasses
+
 from typing import NamedTuple, Self
 
 import torch
+
 
 IN_CHAN = 3
 OUT_CHAN = 3
 
 
 class Inputs(NamedTuple):
-    """
-    Input for the outer autoencoder.
+    """Input for the outer autoencoder.
 
     Attributes:
         cloud: the input cloud.
@@ -24,8 +25,7 @@ class Inputs(NamedTuple):
 
 
 class Targets(NamedTuple):
-    """
-    Targets for the outer autoencoder.
+    """Targets for the outer autoencoder.
 
     Attributes:
         ref_cloud: the reference cloud for reconstruction.
@@ -39,8 +39,7 @@ class Targets(NamedTuple):
 
 @dataclasses.dataclass(init=False, slots=True)
 class Outputs:
-    """
-    Outputs of the inner and outer autoencoder.
+    """Outputs of the inner and outer autoencoder.
 
     Attributes:
         model_epoch: the epoch of the model (used for annealing in some losses)
@@ -124,8 +123,7 @@ class Outputs:
 
 
 class WInputs(NamedTuple):
-    """
-    Targets for training the inner autoencoder.
+    """Targets for training the inner autoencoder.
 
     Attributes:
         w_q: outer encoder approximation of the discrete encodings' embedding.
@@ -136,8 +134,7 @@ class WInputs(NamedTuple):
 
 
 class WTargets(NamedTuple):
-    """
-    Targets for training the inner autoencoder.
+    """Targets for training the inner autoencoder.
 
     Attributes:
         w_e: the discrete encodings' embedding vectorized.

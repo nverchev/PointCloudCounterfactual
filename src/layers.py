@@ -1,50 +1,36 @@
 """This module contains classes for various layers in the neural network."""
 
 import abc
-import sys
 import functools
-from typing import Any, Callable, TypeAlias, Optional
+import pdb
+import sys
+
+from collections.abc import Callable
+from typing import Any, Protocol, TypeAlias, cast, override, runtime_checkable
 
 import torch
 import torch.nn as nn
+
 from torch import Tensor
 from torch.autograd import Function
 
-debug_mode = sys.gettrace()
-if debug_mode:
-    import pdb
+
+DEBUG_MODE = sys.gettrace()
 
 _grad_t: TypeAlias = tuple[torch.Tensor, ...] | torch.Tensor
 ActClass: TypeAlias = Callable[[], nn.Module]
 
 
-def debug_check(_not_used1: nn.Module, _not_used2: _grad_t, tensor_out: _grad_t) -> None:
-    """
-    This function is used for debugging purposes during the training process. It checks for NaN and Inf values in the
-    output tensor of a neural network layer. If such values are found, it triggers a debugger for further inspection.
+@runtime_checkable
+class CanReset(Protocol):
+    """Protocol for classes that can be reset to their initial state."""
 
-    Args:
-        _not_used1:
-        _not_used2:
-        tensor_out: The output tensor of the neural network layer.
-
-    """
-    if isinstance(tensor_out, tuple):
-        tensor = tensor_out[0]
-    else:
-        tensor = tensor_out
-    if torch.any(torch.isnan(tensor)):
-        breakpoint()
-        pdb.set_trace()
-    if torch.any(torch.isinf(tensor)):
-        breakpoint()
-        pdb.set_trace()
-    return None
+    def reset_parameters(self) -> None:
+        """Reset parameters of the layer."""
 
 
 class View(nn.Module):
-    """
-    A simple module that reshapes the input tensor according to the specified shape.
+    """A simple module that reshapes the input tensor according to the specified shape.
 
     Args:
     *shape (int): A tuple of integers specifying the desired shape for the output tensor.
@@ -58,7 +44,7 @@ class View(nn.Module):
 
     def __init__(self, *shape: int) -> None:
         super().__init__()
-        self.shape = shape
+        self.shape: tuple[int, ...] = shape
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         """Forward pass."""
@@ -101,9 +87,9 @@ class GeneralizedLinearLayer(nn.Module, metaclass=abc.ABCMeta):
     def __init__(self,
                  in_dim: int,
                  out_dim: int,
-                 act_cls: Optional[ActClass] = None,
+                 act_cls: ActClass | None = None,
                  batch_norm: bool = True,
-                 bn_momentum: Optional[float] = None,
+                 bn_momentum: float | None = None,
                  groups: int = 1,
                  residual: bool = False) -> None:
         super().__init__()
@@ -120,19 +106,21 @@ class GeneralizedLinearLayer(nn.Module, metaclass=abc.ABCMeta):
             self.act = None
         else:
             try:
-                self.act = act_cls(inplace=True)  # type: ignore
+                self.act = act_cls(inplace=True)  # type: ignore  # pyright: ignore
             except TypeError:
                 self.act = act_cls()
-        if debug_mode:
+
+        if DEBUG_MODE:
             self.register_forward_hook(debug_check)
             self.register_full_backward_hook(debug_check)
+
         self.init = self.get_init(self.act)
-        self.init(self.dense.weight)
+        self.init(cast(torch.Tensor, self.dense.weight))
+        return
 
     @staticmethod
-    def get_init(act: Optional[nn.Module]) -> Callable[[torch.Tensor], torch.Tensor]:
-        """
-        This static method returns an initialization determined based on the type of activation.
+    def get_init(act: nn.Module | None) -> Callable[[torch.Tensor], torch.Tensor]:
+        """This static method returns an initialization determined based on the type of activation.
 
         Parameters:
         act (Optional[nn.Module]): The optional activation function applied to the output of the linear layer.
@@ -157,12 +145,12 @@ class GeneralizedLinearLayer(nn.Module, metaclass=abc.ABCMeta):
         """Get the wrapped layer"""
 
     @abc.abstractmethod
-    def get_bn_layer(self):
+    def get_bn_layer(self) -> nn.Module:
         """Get the batch normalization layer"""
 
     def forward(self, x):
         """Forward pass."""
-        y = self.bn(self.dense(x)) if self.batch_norm else self.dense(x)
+        y = self.bn(self.dense(x)) if self.bn is not None else self.dense(x)
         if self.act is not None:
             y = self.act(y)
         if self.resnet:
@@ -173,43 +161,51 @@ class GeneralizedLinearLayer(nn.Module, metaclass=abc.ABCMeta):
 # Input (Batch, Features)
 class LinearLayer(GeneralizedLinearLayer):
 
+    @override
     def get_dense_layer(self) -> nn.Module:
         if self.groups > 1:
             raise NotImplementedError('nn.Linear has not option for groups')
         return nn.Linear(self.in_dim, self.out_dim, bias=self.bias)
 
-    def get_bn_layer(self):
+    @override
+    def get_bn_layer(self) -> nn.Module:
         return nn.BatchNorm1d(self.out_dim, momentum=self.bn_momentum)
 
 
 # Input (Batch, Points, Features)
 class PointsConvLayer(GeneralizedLinearLayer):
 
+    @override
     def get_dense_layer(self) -> nn.Module:
         return nn.Conv1d(self.in_dim, self.out_dim, kernel_size=1, bias=self.bias, groups=self.groups)
 
-    def get_bn_layer(self):
+    @override
+    def get_bn_layer(self) -> nn.Module:
         return nn.BatchNorm1d(self.out_dim, momentum=self.bn_momentum)
 
 
 class EdgeConvLayer(GeneralizedLinearLayer):
 
+    @override
     def get_dense_layer(self) -> nn.Module:
         return nn.Conv2d(self.in_dim, self.out_dim, kernel_size=1, bias=self.bias, groups=self.groups)
 
+    @override
     def get_bn_layer(self) -> nn.Module:
         return nn.BatchNorm2d(self.out_dim, momentum=self.bn_momentum)
 
 
 class TemperatureScaledSoftmax(nn.Softmax):
+    temperature: torch.Tensor
 
-    def __init__(self, dim: Optional[int] = None, temperature: float = 1):
+    def __init__(self, dim: int | None = None, temperature: float = 1):
         super().__init__(dim)
         self.temperature = torch.tensor(temperature, dtype=torch.float)
 
-    def forward(self, x: Tensor) -> Tensor:
+    @override
+    def forward(self, input: Tensor) -> Tensor:
         """Forward pass"""
-        return super().forward(x / self.temperature)
+        return super().forward(input / self.temperature)
 
 
 class TransferGrad(Function):
@@ -226,10 +222,34 @@ class TransferGrad(Function):
         """Backward pass."""
         return None, grad_outputs[0].clone()
 
+    @classmethod
+    def apply(cls, x: torch.Tensor, y: torch.Tensor) -> torch.Tensor:
+        """Apply the function to two tensors."""
+        return cast(torch.Tensor, super().apply(x, y))
 
-def frozen_forward(network, x):
+
+def debug_check(_not_used1: nn.Module, _not_used2: _grad_t, tensor_out: _grad_t) -> None:
+    """This function is used for debugging purposes during the training process.
+
+    It checks for NaN and Inf values in the output tensor of a neural network layer.
+    If such values are found, it triggers a debugger for further inspection.
+    """
+    if isinstance(tensor_out, tuple):
+        tensor = tensor_out[0]
+    else:
+        tensor = tensor_out
+    if torch.any(torch.isnan(tensor)):
+        breakpoint()
+        pdb.set_trace()
+    if torch.any(torch.isinf(tensor)):
+        breakpoint()
+        pdb.set_trace()
+    return None
+
+
+def frozen_forward(network: nn.Module, x: torch.Tensor) -> Any:
     """Temporarily disable gradients for all parameters."""
-    was_requires_grad = []
+    was_requires_grad: list[bool] = []
     for p in network.parameters():
         was_requires_grad.append(p.requires_grad)
         p.requires_grad_(False)
@@ -242,3 +262,12 @@ def frozen_forward(network, x):
         p.requires_grad_(req)
 
     return output
+
+
+def reset_child_params(module: nn.Module) -> None:
+    """Reset all parameters of a module and its children."""
+    for layer in module.children():
+        if isinstance(layer, CanReset):
+            layer.reset_parameters()
+
+        reset_child_params(layer)

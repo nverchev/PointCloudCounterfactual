@@ -4,10 +4,10 @@ import torch
 
 from drytorch import Model
 from drytorch.lib.checkpoints import LocalCheckpoint
-
 from src.autoencoder import CounterfactualVQVAE
 from src.classifier import DGCNN
 from src.config_options import ConfigAll, Experiment, hydra_main
+
 
 torch.inference_mode()
 def create_variation() -> None:

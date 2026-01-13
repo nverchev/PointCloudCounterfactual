@@ -4,23 +4,28 @@ import enum
 import functools
 import pathlib
 import sys
-from collections.abc import Iterator
-from contextlib import contextmanager
-from dataclasses import field
-from typing import Optional, Self, Annotated, Callable, TypeAlias, cast
 import tomllib
 
+from collections.abc import Callable, Iterator
+from contextlib import contextmanager
+from dataclasses import field
+from typing import Annotated, Any, Self, TypeAlias, cast
+
 import hydra
+import hydra.core.utils as hydra_utils
 import numpy as np
-from hydra.core.global_hydra import GlobalHydra
-from hydra.core.hydra_config import HydraConfig
-from omegaconf import OmegaConf, DictConfig
-from pydantic import model_validator, Field
-from pydantic.dataclasses import dataclass
-from pydantic_settings import BaseSettings, SettingsConfigDict
 import torch
 
+from hydra.core import config_store, hydra_config
+from hydra.core.global_hydra import GlobalHydra
+from hydra.core.hydra_config import HydraConfig
+from omegaconf import DictConfig, OmegaConf
+from pydantic import Field, model_validator
+from pydantic.dataclasses import dataclass
+from pydantic_settings import BaseSettings, SettingsConfigDict
+
 import drytorch
+
 
 PositiveInt = Annotated[int, Field(ge=0)]
 StrictlyPositiveInt = Annotated[int, Field(gt=0)]
@@ -158,7 +163,7 @@ class DatasetConfig:
 
     name: Datasets
     n_classes: PositiveInt
-    settings: dict
+    settings: dict[str, Any] = field(default_factory=dict)
 
 
 @dataclass
@@ -446,7 +451,7 @@ class SchedulerConfig:
     restart_interval: PositiveInt
     restart_fraction: PositiveInt
     warmup_steps: PositiveInt
-    settings: dict
+    settings: dict[str, Any] = field(default_factory=dict)
 
 
 @dataclass
@@ -466,8 +471,8 @@ class LearningConfig:
     learning_rate: PositiveFloat
     grad_op: GradOp | None
     clip_criterion: ClipCriterion
-    opt_settings: dict
     scheduler: SchedulerConfig
+    opt_settings: dict[str, Any] = field(default_factory=dict)
 
     @property
     def optimizer_cls(self) -> type[torch.optim.Optimizer]:
@@ -646,7 +651,7 @@ class UserSettings:
     generate: GenerationOptions
     trackers: TrackerList
     plot: PlottingOptions
-    seed: Optional[int]
+    seed: int | None
     checkpoint_every: PositiveInt
     n_generated_output_points: int
     load_checkpoint: int = -1
@@ -783,7 +788,7 @@ class Experiment(drytorch.Experiment[ConfigAll]):
     pass
 
 
-def get_config_all(overrides: Optional[list[str]] = None) -> ConfigAll:
+def get_config_all(overrides: list[str] | None = None) -> ConfigAll:
     """Get hydra configuration without starting a run."""
     GlobalHydra.instance().clear()
 
@@ -798,22 +803,23 @@ def get_config_all(overrides: Optional[list[str]] = None) -> ConfigAll:
 
 def get_current_hydra_dir() -> pathlib.Path:
     """Get the path to the current hydra run."""
-    hydra_config = hydra.core.hydra_config.HydraConfig.get()
-    return pathlib.Path(hydra_config.runtime.output_dir)
+    config = hydra_config.HydraConfig.get()
+    return pathlib.Path(config.runtime.output_dir)
 
 
 def get_trackers(cfg: ConfigAll, hydra_dir: pathlib.Path) -> list[drytorch.Tracker]:
     """Get trackers from according to the user configuration."""
     cfg_trackers = cfg.user.trackers
-    hydra.core.utils.configure_log(None)
+    hydra_utils.configure_log(None)  # type:ignore # pyright:ignore --- correct way to restart logging in subprocesses
     drytorch.init_trackers(mode='hydra')
     tracker_list: list[drytorch.Tracker] = []
     if sys.gettrace():  # skip in debug mode
         return tracker_list
 
     if cfg_trackers.wandb:
-        from drytorch.trackers.wandb import Wandb
         import wandb
+
+        from drytorch.trackers.wandb import Wandb
 
         tracker_list.append(Wandb(settings=wandb.Settings(project=cfg.project)))
 
@@ -834,6 +840,7 @@ def get_trackers(cfg: ConfigAll, hydra_dir: pathlib.Path) -> list[drytorch.Track
 
     if cfg_trackers.sqlalchemy:
         import sqlalchemy
+
         from drytorch.trackers.sqlalchemy import SQLConnection
 
         engine_path = cfg.user.path.version_dir / 'metrics.db'
@@ -869,5 +876,5 @@ def update_exp_name(cfg: ConfigAll, overrides: list[str]) -> None:
     return
 
 
-cs = hydra.core.config_store.ConfigStore.instance()  # type: ignore
+cs = config_store.ConfigStore.instance()  # type: ignore
 cs.store(name='config_all', node=ConfigAll)

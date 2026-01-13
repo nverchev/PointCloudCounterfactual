@@ -1,6 +1,7 @@
-from typing import Any
+from typing import Any, cast
 
 import torch
+
 from torch.autograd import Function
 
 from structural_losses.structural_losses_backend import ApproxMatch, MatchCost, MatchCostGrad
@@ -11,8 +12,7 @@ class MatchCostFunction(Function):
     # Note that both forward and backward are static methods
     @staticmethod
     def forward(ctx: Any, *args: torch.Tensor, **kwargs: Any) -> torch.Tensor:
-        """
-        input:
+        """input:
             set1 : batch_size * #dataset_points * 3
             set2 : batch_size * #query_points * 3
         returns:
@@ -40,6 +40,11 @@ class MatchCostFunction(Function):
         grad1, grad2 = MatchCostGrad(set1, set2, ctx.match)
         grad_output_expand = grad_output.unsqueeze(1).unsqueeze(2)
         return grad1 * grad_output_expand, grad2 * grad_output_expand
+
+    @classmethod
+    def apply(cls, x: torch.Tensor, *y: torch.Tensor) -> torch.Tensor:
+        """Apply the function to two tensors."""
+        return cast(torch.Tensor, super().apply(x, y))
 
 
 match_cost = MatchCostFunction.apply
