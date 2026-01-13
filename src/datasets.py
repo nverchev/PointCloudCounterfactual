@@ -284,7 +284,7 @@ class ModelNet40Dataset(SplitCreator):
         return ModelNet40Split(pcd=self.pcd[split], indices=self.indices[split], labels=self.labels[split])
 
     def _download(self) -> None:
-        url = 'https://cloud.tsinghua.edu.cn/f/b3d9fe3e2a514def8097/?dl=1'
+        url = 'https://gaimfs.ugent.be/Public/Dataset/modelnet40_hdf5_2048.zip'
         return download_zip(target_folder=self.modelnet_path, url=url)
 
     def _train_val_to_train_and_val(self, val_every: int = 6) -> None:
