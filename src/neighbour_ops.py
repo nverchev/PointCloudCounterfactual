@@ -1,12 +1,27 @@
 """Module providing point cloud operations for nearest neighbor computations and graph feature extraction."""
 
+from typing import Any
+
 import pykeops  # type: ignore
 import torch
+import numpy as np
+from numpy import typing as npt
+from sklearn.neighbors import KDTree
 
 from pykeops.torch import LazyTensor  # type: ignore
 
-
 pykeops.set_verbose(False)
+
+
+def index_k_neighbours(pcs: list[npt.NDArray[Any]], k: int) -> npt.NDArray[Any]:
+    """Finds the k nearest neighbors for each point in a list of point clouds."""
+    indices_list = []
+    for pc in pcs:
+        kdtree = KDTree(pc)
+        indices = kdtree.query(pc, k, return_distance=False)
+        indices_list.append(indices.reshape(-1, k))
+
+    return np.stack(indices_list)
 
 
 def square_distance(t1: torch.Tensor, t2: torch.Tensor) -> torch.Tensor | LazyTensor:
