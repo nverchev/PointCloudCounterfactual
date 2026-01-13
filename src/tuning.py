@@ -9,17 +9,19 @@ def get_past_final_values(trial: optuna.Trial) -> list[float]:
     study = trial.study
     *past_trials, _current_trial = study.get_trials(deepcopy=False)
     real_completed_trials = [
-        t for t in past_trials
+        t
+        for t in past_trials
         if (
-                t.state == optuna.trial.TrialState.COMPLETE
-                and t.value is not None
-                and not t.user_attrs.get('imputed', False)
+            t.state == optuna.trial.TrialState.COMPLETE
+            and t.value is not None
+            and not t.user_attrs.get('imputed', False)
         )
     ]
     if len(real_completed_trials) < 10:
         raise optuna.TrialPruned()
 
     return [trial.value for trial in real_completed_trials if trial.value is not None]
+
 
 def impute_pruned_trial(trial: optuna.Trial) -> float:
     """Input pruned trial with an interpolation from past completed trials' values."""

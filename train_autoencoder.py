@@ -32,8 +32,12 @@ def train_autoencoder(trial: Trial | None = None) -> None:
     ae = get_autoencoder()
     model = Model(ae, name=cfg_ae.architecture.name, device=cfg_user.device)
     train_dataset, test_dataset = get_dataset_multiprocess_safe()  # test is validation unless final=True
-    train_loader = DataLoader(dataset=train_dataset, batch_size=cfg_ae.train.batch_size_per_device, n_workers=cfg_user.n_workers)
-    test_loader = DataLoader(dataset=test_dataset, batch_size=cfg_ae.train.batch_size_per_device, n_workers=cfg_user.n_workers)
+    train_loader = DataLoader(
+        dataset=train_dataset, batch_size=cfg_ae.train.batch_size_per_device, n_workers=cfg_user.n_workers
+    )
+    test_loader = DataLoader(
+        dataset=test_dataset, batch_size=cfg_ae.train.batch_size_per_device, n_workers=cfg_user.n_workers
+    )
     with cfg.focus(cfg.autoencoder):
         learning_schema = get_learning_schema()
 
@@ -64,8 +68,10 @@ def train_autoencoder(trial: Trial | None = None) -> None:
         pass
 
     if not cfg.final and cfg_early.active:
-        trainer.post_epoch_hooks.register(EarlyStoppingCallback(
-            metric=get_recon_loss(), filter_fn=get_trailing_mean(cfg_early.window), patience=cfg_early.patience)
+        trainer.post_epoch_hooks.register(
+            EarlyStoppingCallback(
+                metric=get_recon_loss(), filter_fn=get_trailing_mean(cfg_early.window), patience=cfg_early.patience
+            )
         )
 
     if trial is None:
@@ -107,5 +113,5 @@ def main(cfg: ConfigAll) -> None:
         setup_and_train(cfg, hydra_dir)
 
 
-if __name__ == "__main__":
+if __name__ == '__main__':
     main()

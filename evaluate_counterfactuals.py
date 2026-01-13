@@ -29,80 +29,54 @@ def get_label_distribution(test_loader: p.LoaderProtocol[tuple[Inputs, Targets]]
 
 
 def evaluate_original_performance(
-        classifier: p.ModelProtocol[Inputs, Tensor],
-        test_loader: DataLoader[tuple[Inputs, Targets]],
+    classifier: p.ModelProtocol[Inputs, Tensor],
+    test_loader: DataLoader[tuple[Inputs, Targets]],
 ) -> Test[Inputs, Targets, Tensor]:
     """Evaluate classifier performance on original test data."""
     loss = get_classification_loss()
-    test_original = Test(
-        classifier,
-        name='ClassificationOriginal',
-        loader=test_loader,
-        metric=loss
-    )
+    test_original = Test(classifier, name='ClassificationOriginal', loader=test_loader, metric=loss)
     test_original(store_outputs=True)
     return test_original
 
 
 def evaluate_reconstructed_performance(
-        classifier: Model[Inputs, Tensor],
-        test_dataset: Dataset[tuple[Inputs, Targets]],
-        vqvae: CounterfactualVQVAE,
-        batch_size: int) -> None:
+    classifier: Model[Inputs, Tensor],
+    test_dataset: Dataset[tuple[Inputs, Targets]],
+    vqvae: CounterfactualVQVAE,
+    batch_size: int,
+) -> None:
     """Evaluate classifier performance on reconstructed test data."""
     reconstructed_dataset = ReconstructedDatasetWithLogits(
         dataset=test_dataset,
         autoencoder=vqvae,
         classifier=classifier,
     )
-    reconstructed_loader = DataLoader(
-        dataset=reconstructed_dataset,
-        batch_size=batch_size,
-        pin_memory=False
-    )
+    reconstructed_loader = DataLoader(dataset=reconstructed_dataset, batch_size=batch_size, pin_memory=False)
     loss = get_classification_loss()
-    test_reconstructed = Test(
-        classifier,
-        name='ClassificationReconstructed',
-        loader=reconstructed_loader,
-        metric=loss
-    )
+    test_reconstructed = Test(classifier, name='ClassificationReconstructed', loader=reconstructed_loader, metric=loss)
     test_reconstructed()
     return
 
 
 def evaluate_counterfactual_performance(
-        classifier: Model[Inputs, Tensor],
-        test_dataset: Dataset[tuple[Inputs, Targets]],
-        vqvae: CounterfactualVQVAE,
-        num_classes: int,
-        batch_size: int,
-        target_value: float) -> None:
+    classifier: Model[Inputs, Tensor],
+    test_dataset: Dataset[tuple[Inputs, Targets]],
+    vqvae: CounterfactualVQVAE,
+    num_classes: int,
+    batch_size: int,
+    target_value: float,
+) -> None:
     """Evaluate counterfactual generation performance across all classes."""
     metrics: list[Metric[Tensor, Targets]] = []
     loss = get_classification_loss()
 
     for j in range(num_classes):
         counterfactual_dataset = CounterfactualDatasetEncoder(
-            test_dataset,
-            vqvae,
-            classifier,
-            num_classes=num_classes,
-            target_label=j,
-            target_value=target_value
+            test_dataset, vqvae, classifier, num_classes=num_classes, target_label=j, target_value=target_value
         )
-        counterfactual_loader = DataLoader(
-            dataset=counterfactual_dataset,
-            batch_size=batch_size,
-            pin_memory=False
-        )
+        counterfactual_loader = DataLoader(dataset=counterfactual_dataset, batch_size=batch_size, pin_memory=False)
 
-        test = Test(
-            classifier,
-            name=f'Counterfeit_to_{j}',
-            loader=counterfactual_loader,
-            metric=loss
-        )
+        test = Test(classifier, name=f'Counterfeit_to_{j}', loader=counterfactual_loader, metric=loss)
         test()
         metrics.append(cast(Metric[Tensor, Targets], test.objective))
 
@@ -115,46 +89,40 @@ def evaluate_counterfactual_performance(
 
 
 def evaluate_misclassified_samples(
-        classifier: Model[Inputs, Tensor],
-        test_dataset: Dataset[tuple[Inputs, Targets]],
-        vqvae: CounterfactualVQVAE,
-        labels: Tensor,
-        predictions: Tensor,
-        batch_size: int) -> None:
+    classifier: Model[Inputs, Tensor],
+    test_dataset: Dataset[tuple[Inputs, Targets]],
+    vqvae: CounterfactualVQVAE,
+    labels: Tensor,
+    predictions: Tensor,
+    batch_size: int,
+) -> None:
     """Evaluate reconstruction performance on misclassified samples."""
     misclassified_bool = predictions != labels
     misclassified_dataset = Subset(test_dataset, indices=list(map(int, misclassified_bool.nonzero())))
     misclassified_reconstruction = ReconstructedDatasetWithLogits(
-        dataset=misclassified_dataset,
-        autoencoder=vqvae,
-        classifier=classifier
+        dataset=misclassified_dataset, autoencoder=vqvae, classifier=classifier
     )
     misclassified_reconstruction_loader = DataLoader(
-        misclassified_reconstruction,
-        batch_size=batch_size,
-        pin_memory=False
+        misclassified_reconstruction, batch_size=batch_size, pin_memory=False
     )
 
     loss = get_classification_loss()
     test_misclassified = Test(
-        classifier,
-        name='MisclassifiedReconstructed',
-        loader=misclassified_reconstruction_loader,
-        metric=loss
+        classifier, name='MisclassifiedReconstructed', loader=misclassified_reconstruction_loader, metric=loss
     )
     test_misclassified()
     return
 
 
 def evaluate_class_specific_counterfactuals(
-        classifier: Model[Inputs, Tensor],
-        test_dataset: Dataset[tuple[Inputs, Targets]],
-        vqvae: CounterfactualVQVAE,
-        labels: Tensor,
-        predictions: Tensor,
-        num_classes: int,
-        batch_size: int,
-        target_value: float
+    classifier: Model[Inputs, Tensor],
+    test_dataset: Dataset[tuple[Inputs, Targets]],
+    vqvae: CounterfactualVQVAE,
+    labels: Tensor,
+    predictions: Tensor,
+    num_classes: int,
+    batch_size: int,
+    target_value: float,
 ) -> None:
     """Evaluate counterfactual performance for specific class transitions."""
     metrics: list[Metric[Tensor, Targets]] = []
@@ -177,19 +145,10 @@ def evaluate_class_specific_counterfactuals(
                 classifier=classifier,
                 num_classes=num_classes,
                 target_label=j,
-                target_value=target_value
+                target_value=target_value,
             )
-            counterfactual_loader = DataLoader(
-                dataset=counterfactual_dataset,
-                batch_size=batch_size,
-                pin_memory=False
-            )
-            test = Test(
-                classifier,
-                name=f'{i}_to_{j}',
-                loader=counterfactual_loader,
-                metric=loss
-            )
+            counterfactual_loader = DataLoader(dataset=counterfactual_dataset, batch_size=batch_size, pin_memory=False)
+            test = Test(classifier, name=f'{i}_to_{j}', loader=counterfactual_loader, metric=loss)
             test(store_outputs=True)
             metrics.append(cast(Metric[Tensor, Targets], test.objective))
 
@@ -239,14 +198,7 @@ def evaluate_counterfactuals(classifier: Model[Inputs, Tensor], vqvae: Counterfa
     predictions = outputs_logits.argmax(dim=1)
     evaluate_misclassified_samples(classifier, test_dataset, vqvae, test_labels, predictions, batch_size)
     evaluate_class_specific_counterfactuals(
-        classifier,
-        test_dataset,
-        vqvae,
-        test_labels,
-        predictions,
-        num_classes,
-        batch_size,
-        counterfactual_value
+        classifier, test_dataset, vqvae, test_labels, predictions, num_classes, batch_size, counterfactual_value
     )
 
 
@@ -264,5 +216,5 @@ def main(cfg: ConfigAll) -> None:
         evaluate_counterfactuals(classifier, vqvae)
 
 
-if __name__ == "__main__":
+if __name__ == '__main__':
     main()

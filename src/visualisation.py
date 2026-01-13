@@ -24,13 +24,15 @@ if TYPE_CHECKING:
 else:
     Figure = Any
 
-def render_cloud(clouds: Sequence[npt.NDArray[Any]],
-                 colorscale: Literal['blue_red', 'sequence'] = 'sequence',
-                 interactive: bool = True,
-                 arrows: torch.Tensor | None = None,
-                 title: str = 'Cloud',
-                 save_dir: pathlib.Path = pathlib.Path() / 'images',
-                 ) -> None:
+
+def render_cloud(
+    clouds: Sequence[npt.NDArray[Any]],
+    colorscale: Literal['blue_red', 'sequence'] = 'sequence',
+    interactive: bool = True,
+    arrows: torch.Tensor | None = None,
+    title: str = 'Cloud',
+    save_dir: pathlib.Path = pathlib.Path() / 'images',
+) -> None:
     """Renders a sequence of point clouds with optional arrows using PyVista."""
     try:
         import pyvista as pv
@@ -38,10 +40,7 @@ def render_cloud(clouds: Sequence[npt.NDArray[Any]],
         print('pyvista not installed. Please install it using pip: pip install pyvista.')
         return
 
-    plotter = pv.Plotter(lighting='three lights',
-                         window_size=[1024, 1024],
-                         notebook=False,
-                         off_screen=not interactive)
+    plotter = pv.Plotter(lighting='three lights', window_size=[1024, 1024], notebook=False, off_screen=not interactive)
     plotter.camera_position = pv.CameraPosition((-3, 1, -2.5), focal_point=(0, 0, 0), viewup=(0, 1, 0))
 
     for light_point in ((3, 3, -2), (3, 3, 2)):
@@ -62,27 +61,25 @@ def render_cloud(clouds: Sequence[npt.NDArray[Any]],
         n = cloud.shape[0]
         cloud_pv = pv.PolyData(cloud[:, :3])
         geom = pv.Sphere(theta_resolution=8, phi_resolution=8)
-        cloud_pv["radius"] = .01 * np.ones(n)
+        cloud_pv['radius'] = 0.01 * np.ones(n)
         glyphs = cast(pv.PolyData, cloud_pv.glyph(scale='radius', geom=geom, orient=False))
-        plotter.add_mesh(glyphs,
-                         color=color,
-                         point_size=15,
-                         render_points_as_spheres=True,
-                         smooth_shading=True,
-                         show_edges=False,
-                         style='points'
-                         )
+        plotter.add_mesh(
+            glyphs,
+            color=color,
+            point_size=15,
+            render_points_as_spheres=True,
+            smooth_shading=True,
+            show_edges=False,
+            style='points',
+        )
         if arrows is not None:
-            geom = pv.Arrow(shaft_radius=.1, tip_radius=.2, scale=1)
-            cloud_pv["vectors"] = arrows[:, [0, 2, 1]].numpy()
-            cloud_pv.set_active_vectors("vectors")
-            arrows_glyph = cast(pv.MultiBlock, cloud_pv.glyph(orient="vectors", geom=geom))
-            plotter.add_mesh(arrows_glyph,
-                             lighting=True,
-                             line_width=10,
-                             color=RED,
-                             show_scalar_bar=False,
-                             edge_color=RED)
+            geom = pv.Arrow(shaft_radius=0.1, tip_radius=0.2, scale=1)
+            cloud_pv['vectors'] = arrows[:, [0, 2, 1]].numpy()
+            cloud_pv.set_active_vectors('vectors')
+            arrows_glyph = cast(pv.MultiBlock, cloud_pv.glyph(orient='vectors', geom=geom))
+            plotter.add_mesh(
+                arrows_glyph, lighting=True, line_width=10, color=RED, show_scalar_bar=False, edge_color=RED
+            )
     # effects
     pv.Plotter.enable_eye_dome_lighting(plotter)  # call unbound because of a type inference bug
     pv.Plotter.enable_shadows(plotter)  # call unbound because of a type inference bug
@@ -98,10 +95,9 @@ def render_cloud(clouds: Sequence[npt.NDArray[Any]],
     return
 
 
-def plot_confusion_matrix_heatmap(cm_array: npt.NDArray[Any],
-                                  class_names: list[str],
-                                  title: str = 'Confusion Matrix',
-                                  dpi: int = 300) -> Figure | None:
+def plot_confusion_matrix_heatmap(
+    cm_array: npt.NDArray[Any], class_names: list[str], title: str = 'Confusion Matrix', dpi: int = 300
+) -> Figure | None:
     """Plots the confusion matrix as a heatmap using Matplotlib and Seaborn."""
     try:
         import seaborn as sns
@@ -112,14 +108,16 @@ def plot_confusion_matrix_heatmap(cm_array: npt.NDArray[Any],
 
     num_classes = len(class_names)
     plt.figure(figsize=(num_classes + 2, num_classes + 2), dpi=dpi)
-    sns.heatmap(cm_array,
-                annot=True,
-                fmt='d',
-                cmap='Blues',
-                xticklabels=class_names,
-                yticklabels=class_names,
-                linewidths=.5,
-                linecolor='black')
+    sns.heatmap(
+        cm_array,
+        annot=True,
+        fmt='d',
+        cmap='Blues',
+        xticklabels=class_names,
+        yticklabels=class_names,
+        linewidths=0.5,
+        linecolor='black',
+    )
     plt.title(title, fontsize=16)
     plt.xlabel('Predicted Label', fontsize=14)
     plt.ylabel('True Label', fontsize=14)

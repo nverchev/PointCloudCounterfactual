@@ -44,8 +44,24 @@ class emdFunction(Function):
         unass_cnt_sum = torch.zeros(512, dtype=torch.int32, device='cuda').contiguous()
         cnt_tmp = torch.zeros(512, dtype=torch.int32, device='cuda').contiguous()
 
-        emd_backend.forward(xyz1, xyz2, dist, assignment, price, assignment_inv, bid, bid_increments, max_increments,
-                            unass_idx, unass_cnt, unass_cnt_sum, cnt_tmp, max_idx, eps, iters)
+        emd_backend.forward(
+            xyz1,
+            xyz2,
+            dist,
+            assignment,
+            price,
+            assignment_inv,
+            bid,
+            bid_increments,
+            max_increments,
+            unass_idx,
+            unass_cnt,
+            unass_cnt_sum,
+            cnt_tmp,
+            max_idx,
+            eps,
+            iters,
+        )
 
         ctx.save_for_backward(xyz1, xyz2, assignment)
         return dist, assignment

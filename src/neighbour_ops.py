@@ -30,15 +30,15 @@ def torch_square_distance(t1: torch.Tensor, t2: torch.Tensor) -> torch.Tensor:
     # [batch, points, features]
     t2 = t2.transpose(-1, -2)
     dist = -2 * torch.matmul(t1, t2)
-    dist += torch.sum(t1 ** 2, -1, keepdim=True)
-    dist += torch.sum(t2 ** 2, -2, keepdim=True)
+    dist += torch.sum(t1**2, -1, keepdim=True)
+    dist += torch.sum(t2**2, -2, keepdim=True)
     return dist
 
 
 def self_square_distance(t1: torch.Tensor) -> torch.Tensor:
     """Compute the squared distance between a point cloud and itself."""
     t2 = t1.transpose(-1, -2)
-    square_component = torch.sum(t1 ** 2, -2, keepdim=True)
+    square_component = torch.sum(t1**2, -2, keepdim=True)
     dist = torch.tensor(-2) * torch.matmul(t2, t1)
     dist += square_component
     dist += square_component.transpose(-1, -2)
@@ -109,7 +109,7 @@ def graph_filtering(x: torch.Tensor, k: int = 4) -> torch.Tensor:
     neighbours = get_neighbours(x, k=k, indices=torch.empty(0))[1]
     neighbours = neighbours[..., 1:]  # the closest neighbor is the point itself
     diff = x.unsqueeze(-1).expand(-1, -1, -1, k - 1) - neighbours
-    dist = torch.sqrt(abs((diff ** 2).sum(1)))
+    dist = torch.sqrt(abs((diff**2).sum(1)))
     sigma = torch.clamp(dist[..., 0:1].mean(1, keepdim=True), min=0.005)
     norm_dist = dist / sigma
     weights = torch.exp(-norm_dist)

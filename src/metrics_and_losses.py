@@ -98,12 +98,12 @@ def gaussian_ll(x: torch.Tensor, mu: torch.Tensor, log_var: torch.Tensor) -> tor
 
 def gaussian_kld(mu: torch.Tensor, log_var: torch.Tensor) -> torch.Tensor:
     """Calculate KL divergence between Gaussian distributions."""
-    return 0.5 * (-1 - log_var + log_var.exp() + (mu ** 2))
+    return 0.5 * (-1 - log_var + log_var.exp() + (mu**2))
 
 
 def diff_gaussian_kld(d_mu: torch.Tensor, d_log_var: torch.Tensor, p_log_var: torch.Tensor) -> torch.Tensor:
     """Calculate KL divergence between two Gaussian distributions with different parameters."""
-    return 0.5 * (-1 - d_log_var + d_log_var.exp() + (d_mu ** 2) / p_log_var.exp())
+    return 0.5 * (-1 - d_log_var + d_log_var.exp() + (d_mu**2) / p_log_var.exp())
 
 
 def get_kld1_loss() -> LossBase[Outputs, WTargets]:
@@ -173,6 +173,7 @@ def get_nll_loss() -> LossBase[Outputs, WTargets]:
 
     return Loss(_nll, name='NLL')
 
+
 def get_mse_loss() -> LossBase[Outputs, WTargets]:
     """Get negative log likelihood loss."""
 
@@ -232,6 +233,7 @@ def get_f1() -> Metric[torch.Tensor, Targets]:
         return multiclass_f1_score(outputs, targets.label)
 
     return Metric(_f1, name='F1_Score', higher_is_better=True)
+
 
 def get_annealing() -> Loss[Outputs, WTargets]:
     """(Reverse) Annealing component for loss.

@@ -8,7 +8,7 @@ setup(
     name='emd',
     install_requires=['torch'],
     packages=['emd'],
-    package_data={"emd": ["py.typed", "*.pyi"]},
+    package_data={'emd': ['py.typed', '*.pyi']},
     ext_modules=[
         CUDAExtension(
             name='emd.emd_backend',

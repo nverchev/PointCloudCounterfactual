@@ -8,7 +8,7 @@ setup(
     version='0.1.0',
     install_requires=['torch'],
     packages=['structural_losses'],
-    package_data={"structural_losses": ["py.typed", "*.pyi"]},
+    package_data={'structural_losses': ['py.typed', '*.pyi']},
     ext_modules=[
         CUDAExtension(
             name='structural_losses.structural_losses_backend',

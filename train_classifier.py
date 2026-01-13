@@ -8,7 +8,7 @@ import torch.distributed as dist
 from torchmetrics import ConfusionMatrix
 
 from drytorch import DataLoader, Model, Test, Trainer
-from drytorch.core. exceptions import TrackerNotActiveError
+from drytorch.core.exceptions import TrackerNotActiveError
 from drytorch.lib.hooks import EarlyStoppingCallback, call_every, saving_hook
 from drytorch.utils.average import get_trailing_mean
 from src.classifier import DGCNN
@@ -45,8 +45,7 @@ def train_classifier() -> None:
 
     if not cfg.final and cfg_class.train.early_stopping.active:
         window = cfg_class.train.early_stopping.window
-        trainer.post_epoch_hooks.register(EarlyStoppingCallback(metric=loss_calc,
-                                                                filter_fn=get_trailing_mean(window)))
+        trainer.post_epoch_hooks.register(EarlyStoppingCallback(metric=loss_calc, filter_fn=get_trailing_mean(window)))
     if checkpoint_every := cfg_user.checkpoint_every:
         trainer.post_epoch_hooks.register(saving_hook.bind(call_every(checkpoint_every)))
 
@@ -63,17 +62,13 @@ def train_classifier() -> None:
     max_indices_to_log = 100
     misclassified_indices_str = str(misclassified_indices[:max_indices_to_log])
     if len(misclassified_indices) > max_indices_to_log:
-        misclassified_indices_str += f" ... (and {len(misclassified_indices) - max_indices_to_log} more)"
+        misclassified_indices_str += f' ... (and {len(misclassified_indices) - max_indices_to_log} more)'
 
-    cf_matrix = ConfusionMatrix(task="multiclass", num_classes=cfg.data.dataset.n_classes)
+    cf_matrix = ConfusionMatrix(task='multiclass', num_classes=cfg.data.dataset.n_classes)
     cf_matrix_tensor = cf_matrix(predictions, labels)  # This will be a torch.Tensor
     cf_matrix_numpy = cf_matrix_tensor.cpu().numpy()
     class_names = cfg.data.dataset.settings['select_classes']
-    fig_cm = plot_confusion_matrix_heatmap(
-        cf_matrix_numpy,
-        class_names,
-        title='Model Confusion Matrix'
-    )
+    fig_cm = plot_confusion_matrix_heatmap(cf_matrix_numpy, class_names, title='Model Confusion Matrix')
     try:
         from drytorch.trackers.tensorboard import TensorBoard
 
@@ -81,18 +76,18 @@ def train_classifier() -> None:
     except TrackerNotActiveError:
         pass
     except (ModuleNotFoundError, ImportError):
-        print(f"Confusion Matrix for classes {class_names}")
+        print(f'Confusion Matrix for classes {class_names}')
         print(cf_matrix_numpy)
-        print(f"Misclassified indices: {misclassified_indices_str}")
+        print(f'Misclassified indices: {misclassified_indices_str}')
     else:
         writer = tensorboard_tracker.writer
         if fig_cm is not None:
-            writer.add_figure(f"{model.name}/{final_test.name}-Confusion Matrix", fig_cm)
+            writer.add_figure(f'{model.name}/{final_test.name}-Confusion Matrix', fig_cm)
 
         writer.add_text(
-            "{model.name}/{final_test.name}- Misclassified Indices",
-            f"Total misclassified samples: {len(misclassified_indices)}\nIndices: {misclassified_indices_str}",
-            global_step=model.epoch
+            '{model.name}/{final_test.name}- Misclassified Indices',
+            f'Total misclassified samples: {len(misclassified_indices)}\nIndices: {misclassified_indices_str}',
+            global_step=model.epoch,
         )
         writer.close()
 
@@ -124,5 +119,5 @@ def main(cfg: ConfigAll) -> None:
         setup_and_train(cfg, hydra_dir)
 
 
-if __name__ == "__main__":
+if __name__ == '__main__':
     main()

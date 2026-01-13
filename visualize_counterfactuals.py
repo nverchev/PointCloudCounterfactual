@@ -1,4 +1,5 @@
 """Visualize counterfactuals."""
+
 from collections.abc import Sized
 from typing import Any
 
@@ -15,6 +16,8 @@ from src.visualisation import render_cloud
 
 
 torch.inference_mode()
+
+
 def visualize_counterfactuals() -> None:
     """Visualize the selected point clouds in the dataset."""
     cfg = Experiment.get_config()
@@ -64,10 +67,7 @@ def visualize_counterfactuals() -> None:
         with torch.inference_mode():
             logits = classifier(Inputs(cloud=data.recon))
         np_recon = data.recon.detach().squeeze().cpu().numpy()
-        render_cloud((np_recon,),
-                     title=f'reconstruction_{i}',
-                     interactive=cfg_user.plot.interactive,
-                     save_dir=save_dir)
+        render_cloud((np_recon,), title=f'reconstruction_{i}', interactive=cfg_user.plot.interactive, save_dir=save_dir)
         recon_probs = torch.softmax(logits, dim=1).cpu().numpy()
         print(f'Reconstruction {i}: (', end='')
         for prob in recon_probs[0]:
@@ -83,10 +83,12 @@ def visualize_counterfactuals() -> None:
                 data.probs = (1 - value) * relaxed_probs + value * target
                 data = vqvae_module.decode(data, inputs)
                 np_recon = data.recon.detach().squeeze().cpu().numpy()
-                render_cloud((np_recon,),
-                             title=f'counterfactual_{i}_to_{j}',
-                             interactive=cfg_user.plot.interactive,
-                             save_dir=save_dir)
+                render_cloud(
+                    (np_recon,),
+                    title=f'counterfactual_{i}_to_{j}',
+                    interactive=cfg_user.plot.interactive,
+                    save_dir=save_dir,
+                )
                 np_recons.append(np_recon)
                 with torch.inference_mode():
                     probs = torch.softmax(classifier(Inputs(cloud=data.recon)), dim=1).cpu().numpy()
@@ -104,10 +106,9 @@ def main(cfg: ConfigAll) -> None:
     """Set up the experiment and launch the counterfactual visualization."""
     exp = Experiment(cfg, name=cfg.name, par_dir=cfg.user.path.version_dir, tags=cfg.tags)
     with exp.create_run(resume=True):
-
         visualize_counterfactuals()
     return
 
 
-if __name__ == "__main__":
+if __name__ == '__main__':
     main()

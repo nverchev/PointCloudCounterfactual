@@ -84,14 +84,16 @@ class GeneralizedLinearLayer(nn.Module, metaclass=abc.ABCMeta):
 
     """
 
-    def __init__(self,
-                 in_dim: int,
-                 out_dim: int,
-                 act_cls: ActClass | None = None,
-                 batch_norm: bool = True,
-                 bn_momentum: float | None = None,
-                 groups: int = 1,
-                 residual: bool = False) -> None:
+    def __init__(
+        self,
+        in_dim: int,
+        out_dim: int,
+        act_cls: ActClass | None = None,
+        batch_norm: bool = True,
+        bn_momentum: float | None = None,
+        groups: int = 1,
+        residual: bool = False,
+    ) -> None:
         super().__init__()
         self.in_dim = in_dim
         self.out_dim = out_dim
@@ -154,13 +156,12 @@ class GeneralizedLinearLayer(nn.Module, metaclass=abc.ABCMeta):
         if self.act is not None:
             y = self.act(y)
         if self.resnet:
-            return y + x.repeat_interleave(self.out_dim // self.in_dim + 1, 1)[:, :y.shape[1], ...]
+            return y + x.repeat_interleave(self.out_dim // self.in_dim + 1, 1)[:, : y.shape[1], ...]
         return y
 
 
 # Input (Batch, Features)
 class LinearLayer(GeneralizedLinearLayer):
-
     @override
     def get_dense_layer(self) -> nn.Module:
         if self.groups > 1:
@@ -174,7 +175,6 @@ class LinearLayer(GeneralizedLinearLayer):
 
 # Input (Batch, Points, Features)
 class PointsConvLayer(GeneralizedLinearLayer):
-
     @override
     def get_dense_layer(self) -> nn.Module:
         return nn.Conv1d(self.in_dim, self.out_dim, kernel_size=1, bias=self.bias, groups=self.groups)
@@ -185,7 +185,6 @@ class PointsConvLayer(GeneralizedLinearLayer):
 
 
 class EdgeConvLayer(GeneralizedLinearLayer):
-
     @override
     def get_dense_layer(self) -> nn.Module:
         return nn.Conv2d(self.in_dim, self.out_dim, kernel_size=1, bias=self.bias, groups=self.groups)

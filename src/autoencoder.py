@@ -3,7 +3,7 @@
 import abc
 
 from collections.abc import Callable, Generator
-from typing import Any, Generic, TypeVar
+from typing import Any
 
 import numpy as np
 import torch
@@ -33,10 +33,9 @@ class DistanceCalculator:
     """Handles distance calculations for quantization."""
 
     @staticmethod
-    def compute_distances(x: torch.Tensor,
-                          codebook: torch.Tensor,
-                          dim_codes: int,
-                          embedding_dim: int) -> tuple[torch.Tensor, torch.Tensor]:
+    def compute_distances(
+        x: torch.Tensor, codebook: torch.Tensor, dim_codes: int, embedding_dim: int
+    ) -> tuple[torch.Tensor, torch.Tensor]:
         """Calculate distances from embeddings and return closest indices."""
         batch, _ = x.shape
         x = x.view(batch * dim_codes, 1, embedding_dim)
@@ -117,13 +116,13 @@ class BaseWAutoEncoder(nn.Module, abc.ABC):
     def codebook(self) -> torch.Tensor:
         """Codebook tensor."""
         if self._codebook is None:
-            raise AttributeError("Codebook not initialized.")
+            raise AttributeError('Codebook not initialized.')
 
         return self._codebook
 
     def update_codebook(self, codebook: torch.Tensor) -> None:
         """Update codebook tensor."""
-        self.register_buffer("_codebook", codebook.data, persistent=False)
+        self.register_buffer('_codebook', codebook.data, persistent=False)
 
     def forward(self, x: WInputs) -> Outputs:
         """Forward pass."""
@@ -172,6 +171,7 @@ class BaseWAutoEncoder(nn.Module, abc.ABC):
 
         reset_child_params(self)
         return
+
 
 class WAutoEncoder(BaseWAutoEncoder):
     """W autoencoder implementation."""
@@ -290,11 +290,12 @@ class CounterfactualWAutoEncoder(BaseWAutoEncoder):
         return self.decode(data, x.logits)
 
     @torch.inference_mode()
-    def sample_latent(self,
-                      z1_bias: torch.Tensor,
-                      batch_size: int = 1,
-                      probs: torch.Tensor | None = None,
-                      ) -> Outputs:
+    def sample_latent(
+        self,
+        z1_bias: torch.Tensor,
+        batch_size: int = 1,
+        probs: torch.Tensor | None = None,
+    ) -> Outputs:
         """Generate samples with counterfactual probabilities."""
         data = super().sample_latent(z1_bias, batch_size)
         if probs is not None and probs.numel() > 0:
@@ -305,10 +306,6 @@ class CounterfactualWAutoEncoder(BaseWAutoEncoder):
             data.probs = torch.distributions.Dirichlet(concentration=alpha).sample((batch_size,))
 
         return data
-
-
-# Type variable for W autoencoder
-WA = TypeVar('WA', bound=BaseWAutoEncoder, covariant=True)
 
 
 class AutoEncoder(nn.Module, abc.ABC):
@@ -342,7 +339,7 @@ class Oracle(AutoEncoder):
     def forward(self, inputs: Inputs) -> Outputs:
         """Forward pass."""
         data = Outputs()
-        data.recon = inputs.cloud[:, :self.m, :]
+        data.recon = inputs.cloud[:, : self.m, :]
         return data
 
 
@@ -405,8 +402,11 @@ class VectorQuantizer:
         return one_hot.scatter_(2, idx.view(batch, self.num_codes, 1), 1)
 
 
-class AbstractVQVAE(AE, Generic[WA], abc.ABC):
+class AbstractVQVAE[WA: BaseWAutoEncoder](AE, abc.ABC):
     """Abstract VQVAE with vector quantization."""
+
+    _null_tensor = torch.empty(0)
+    _zero_tensor = torch.tensor(0.0)
 
     def __init__(self):
         super().__init__()
@@ -415,11 +415,7 @@ class AbstractVQVAE(AE, Generic[WA], abc.ABC):
         self.book_size = cfg_ae_arc.book_size
         self.embedding_dim = cfg_ae_arc.embedding_dim
         self.double_encoding = UsuallyFalse()
-        self.codebook = nn.Parameter(torch.randn(
-            self.n_codes,
-            self.book_size,
-            self.embedding_dim
-        ))
+        self.codebook = nn.Parameter(torch.randn(self.n_codes, self.book_size, self.embedding_dim))
 
         self.w_autoencoder = self._create_w_autoencoder()
         for param in self.w_autoencoder.parameters():
@@ -463,16 +459,18 @@ class AbstractVQVAE(AE, Generic[WA], abc.ABC):
         return embeddings.view(-1, self.n_codes * self.embedding_dim)
 
     @torch.inference_mode()
-    def generate(self,
-                 batch_size: int = 1,
-                 initial_sampling: torch.Tensor = torch.empty(0),
-                 z1_bias: torch.Tensor = torch.tensor(0),
-                 **kwargs: Any) -> Outputs:
+    def generate(
+        self,
+        batch_size: int = 1,
+        initial_sampling: torch.Tensor = _null_tensor,
+        z1_bias: torch.Tensor = _zero_tensor,
+        **kwargs: Any,
+    ) -> Outputs:
         """Generate samples from the model."""
         z1_bias = z1_bias.to(self.codebook.device)
         initial_sampling = initial_sampling.to(self.codebook.device)
         data = self.w_autoencoder.sample_latent(z1_bias, batch_size=batch_size, **kwargs)
-        inputs = Inputs(torch.empty(0), initial_sampling)
+        inputs = Inputs(self._null_tensor, initial_sampling)
         with self.double_encoding:
             output = self.decode(data, inputs)
 
@@ -494,36 +492,32 @@ class VQVAE(AbstractVQVAE[WAutoEncoder]):
 class CounterfactualVQVAE(AbstractVQVAE[CounterfactualWAutoEncoder]):
     """Counterfactual VQVAE implementation."""
 
+    _null_tensor = torch.empty(0)
+    _zero_tensor = torch.tensor(0.0)
+
     def _create_w_autoencoder(self) -> CounterfactualWAutoEncoder:
         return CounterfactualWAutoEncoder()
 
     @torch.inference_mode()
-    def generate(self,
-                 batch_size: int = 1,
-                 initial_sampling: torch.Tensor = torch.empty(0),
-                 z1_bias: torch.Tensor = torch.tensor(0),
-                 probs: torch.Tensor | None = None,
-                 **kwargs: Any) -> Outputs:
+    def generate(
+        self,
+        batch_size: int = 1,
+        initial_sampling: torch.Tensor = _null_tensor,
+        z1_bias: torch.Tensor = _zero_tensor,
+        probs: torch.Tensor | None = None,
+        **kwargs: Any,
+    ) -> Outputs:
         """Generate counterfactual samples."""
-        return super().generate(
-            batch_size=batch_size,
-            initial_sampling=initial_sampling,
-            z1_bias=z1_bias,
-            probs=probs
-        )
+        return super().generate(batch_size=batch_size, initial_sampling=initial_sampling, z1_bias=z1_bias, probs=probs)
 
 
 def get_autoencoder() -> AutoEncoder:
     """Factory function to create the appropriate autoencoder."""
-    model_registry = {
-        ModelHead.AE: AE,
-        ModelHead.VQVAE: VQVAE,
-        ModelHead.CounterfactualVQVAE: CounterfactualVQVAE
-    }
+    model_registry = {ModelHead.AE: AE, ModelHead.VQVAE: VQVAE, ModelHead.CounterfactualVQVAE: CounterfactualVQVAE}
 
     model_head = Experiment.get_config().autoencoder.architecture.head
 
     if model_head not in model_registry:
-        raise ValueError(f"Unknown model head: {model_head}")
+        raise ValueError(f'Unknown model head: {model_head}')
 
     return model_registry[model_head]()

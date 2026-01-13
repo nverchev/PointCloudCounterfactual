@@ -63,7 +63,6 @@ class BaseWEncoder(nn.Module, metaclass=abc.ABCMeta):
 
 
 class WEncoderConvolution(BaseWEncoder):
-
     def __init__(self) -> None:
         super().__init__()
         modules: list[nn.Module] = []
@@ -79,14 +78,12 @@ class WEncoderConvolution(BaseWEncoder):
         for (in_dim, out_dim), do in zip(dim_pairs, self.dropout, strict=False):
             modules.append(LinearLayer(in_dim, out_dim, act_cls=self.act_cls))
             modules.append(nn.Dropout(do))
-        modules.append(
-            LinearLayer(self.h_dims_lin[-1], 2 * self.z_dim, batch_norm=False)
-        )  # change to encode
+        modules.append(LinearLayer(self.h_dims_lin[-1], 2 * self.z_dim, batch_norm=False))  # change to encode
         self.encode = nn.Sequential(*modules)
 
     def forward(self, x) -> tuple[torch.Tensor, torch.Tensor]:
         """Forward pass."""
-        x = x.view(-1,  self.n_codes, self.embedding_dim).transpose(2, 1)
+        x = x.view(-1, self.n_codes, self.embedding_dim).transpose(2, 1)
         h = self.conv(x).view(-1, self.w_dim * self.h_dims_conv[-1])
         x = self.encode(h)
         return h, x
@@ -130,6 +127,7 @@ class WEncoderTransformers(BaseWEncoder):
 
         z = self.to_latent(h)
         return x, z
+
 
 class BasePointEncoder(nn.Module, metaclass=abc.ABCMeta):
     def __init__(self) -> None:

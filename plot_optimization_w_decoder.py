@@ -16,7 +16,7 @@ from src.config_options import VERSION, ConfigPath
 def tune(tune_cfg: DictConfig):
     """Set up the study and launch the optimization."""
     pathlib.Path(tune_cfg.db_location).mkdir(exist_ok=True)
-    version = f"v{VERSION}"
+    version = f'v{VERSION}'
     with (ConfigPath.CONFIG_ALL.get_path() / 'defaults').with_suffix('.yaml').open() as f:
         loaded_cfg = yaml.safe_load(f)
         variation = loaded_cfg['variation']

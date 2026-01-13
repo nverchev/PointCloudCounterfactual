@@ -1,4 +1,5 @@
 """Hooks for model training and optimization."""
+
 from typing import cast
 
 import numpy as np
@@ -22,6 +23,7 @@ class DiscreteSpaceOptimizer:
     to ensure efficient utilization of the discrete latent space. Unused codebook
     entries are reassigned based on the usage patterns of active entries.
     """
+
     module: AbstractVQVAE[WAutoEncoder]
 
     def __init__(self, model_runner: ModelRunner[Inputs, Targets, Outputs]) -> None:

@@ -34,8 +34,9 @@ class NNDistanceFunction(Function):
         set1, set2 = ctx.saved_tensors
         idx1 = ctx.idx1
         idx2 = ctx.idx2
-        grad1, grad2 = NNDistanceGrad(set1, set2, idx1, idx2,
-                                      grad_outputs[0].contiguous(), grad_outputs[1].contiguous())
+        grad1, grad2 = NNDistanceGrad(
+            set1, set2, idx1, idx2, grad_outputs[0].contiguous(), grad_outputs[1].contiguous()
+        )
         return grad1, grad2
 
 

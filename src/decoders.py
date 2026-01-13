@@ -112,7 +112,7 @@ class WDecoderLinear(BaseWDecoder):
     def __init__(self) -> None:
         super().__init__()
         modules: list[nn.Module] = []
-        self.dropout: tuple[float, ...] = (0., *self.dropout)
+        self.dropout: tuple[float, ...] = (0.0, *self.dropout)
         expanded_w_dim = self.w_dim * self.proj_dim
         dim_pairs = itertools.pairwise([self.z1_dim + self.z2_dim, *self.h_dims, expanded_w_dim])
         for (in_dim, out_dim), do in zip(dim_pairs, self.dropout, strict=False):
@@ -120,10 +120,10 @@ class WDecoderLinear(BaseWDecoder):
             modules.append(nn.Dropout(do))
         self.decode = nn.Sequential(*modules)
         self.conv = nn.Sequential(
-            PointsConvLayer(self.proj_dim * self.embedding_dim,
-                            self.embedding_dim,
-                            groups=self.embedding_dim,
-                            batch_norm=False))
+            PointsConvLayer(
+                self.proj_dim * self.embedding_dim, self.embedding_dim, groups=self.embedding_dim, batch_norm=False
+            )
+        )
 
     def forward(self, z1: torch.Tensor, z2: torch.Tensor):
         """Forward pass."""
@@ -144,9 +144,7 @@ class WDecoderConvolution(BaseWDecoder):
         for (in_dim, out_dim), do in zip(dim_pairs, self.dropout, strict=False):
             modules.append(PointsConvLayer(in_dim, out_dim, groups=self.n_codes, act_cls=self.act_cls))
             modules.append(nn.Dropout(do))
-        modules.append(
-            PointsConvLayer(total_h_dims[-1], self.w_dim, groups=self.n_codes, batch_norm=False)
-        )
+        modules.append(PointsConvLayer(total_h_dims[-1], self.w_dim, groups=self.n_codes, batch_norm=False))
         self.decode = nn.ModuleList(modules)
 
     def forward(self, z1: torch.Tensor, z2: torch.Tensor):
@@ -217,19 +215,22 @@ class BasePointDecoder(nn.Module, metaclass=abc.ABCMeta):
         self.tau = cfg_decoder.tau
 
     @abc.abstractmethod
-    def forward(self,
-                w: torch.Tensor,
-                m: int,
-                s: torch.Tensor,
-                viz_att: torch.Tensor,
-                viz_components: torch.Tensor,
-                ) -> torch.Tensor:
+    def forward(
+        self,
+        w: torch.Tensor,
+        m: int,
+        s: torch.Tensor,
+        viz_att: torch.Tensor,
+        viz_components: torch.Tensor,
+    ) -> torch.Tensor:
         """Forward pass."""
 
 
 class PCGen(BasePointDecoder):
     """Map points from a fixed distribution to a point cloud in parallel."""
+
     concat: bool = False
+    _null_tensor: torch.Tensor = torch.empty(0)
 
     def __init__(self) -> None:
         super().__init__()
@@ -253,17 +254,16 @@ class PCGen(BasePointDecoder):
                 PointsConvLayer(self.h_dims_conv[-1], OUT_CHAN, batch_norm=False, act_cls=torch.nn.Identity)
             )
         if self.n_components > 1:
-            self.att = PointsConvLayer(self.h_dims_conv[-1] * self.n_components,
-                                       self.n_components,
-                                       batch_norm=False)
+            self.att = PointsConvLayer(self.h_dims_conv[-1] * self.n_components, self.n_components, batch_norm=False)
 
-    def forward(self,
-                w: torch.Tensor,
-                m: int,
-                s: torch.Tensor,
-                viz_att: torch.Tensor = torch.empty(0),
-                viz_components: torch.Tensor = torch.empty(0),
-                ) -> torch.Tensor:
+    def forward(
+        self,
+        w: torch.Tensor,
+        m: int,
+        s: torch.Tensor,
+        viz_att: torch.Tensor = _null_tensor,
+        viz_components: torch.Tensor = _null_tensor,
+    ) -> torch.Tensor:
         """Forward pass."""
         batch = w.size()[0]
         device = w.device
@@ -291,13 +291,15 @@ class PCGen(BasePointDecoder):
             x_att = x_att.transpose(2, 1)
             x = (xs * x_att.unsqueeze(1)).sum(3)
             if viz_att.numel():  # accessory information for visualization
-                assert x_att.shape == viz_att.shape, (f'Shape tensor_out {viz_att.shape} does not match shape '
-                                                      f'attention {x_att.shape}')
+                assert x_att.shape == viz_att.shape, (
+                    f'Shape tensor_out {viz_att.shape} does not match shape attention {x_att.shape}'
+                )
                 # side effects
                 viz_att.data = x_att
             if viz_components.numel():  # accessory information for visualization
-                assert xs.shape == viz_components.shape, (f'Shape tensor_out {viz_components.shape} does '
-                                                          f'not match shape components {xs.shape}')
+                assert xs.shape == viz_components.shape, (
+                    f'Shape tensor_out {viz_components.shape} does not match shape components {xs.shape}'
+                )
                 # side effects
                 viz_components.data = xs
         else:

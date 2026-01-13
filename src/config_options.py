@@ -48,6 +48,7 @@ class EnvSettings(BaseSettings):
 
 class ConfigPath(enum.StrEnum):
     """Configuration paths relative to the project root."""
+
     CONFIG_ALL = 'config_all'
     TUNE_AUTOENCODER = 'tune_autoencoder'
     TUNE_W_AUTOENCODER = 'tune_w_autoencoder'
@@ -73,42 +74,47 @@ class ConfigPath(enum.StrEnum):
 def _get_activation_cls(act_name: str) -> ActClass:
     try:
         return getattr(torch.nn.modules.activation, act_name)
-    except AttributeError:
-        raise ValueError(f'Input act_name "{act_name}" is not the name of a pytorch activation.')
+    except AttributeError as ae:
+        raise ValueError(f'Input act_name "{act_name}" is not the name of a pytorch activation.') from ae
 
 
 def _get_optim_cls(optimizer_name: str) -> type[torch.optim.Optimizer]:
     try:
         return getattr(torch.optim, optimizer_name)
-    except AttributeError:
-        raise ValueError(f'Input opt_name "{optimizer_name}" is not the name of a pytorch optimizer.')
+    except AttributeError as ae:
+        raise ValueError(f'Input opt_name "{optimizer_name}" is not the name of a pytorch optimizer.') from ae
 
 
 class Datasets(enum.StrEnum):
     """Dataset names."""
+
     ModelNet = enum.auto()
     ShapenetFlow = enum.auto()
 
 
 class Encoders(enum.StrEnum):
     """Encoder names."""
+
     LDGCNN = enum.auto()
     DGCNN = enum.auto()
 
 
 class Decoders(enum.StrEnum):
     """Encoder names."""
+
     PCGen = enum.auto()
 
 
 class WEncoders(enum.StrEnum):
     """Encoder names for the W-autoencoder."""
+
     Convolution = enum.auto()
     Transformers = enum.auto()
 
 
 class WDecoders(enum.StrEnum):
     """Decoder names for the W-autoencoder."""
+
     Convolution = enum.auto()
     Linear = enum.auto()
     TransformerCross = enum.auto()
@@ -116,6 +122,7 @@ class WDecoders(enum.StrEnum):
 
 class ModelHead(enum.StrEnum):
     """Model type."""
+
     AE = enum.auto()
     VQVAE = enum.auto()
     CounterfactualVQVAE = enum.auto()
@@ -123,6 +130,7 @@ class ModelHead(enum.StrEnum):
 
 class GradOp(enum.StrEnum):
     """Gradient operation names."""
+
     GradParamNormalizer = enum.auto()
     GradZScoreNormalizer = enum.auto()
     GradNormClipper = enum.auto()
@@ -134,12 +142,14 @@ class GradOp(enum.StrEnum):
 
 class ClipCriterion(enum.StrEnum):
     """Clipping criterion names."""
+
     ZStat = enum.auto()
     EMA = enum.auto()
 
 
 class Schedulers(enum.StrEnum):
     """Scheduler names."""
+
     Constant = enum.auto()
     Cosine = enum.auto()
     Exponential = enum.auto()
@@ -147,6 +157,7 @@ class Schedulers(enum.StrEnum):
 
 class ReconLosses(enum.StrEnum):
     """Loss names."""
+
     Chamfer = enum.auto()
     ChamferEMD = enum.auto()
 
@@ -229,6 +240,7 @@ class WEncoderConfig:
         if len(self.hidden_dims_lin) > len(self.dropout):
             msg = 'Number of hidden dimensions {} and dropouts {} not compatible.'
             raise ValueError(msg.format(len(self.hidden_dims_lin), len(self.dropout)))
+
         return self
 
 
@@ -286,6 +298,7 @@ class WDecoderConfig:
         if len(self.hidden_dims) > len(self.dropout):
             msg = 'Number of hidden dimensions {} and dropouts {} not compatible.'
             raise ValueError(msg.format(len(self.hidden_dims), len(self.dropout)))
+
         return self
 
 
@@ -315,6 +328,7 @@ class PosteriorDecoderConfig:
         if len(self.hidden_dims) > len(self.dropout):
             msg = 'Number of hidden dimensions {} and dropouts {} not compatible.'
             raise ValueError(msg.format(len(self.hidden_dims), len(self.dropout)))
+
         return self
 
 
@@ -432,6 +446,7 @@ class ClassifierConfig:
         if len(self.mlp_dims) > len(self.dropout):
             msg = 'Number of hidden dimensions {} and dropouts {} not compatible.'
             raise ValueError(msg.format(len(self.hidden_dims), len(self.dropout)))
+
         return self
 
 
@@ -505,6 +520,7 @@ class TrainingConfig:
         n_epochs (StrictlyPositiveInt): The total number of epochs for training
         early_stopping (EarlyStoppingConfig): The configuration for early stopping
     """
+
     batch_size: StrictlyPositiveInt
     learn: LearningConfig
     n_epochs: StrictlyPositiveInt
@@ -537,6 +553,7 @@ class ObjectiveAEConfig:
         recon_loss (ReconLosses): The denomination of the reconstruction loss
         c_embedding (PositiveFloat): The coefficient for the embedding loss
     """
+
     n_inference_output_points: StrictlyPositiveInt
     recon_loss: ReconLosses
     c_embedding: PositiveFloat
@@ -552,6 +569,7 @@ class ObjectiveWAEConfig:
         c_kld2 (PositiveFloat): The Kullback-Leibler Divergence coefficient for the second latent variable
         c_counterfactual (PositiveFloat): The coefficient for the Counterfactual loss
     """
+
     vamp: bool
     c_kld1: PositiveFloat
     c_kld2: PositiveFloat
@@ -582,6 +600,7 @@ class PathSpecs:
         data_dir (pathlib.Path): The directory for datasets. Default is the path specified in the .env file
         metadata_dir (pathlib.Path): The directory for dataset metadata. Default is the path specified in the .env file
     """
+
     _env = EnvSettings()
     root_exp_dir: pathlib.Path = _env.root_exp_dir
     data_dir: pathlib.Path = _env.dataset_dir
@@ -655,7 +674,7 @@ class UserSettings:
     checkpoint_every: PositiveInt
     n_generated_output_points: int
     load_checkpoint: int = -1
-    counterfactual_value: PositiveFloat = 1.
+    counterfactual_value: PositiveFloat = 1.0
     path = PathSpecs()
 
     def __post_init__(self):
@@ -684,6 +703,7 @@ class ConfigTrain:
         train (TrainingConfig): Training options
         name (str): The name of the child experiment
     """
+
     train: TrainingConfig
     name: str
 
@@ -697,6 +717,7 @@ class ConfigTrainClassifier(ConfigTrain):
         name (str): The name of the child experiment
         architecture (ClassifierConfig): The classifier architecture configuration.
     """
+
     architecture: ClassifierConfig
 
 
@@ -711,6 +732,7 @@ class ConfigTrainAE(ConfigTrain):
         objective (ObjectiveAEConfig): The autoencoder objective (loss and metrics) configuration
         diagnose_every (StrictlyPositiveInt): The number of points between diagnostics (rearranging the discrete space)
     """
+
     architecture: AEConfig
     objective: ObjectiveAEConfig
     diagnose_every: StrictlyPositiveInt
@@ -725,6 +747,7 @@ class ConfigTrainWAE(ConfigTrain):
         name (str): The name of the child experiment
         objective (ObjectiveWAEConfig): The W-autoencoder objective (loss and metrics) configuration
     """
+
     objective: ObjectiveWAEConfig
 
 
@@ -741,6 +764,7 @@ class ConfigAll:
         user (UserSettings): User-specific settings
         data (DataConfig): Data pre-processing configuration
     """
+
     variation: str
     final: bool
     classifier: ConfigTrainClassifier
@@ -749,7 +773,7 @@ class ConfigAll:
     user: UserSettings
     data: DataConfig
     tags: list[str] = field(default_factory=list)
-    version = f"v{VERSION}"
+    version = f'v{VERSION}'
     _lens: ConfigTrain | None = None
 
     @property
@@ -768,6 +792,7 @@ class ConfigAll:
         """The section of the configuration that is currently focused on."""
         if self._lens is None:
             raise ValueError('lens not set.')
+
         return self._lens
 
     @contextmanager
@@ -785,6 +810,7 @@ class ConfigAll:
 
 class Experiment(drytorch.Experiment[ConfigAll]):
     """Specifications for the current experiment."""
+
     pass
 
 
@@ -868,9 +894,11 @@ def hydra_main(func: Callable[[ConfigAll], None]) -> Callable[[], None]:
 
 def update_exp_name(cfg: ConfigAll, overrides: list[str]) -> None:
     """Adds the overrides to the name for the experiment."""
-    overrides = [override for override in overrides
-                 if override.split('.')[0] != 'user' and
-                 override.split('=')[0] not in ('final', 'variation')]
+    overrides = [
+        override
+        for override in overrides
+        if override.split('.')[0] != 'user' and override.split('=')[0] not in ('final', 'variation')
+    ]
     cfg.variation = '_'.join([cfg.variation, *overrides]).replace('/', '_')
     cfg.tags = overrides
     return

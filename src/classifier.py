@@ -13,6 +13,7 @@ from src.neighbour_ops import get_graph_features
 
 class DGCNN(nn.Module):
     """Standard DGCNN classifier."""
+
     def __init__(self) -> None:
         super().__init__()
         cfg = Experiment.get_config()

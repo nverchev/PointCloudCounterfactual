@@ -1,4 +1,5 @@
 """Visualize reconstructions of the autoencoder."""
+
 from collections.abc import Sized
 
 import torch
@@ -12,6 +13,8 @@ from src.visualisation import render_cloud
 
 
 torch.inference_mode()
+
+
 def visualize_reconstructions() -> None:
     """Visualize the selected point clouds in the dataset."""
     cfg = Experiment.get_config()
@@ -64,5 +67,5 @@ def main(cfg: ConfigAll) -> None:
     return
 
 
-if __name__ == "__main__":
+if __name__ == '__main__':
     main()

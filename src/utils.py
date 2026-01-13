@@ -4,7 +4,7 @@ import logging
 import pathlib
 import zipfile
 
-from typing import Any, cast
+from typing import Any, cast, ClassVar
 
 import h5py
 import numpy as np
@@ -17,7 +17,8 @@ from sklearn.neighbors import KDTree
 
 class Singleton(type):
     """A metaclass that ensures only one instance of a class is created."""
-    _instances = dict[type, Any]()
+
+    _instances: ClassVar[dict[type, Any]] = {}
 
     def __call__(cls, *args, **kwargs):
         if cls not in cls._instances:
@@ -29,6 +30,7 @@ class Singleton(type):
 # Allows a temporary change using the "with" clause
 class UsuallyFalse:
     """A class that provides a context manager for temporarily changing a boolean value."""
+
     _value: bool = False
 
     def __bool__(self) -> bool:
@@ -43,25 +45,25 @@ class UsuallyFalse:
 
 def download_zip(target_folder: pathlib.Path, url: str) -> None:
     """Downloads and extracts a zip file from a URL to a target folder."""
-    logging.info(f"Checking if folder exists: {target_folder}")
+    logging.info(f'Checking if folder exists: {target_folder}')
 
     if not target_folder.exists():
-        logging.info(f"Folder does not exist. Starting download from: {url}")
+        logging.info(f'Folder does not exist. Starting download from: {url}')
         r = requests.get(url)
-        logging.info(f"Download complete. Size: {len(r.content)} bytes")
+        logging.info(f'Download complete. Size: {len(r.content)} bytes')
         zip_path = target_folder.with_suffix('.zip')
-        logging.info(f"Saving zip file to: {zip_path}")
+        logging.info(f'Saving zip file to: {zip_path}')
 
         with zip_path.open('wb') as zip_file:
             zip_file.write(r.content)
 
-        logging.info(f"Zip file saved successfully. Extracting to: {target_folder.parent}")
+        logging.info(f'Zip file saved successfully. Extracting to: {target_folder.parent}')
         with zipfile.ZipFile(zip_path) as zip_ref:
             zip_ref.extractall(target_folder.parent)
 
-        logging.info("Extraction complete")
+        logging.info('Extraction complete')
     else:
-        logging.info(f"Folder already exists at {target_folder}. Skipping download.")
+        logging.info(f'Folder already exists at {target_folder}. Skipping download.')
 
     return
 
@@ -76,10 +78,9 @@ def index_k_neighbours(pcs: list[npt.NDArray[Any]], k: int) -> npt.NDArray[Any]:
     return np.stack(indices_list)
 
 
-def load_h5_modelnet(path: pathlib.Path,
-                     wild_str: str,
-                     input_points: int,
-                     k: int) -> tuple[npt.NDArray[Any], npt.NDArray[Any], npt.NDArray[Any]]:
+def load_h5_modelnet(
+    path: pathlib.Path, wild_str: str, input_points: int, k: int
+) -> tuple[npt.NDArray[Any], npt.NDArray[Any], npt.NDArray[Any]]:
     """Loads and processes ModelNet data from H5 files, including point clouds, indices and labels."""
     pcd_list: list[npt.NDArray[Any]] = []
     indices_list: list[npt.NDArray[Any]] = []
@@ -130,5 +131,7 @@ def print_statistics(title: str, test_outcomes: list[float]):
         return
     np_test_outcomes = np.array(test_outcomes)
     print(title)
-    print(f'Number of tests: {len(np_test_outcomes):} Min: {np_test_outcomes.min():.4e} '
-          f'Max: {np_test_outcomes.max():.4e} Mean: {np_test_outcomes.mean():.4e} Std: {np_test_outcomes.std():.4e}')
+    print(
+        f'Number of tests: {len(np_test_outcomes):} Min: {np_test_outcomes.min():.4e} '
+        f'Max: {np_test_outcomes.max():.4e} Mean: {np_test_outcomes.mean():.4e} Std: {np_test_outcomes.std():.4e}'
+    )

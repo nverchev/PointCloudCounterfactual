@@ -17,8 +17,8 @@ def get_scheduler(config: SchedulerConfig) -> schedulers.AbstractScheduler:
     else:
         raise ValueError(f'Scheduler {config.function} not supported.')
 
-    scheduler = scheduler.bind(schedulers.restart(
-        restart_interval=config.restart_interval, restart_fraction=config.restart_fraction)
+    scheduler = scheduler.bind(
+        schedulers.restart(restart_interval=config.restart_interval, restart_fraction=config.restart_fraction)
     ).bind(schedulers.warmup(config.warmup_steps))
 
     return scheduler
@@ -51,9 +51,10 @@ def get_grad_op(config: LearningConfig) -> p.GradientOpProtocol:
 def get_learning_schema() -> LearningSchema:
     """Returns configured the learning scheme."""
     config = Experiment.get_config().lens.train.learn
-    return LearningSchema(optimizer_cls=config.optimizer_cls,
-                          base_lr=config.learning_rate,
-                          scheduler=get_scheduler(config.scheduler),
-                          optimizer_defaults=config.opt_settings,
-                          gradient_op=get_grad_op(config)
-                          )
+    return LearningSchema(
+        optimizer_cls=config.optimizer_cls,
+        base_lr=config.learning_rate,
+        scheduler=get_scheduler(config.scheduler),
+        optimizer_defaults=config.opt_settings,
+        gradient_op=get_grad_op(config),
+    )

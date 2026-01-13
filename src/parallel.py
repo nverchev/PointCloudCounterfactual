@@ -14,6 +14,7 @@ import torch.multiprocessing as mp
 P = ParamSpec('P')
 T = TypeVar('T')
 
+
 class DistributedWorker[**P, T]:
     """Callable wrapper to distribute a worker across multiple processes."""
 
@@ -46,10 +47,9 @@ class DistributedWorker[**P, T]:
         acc_or_none = torch.accelerator.current_accelerator()
         acc = torch.device('cpu') if acc_or_none is None else acc_or_none
         backend = torch.distributed.get_default_backend_for_device(acc)
-        dist.init_process_group(backend,
-                                rank=rank,
-                                init_method=f'tcp://127.0.0.1:{self.port}',
-                                world_size=self.world_size)
+        dist.init_process_group(
+            backend, rank=rank, init_method=f'tcp://127.0.0.1:{self.port}', world_size=self.world_size
+        )
 
         return
 

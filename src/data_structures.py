@@ -19,6 +19,7 @@ class Inputs(NamedTuple):
         indices: precalculated indices for the nearest neighbors (number must match architecture).
         initial_sampling: specify the sampling for the reconstructed cloud from the initial sampling space.
     """
+
     cloud: torch.Tensor
     indices: torch.Tensor = torch.empty(0)
     initial_sampling: torch.Tensor = torch.empty(0)
@@ -32,6 +33,7 @@ class Targets(NamedTuple):
         scale: original scale factor for the cloud.
         label: label of the sample.
     """
+
     ref_cloud: torch.Tensor
     scale: torch.Tensor = torch.empty(0)
     label: torch.Tensor = torch.empty(0)
@@ -71,6 +73,7 @@ class Outputs:
         y2: output of the evaluated discriminator for the conditional inner autoencoder discriminative loss.
 
     """
+
     model_epoch: int
     recon: torch.Tensor
     w: torch.Tensor
@@ -113,13 +116,13 @@ class Outputs:
             if hasattr(self, name):
                 try:
                     value = getattr(self, name)
-                    parts.append(f"{name}={value!r}")
+                    parts.append(f'{name}={value!r}')
                 except Exception:
-                    parts.append(f"{name}=<error>")
+                    parts.append(f'{name}=<error>')
             else:
-                parts.append(f"{name}=<uninitialized>")
+                parts.append(f'{name}=<uninitialized>')
 
-        return f"{self.__class__.__name__}({', '.join(parts)})"
+        return f'{self.__class__.__name__}({", ".join(parts)})'
 
 
 class WInputs(NamedTuple):
@@ -129,6 +132,7 @@ class WInputs(NamedTuple):
         w_q: outer encoder approximation of the discrete encodings' embedding.
         logits: optional argument for learning a conditional distribution given a classifier evaluation.
     """
+
     w_q: torch.Tensor
     logits: torch.Tensor = torch.empty(0)
 
@@ -141,6 +145,7 @@ class WTargets(NamedTuple):
         one_hot_idx: torch.Tensor
         logits: optional argument to get a conditional distribution given a classifier's evaluation.
     """
+
     w_e: torch.Tensor
     one_hot_idx: torch.Tensor
     logits: torch.Tensor = torch.empty(0)

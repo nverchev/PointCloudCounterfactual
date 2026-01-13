@@ -10,6 +10,8 @@ from src.config_options import ConfigAll, Experiment, hydra_main
 
 
 torch.inference_mode()
+
+
 def create_variation() -> None:
     """Convenience method that copies the autoencoder and classifier state from the main experiment to a new one."""
     cfg = Experiment.get_config()
@@ -40,6 +42,7 @@ def create_variation() -> None:
     dgcnn_module.load_state_dict(torch.load(main_state_path, weights_only=True))
     dgcnn.save_state()
 
+
 @hydra_main
 def main(cfg: ConfigAll) -> None:
     """Set up the experiment and launches the variation creation."""
@@ -49,5 +52,5 @@ def main(cfg: ConfigAll) -> None:
     return
 
 
-if __name__ == "__main__":
+if __name__ == '__main__':
     main()

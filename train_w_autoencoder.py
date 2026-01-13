@@ -26,10 +26,9 @@ else:
     Trial = Any
 
 
-def train_w_autoencoder(vqvae: CounterfactualVQVAE,
-                        classifier: Model[Inputs, torch.Tensor],
-                        name: str,
-                        trial: Trial | None = None) -> None:
+def train_w_autoencoder(
+    vqvae: CounterfactualVQVAE, classifier: Model[Inputs, torch.Tensor], name: str, trial: Trial | None = None
+) -> None:
     """Train the w-autoencoder."""
     cfg = Experiment.get_config()
     cfg_w_ae = cfg.w_autoencoder
@@ -53,11 +52,10 @@ def train_w_autoencoder(vqvae: CounterfactualVQVAE,
     with cfg.focus(cfg.w_autoencoder):
         learning_schema = get_learning_schema()
 
-    train_loader = DataLoader(dataset=train_w_dataset, batch_size=cfg_w_ae.train.batch_size_per_device, pin_memory=False)
-    trainer = Trainer(w_encoder_model,
-                      loader=train_loader,
-                      loss=loss_calc,
-                      learning_schema=learning_schema)
+    train_loader = DataLoader(
+        dataset=train_w_dataset, batch_size=cfg_w_ae.train.batch_size_per_device, pin_memory=False
+    )
+    trainer = Trainer(w_encoder_model, loader=train_loader, loss=loss_calc, learning_schema=learning_schema)
     test_encoding = Test(w_encoder_model, loader=test_loader, metric=loss_calc)
 
     if not cfg.final:
@@ -65,15 +63,15 @@ def train_w_autoencoder(vqvae: CounterfactualVQVAE,
 
     cfg_early = cfg_w_ae.train.early_stopping
     if not cfg.final and cfg_early.active:
-        trainer.post_epoch_hooks.register(EarlyStoppingCallback(metric=loss_calc,
-                                                                filter_fn=get_trailing_mean(cfg_early.window),
-                                                                patience=cfg_early.patience))
+        trainer.post_epoch_hooks.register(
+            EarlyStoppingCallback(
+                metric=loss_calc, filter_fn=get_trailing_mean(cfg_early.window), patience=cfg_early.patience
+            )
+        )
     if trial is not None:
         from drytorch.contrib.optuna import TrialCallback
 
-        prune_hook = TrialCallback(trial,
-                                   filter_fn=get_moving_average(),
-                                   metric=loss_calc)
+        prune_hook = TrialCallback(trial, filter_fn=get_moving_average(), metric=loss_calc)
         trainer.post_epoch_hooks.register(prune_hook)
 
     if cfg_user.load_checkpoint >= 0:
@@ -97,14 +95,17 @@ def setup_and_train(cfg: ConfigAll, hydra_dir: pathlib.Path) -> None:
             name=cfg.classifier.architecture.name,
             device=cfg.user.device,
             should_compile=False,
-            should_distribute=False)
+            should_distribute=False,
+        )
         classifier.load_state()
         module = CounterfactualVQVAE()
-        autoencoder = Model(module,
-                            name=cfg.autoencoder.architecture.name,
-                            device=cfg.user.device,
-                            should_compile=False,
-                            should_distribute=False)
+        autoencoder = Model(
+            module,
+            name=cfg.autoencoder.architecture.name,
+            device=cfg.user.device,
+            should_compile=False,
+            should_distribute=False,
+        )
         autoencoder.checkpoint.load()
         train_w_autoencoder(module, classifier, name=autoencoder.name)
         autoencoder.save_state()
@@ -122,5 +123,5 @@ def main(cfg: ConfigAll) -> None:
         setup_and_train(cfg, hydra_dir)
 
 
-if __name__ == "__main__":
+if __name__ == '__main__':
     main()
