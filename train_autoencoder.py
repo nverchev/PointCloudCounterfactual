@@ -8,13 +8,14 @@ from drytorch import DataLoader, Diagnostic, Model, Test, Trainer
 from drytorch.core.exceptions import TrackerNotActiveError
 from drytorch.lib.hooks import EarlyStoppingCallback, Hook, StaticHook, call_every, saving_hook
 from drytorch.utils.average import get_moving_average, get_trailing_mean
-from src.autoencoder import AbstractVQVAE, get_autoencoder
+
+from src.module import AbstractVQVAE, get_autoencoder
 from src.config_options import ConfigAll, Experiment, get_current_hydra_dir, get_trackers, hydra_main
-from src.datasets import get_dataset_multiprocess_safe
-from src.hooks import DiscreteSpaceOptimizer
-from src.learning_schema import get_learning_schema
-from src.metrics_and_losses import get_autoencoder_loss, get_emd_loss, get_recon_loss
-from src.parallel import DistributedWorker
+from src.dataset import get_dataset_multiprocess_safe
+from src.train.hooks import DiscreteSpaceOptimizer
+from src.train.learning_schema import get_learning_schema
+from src.train.metrics_and_losses import get_autoencoder_loss, get_emd_loss, get_recon_loss
+from src.utils.parallel import DistributedWorker
 
 
 if TYPE_CHECKING:
@@ -56,7 +57,7 @@ def train_autoencoder(trial: Trial | None = None) -> None:
         trainer.add_validation(test_loader)  # when not final, this uses the validation dataset
 
     try:
-        from src.hooks import TensorBoardLogReconstruction
+        from src.train.hooks import TensorBoardLogReconstruction
 
         restart_interval = cfg.autoencoder.train.learn.scheduler.restart_interval
         trainer.post_epoch_hooks.register(

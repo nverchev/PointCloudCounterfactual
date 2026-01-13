@@ -20,7 +20,7 @@ COLOR_TUPLE = (BLUE, RED, GREEN, VIOLET, ORANGE)
 
 
 if TYPE_CHECKING:
-    from matplotlib.pyplot import Figure
+    from matplotlib.figure import Figure
 else:
     Figure = Any
 

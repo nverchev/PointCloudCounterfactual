@@ -100,7 +100,7 @@ class GeneralizedLinearLayer(nn.Module, metaclass=abc.ABCMeta):
         self.bias: bool = False if batch_norm else True
         self.dense = self.get_dense_layer()
         self.bn_momentum: float = 0.1 if bn_momentum is None else bn_momentum
-        self.bn: nn.Module or None = self.get_bn_layer() if batch_norm else None
+        self.bn: nn.Module | None = self.get_bn_layer() if batch_norm else None
         self.residual: bool = residual
         if act_cls is None:
             self.act = None

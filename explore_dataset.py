@@ -3,8 +3,8 @@
 import torch
 
 from src.config_options import ConfigAll, Experiment, hydra_main
-from src.datasets import Partitions, PointCloudDataset, get_dataset
-from src.visualisation import render_cloud
+from src.dataset import get_dataset, PointCloudDataset, Partitions
+from src.utils.visualisation import render_cloud
 
 
 @torch.inference_mode()

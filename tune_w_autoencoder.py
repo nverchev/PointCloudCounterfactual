@@ -16,9 +16,8 @@ from drytorch import Model, init_trackers
 from drytorch.contrib.optuna import get_final_value, suggest_overrides
 from drytorch.core.exceptions import ConvergenceError
 from drytorch.core.register import register_model, unregister_model
-from src import tuning
-from src.autoencoder import CounterfactualVQVAE
-from src.classifier import DGCNN
+from src.utils import tuning
+from src.module import CounterfactualVQVAE, DGCNN
 from src.config_options import VERSION, ConfigPath, Experiment, get_config_all
 from train_w_autoencoder import train_w_autoencoder
 

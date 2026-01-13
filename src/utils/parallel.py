@@ -8,8 +8,7 @@ from typing import ParamSpec, TypeVar
 
 import torch
 import torch.distributed as dist
-import torch.multiprocessing as mp
-
+from torch.multiprocessing.spawn import spawn
 
 P = ParamSpec('P')
 T = TypeVar('T')
@@ -37,7 +36,7 @@ class DistributedWorker[**P, T]:
 
     def spawn(self, *args: P.args, **kwargs: P.kwargs) -> None:
         """Spawn the worker in multiple processes."""
-        mp.spawn(self, args=args, nprocs=self.world_size)
+        spawn(self, args=args, nprocs=self.world_size)
         return
 
     def _setup_distributed(self, rank: int) -> None:

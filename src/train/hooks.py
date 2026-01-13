@@ -11,9 +11,9 @@ from torch.utils import data
 from drytorch.core import protocols as p
 from drytorch.lib.load import take_from_dataset
 from drytorch.lib.runners import ModelRunner
-from src.autoencoder import AbstractVQVAE, WAutoEncoder
+from src.module import AbstractVQVAE, WAutoEncoder
 from src.config_options import Experiment
-from src.data_structures import Inputs, Outputs, Targets
+from src.data_types import Inputs, Outputs, Targets
 
 
 class DiscreteSpaceOptimizer:

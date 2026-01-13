@@ -6,7 +6,6 @@ from typing import NamedTuple, Self
 
 import torch
 
-
 IN_CHAN = 3
 OUT_CHAN = 3
 

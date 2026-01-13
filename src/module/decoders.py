@@ -7,9 +7,9 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
-from src.config_options import ActClass, Decoders, Experiment, WDecoders
-from src.data_structures import OUT_CHAN
-from src.layers import LinearLayer, PointsConvLayer
+from src.config_options import ActClass, Experiment
+from src.data_types import OUT_CHAN
+from src.module.layers import LinearLayer, PointsConvLayer
 from src.neighbour_ops import graph_filtering
 
 
@@ -311,21 +311,3 @@ class PCGen(BasePointDecoder):
     @staticmethod
     def _join_operation(x: torch.Tensor, w: torch.Tensor) -> torch.Tensor:
         return w.unsqueeze(2) * x
-
-
-def get_decoder() -> BasePointDecoder:
-    """Get decoder according to the configuration."""
-    decoder_dict: dict[Decoders, BasePointDecoder] = {
-        Decoders.PCGen: PCGen(),
-    }
-    return decoder_dict[Experiment.get_config().autoencoder.architecture.decoder.architecture]
-
-
-def get_w_decoder() -> BaseWDecoder:
-    """Get W-decoder according to the configuration."""
-    decoder_dict: dict[WDecoders, type[BaseWDecoder]] = {
-        WDecoders.Convolution: WDecoderConvolution,
-        WDecoders.Linear: WDecoderLinear,
-        WDecoders.TransformerCross: WDecoderTransformers,
-    }
-    return decoder_dict[Experiment.get_config().autoencoder.architecture.decoder.w_decoder.architecture]()

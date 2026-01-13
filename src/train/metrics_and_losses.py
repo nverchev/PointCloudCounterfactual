@@ -14,8 +14,8 @@ from torcheval.metrics.functional import multiclass_accuracy, multiclass_f1_scor
 
 from drytorch.lib.objectives import Loss, LossBase, Metric
 from src.config_options import Experiment, ModelHead, ReconLosses
-from src.data_structures import Outputs, Targets, WTargets
-from src.neighbour_ops import pykeops_square_distance, torch_square_distance
+from src.data_types import Outputs, Targets, WTargets
+from src.utils.neighbour_ops import pykeops_square_distance, torch_square_distance
 
 
 def pykeops_chamfer(t1: torch.Tensor, t2: torch.Tensor) -> torch.Tensor:

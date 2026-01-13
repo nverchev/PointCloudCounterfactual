@@ -7,12 +7,11 @@ import numpy.typing as npt
 import torch
 
 from drytorch import Model
-from src.autoencoder import CounterfactualVQVAE
-from src.classifier import DGCNN
+from src.module import CounterfactualVQVAE, DGCNN
 from src.config_options import ConfigAll, Experiment, hydra_main
-from src.data_structures import Inputs
-from src.datasets import Partitions, get_dataset
-from src.visualisation import render_cloud
+from src.data_types import Inputs
+from src.dataset import Partitions, get_dataset
+from src.utils.visualisation import render_cloud
 
 
 torch.inference_mode()

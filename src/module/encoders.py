@@ -6,9 +6,9 @@ import itertools
 import torch
 import torch.nn as nn
 
-from src.config_options import Encoders, Experiment, WEncoders, ActClass
-from src.data_structures import IN_CHAN
-from src.layers import EdgeConvLayer, LinearLayer, PointsConvLayer
+from src.config_options import Experiment, ActClass
+from src.data_types import IN_CHAN
+from src.module.layers import EdgeConvLayer, LinearLayer, PointsConvLayer
 from src.neighbour_ops import get_graph_features, graph_max_pooling
 
 
@@ -196,21 +196,3 @@ class DGCNN(BasePointEncoder):
         x_max = x.max(dim=2, keepdim=False)[0]
         x = x_max
         return x
-
-
-def get_encoder() -> BasePointEncoder:
-    """Returns correct encoder."""
-    dict_encoder: dict[Encoders, type[BasePointEncoder]] = {
-        Encoders.LDGCNN: LDGCNN,
-        Encoders.DGCNN: DGCNN,
-    }
-    return dict_encoder[Experiment.get_config().autoencoder.architecture.encoder.architecture]()
-
-
-def get_w_encoder() -> BaseWEncoder:
-    """Returns the correct w_encoder."""
-    decoder_dict: dict[WEncoders, type[BaseWEncoder]] = {
-        WEncoders.Convolution: WEncoderConvolution,
-        WEncoders.Transformers: WEncoderTransformers,
-    }
-    return decoder_dict[Experiment.get_config().autoencoder.architecture.encoder.w_encoder.architecture]()

@@ -10,12 +10,13 @@ from torch.utils.data import Dataset, Subset
 from drytorch import DataLoader, Model, Test
 from drytorch.core import protocols as p
 from drytorch.lib.objectives import Metric, compute_metrics
-from src.autoencoder import CounterfactualVQVAE
-from src.classifier import DGCNN
+
+from src.module import CounterfactualVQVAE, DGCNN
 from src.config_options import ConfigAll, Experiment, hydra_main
-from src.data_structures import Inputs, Targets
-from src.datasets import CounterfactualDatasetEncoder, Partitions, ReconstructedDatasetWithLogits, get_dataset
-from src.metrics_and_losses import get_classification_loss
+from src.dataset import Partitions, get_dataset
+from src.data_types import Inputs, Targets
+from src.dataset import CounterfactualDatasetEncoder, ReconstructedDatasetWithLogits
+from src.train.metrics_and_losses import get_classification_loss
 
 
 def get_label_distribution(test_loader: p.LoaderProtocol[tuple[Inputs, Targets]], num_classes: int) -> Tensor:
