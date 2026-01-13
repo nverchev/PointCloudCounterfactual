@@ -22,7 +22,7 @@ class MatchCostFunction(Function):
         # bias is an optional argument
         ctx.save_for_backward(set1, set2)
 
-        match, temp = ApproxMatch(set1, set2)
+        match, _temp = ApproxMatch(set1, set2)
         ctx.match = match
         cost = MatchCost(set1, set2, match)
         return cost

@@ -50,7 +50,7 @@ def visualize_reconstructions() -> None:
         data = vqvae_module(batch)
     np_input_cloud = input_clouds.cpu().numpy()
     np_recon = data.recon.detach().cpu().numpy()
-    for input_cloud, recon, i in zip(np_input_cloud, np_recon, cfg_user.plot.indices_to_reconstruct):
+    for input_cloud, recon, i in zip(np_input_cloud, np_recon, cfg_user.plot.indices_to_reconstruct, strict=False):
         render_cloud((input_cloud,), title=f'sample_{i}', interactive=cfg_user.plot.interactive, save_dir=save_dir)
         render_cloud((recon,), title=f'recon_{i}', interactive=cfg_user.plot.interactive, save_dir=save_dir)
 

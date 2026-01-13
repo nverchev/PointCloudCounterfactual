@@ -4,7 +4,7 @@ import os
 import socket
 
 from collections.abc import Callable
-from typing import Generic, ParamSpec, TypeVar
+from typing import ParamSpec, TypeVar
 
 import torch
 import torch.distributed as dist
@@ -14,7 +14,7 @@ import torch.multiprocessing as mp
 P = ParamSpec('P')
 T = TypeVar('T')
 
-class DistributedWorker(Generic[P, T]):
+class DistributedWorker[**P, T]:
     """Callable wrapper to distribute a worker across multiple processes."""
 
     def __init__(self, worker: Callable[P, T], world_size: int) -> None:

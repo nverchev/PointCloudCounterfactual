@@ -6,7 +6,7 @@ import pdb
 import sys
 
 from collections.abc import Callable
-from typing import Any, Protocol, TypeAlias, cast, override, runtime_checkable
+from typing import Any, Protocol, cast, override, runtime_checkable
 
 import torch
 import torch.nn as nn
@@ -17,8 +17,8 @@ from torch.autograd import Function
 
 DEBUG_MODE = sys.gettrace()
 
-_grad_t: TypeAlias = tuple[torch.Tensor, ...] | torch.Tensor
-ActClass: TypeAlias = Callable[[], nn.Module]
+type _grad_t = tuple[torch.Tensor, ...] | torch.Tensor
+type ActClass = Callable[[], nn.Module]
 
 
 @runtime_checkable
@@ -214,7 +214,7 @@ class TransferGrad(Function):
     @staticmethod
     def forward(ctx: Any, *args: torch.Tensor, **kwargs: Any) -> torch.Tensor:
         """Forward pass."""
-        from_tensor, to_tensor = args
+        from_tensor, _to_tensor = args
         return from_tensor
 
     @staticmethod
@@ -258,7 +258,7 @@ def frozen_forward(network: nn.Module, x: torch.Tensor) -> Any:
     output = network(x)
 
     # Restore original requires_grad flags
-    for p, req in zip(network.parameters(), was_requires_grad):
+    for p, req in zip(network.parameters(), was_requires_grad, strict=False):
         p.requires_grad_(req)
 
     return output

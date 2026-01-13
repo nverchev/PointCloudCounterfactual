@@ -76,7 +76,7 @@ class WEncoderConvolution(BaseWEncoder):
         modules = []
         expand_w_dim = self.w_dim * self.h_dims_conv[-1]
         dim_pairs = itertools.pairwise([expand_w_dim, *self.h_dims_lin])
-        for (in_dim, out_dim), do in zip(dim_pairs, self.dropout):
+        for (in_dim, out_dim), do in zip(dim_pairs, self.dropout, strict=False):
             modules.append(LinearLayer(in_dim, out_dim, act_cls=self.act_cls))
             modules.append(nn.Dropout(do))
         modules.append(
@@ -105,7 +105,7 @@ class WEncoderTransformers(BaseWEncoder):
         self.input_proj = LinearLayer(self.embedding_dim, self.proj_dim, batch_norm=False, act_cls=nn.Identity)
         self.positional_encoding = nn.Parameter(torch.randn(1, self.n_codes, self.proj_dim))
         transformer_layers: list[nn.Module] = []
-        for hidden_dim, do in zip(self.h_dims_lin, self.dropout):
+        for hidden_dim, do in zip(self.h_dims_lin, self.dropout, strict=False):
             encoder_layer = nn.TransformerEncoderLayer(
                 d_model=self.proj_dim,
                 nhead=self.n_heads,

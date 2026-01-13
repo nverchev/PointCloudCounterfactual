@@ -21,7 +21,7 @@ def tune(tune_cfg: DictConfig):
         loaded_cfg = yaml.safe_load(f)
         variation = loaded_cfg['variation']
 
-    study_name = '_'.join([tune_cfg.tune.study_name, version, variation] + tune_cfg.overrides[1:])
+    study_name = '_'.join([tune_cfg.tune.study_name, version, variation, *tune_cfg.overrides[1:]])
     study = optuna.load_study(study_name=study_name, storage=tune_cfg.storage)
     visualization.plot_optimization_history(study).show(renderer=tune_cfg.renderer)
     visualization.plot_slice(study).show(renderer=tune_cfg.renderer)

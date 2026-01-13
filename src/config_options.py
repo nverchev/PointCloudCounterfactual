@@ -9,7 +9,7 @@ import tomllib
 from collections.abc import Callable, Iterator
 from contextlib import contextmanager
 from dataclasses import field
-from typing import Annotated, Any, Self, TypeAlias, cast
+from typing import Annotated, Any, Self, cast
 
 import hydra
 import hydra.core.utils as hydra_utils
@@ -30,7 +30,7 @@ import drytorch
 PositiveInt = Annotated[int, Field(ge=0)]
 StrictlyPositiveInt = Annotated[int, Field(gt=0)]
 PositiveFloat = Annotated[float, Field(ge=0)]
-ActClass: TypeAlias = Callable[[], torch.nn.Module]
+type ActClass = Callable[[], torch.nn.Module]
 
 ACT: ActClass = functools.partial(torch.nn.LeakyReLU, negative_slope=0.2)
 
@@ -871,7 +871,7 @@ def update_exp_name(cfg: ConfigAll, overrides: list[str]) -> None:
     overrides = [override for override in overrides
                  if override.split('.')[0] != 'user' and
                  override.split('=')[0] not in ('final', 'variation')]
-    cfg.variation = '_'.join([cfg.variation] + overrides).replace('/', '_')
+    cfg.variation = '_'.join([cfg.variation, *overrides]).replace('/', '_')
     cfg.tags = overrides
     return
 

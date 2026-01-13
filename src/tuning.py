@@ -7,7 +7,7 @@ import optuna
 def get_past_final_values(trial: optuna.Trial) -> list[float]:
     """Get final value from completed trials."""
     study = trial.study
-    *past_trials, current_trial = study.get_trials(deepcopy=False)
+    *past_trials, _current_trial = study.get_trials(deepcopy=False)
     real_completed_trials = [
         t for t in past_trials
         if (

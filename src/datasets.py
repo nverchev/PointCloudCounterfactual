@@ -8,7 +8,7 @@ import pathlib
 
 from abc import ABCMeta, abstractmethod
 from collections.abc import Callable, Generator, Iterable, Sized
-from typing import Any, Generic, Literal, TypeVar
+from typing import Any, Generic, Literal, TypeVar, override
 
 import numpy as np
 import numpy.typing as npt
@@ -16,7 +16,6 @@ import torch
 import torch.distributed as dist
 
 from torch.utils.data import Dataset
-from typing_extensions import override
 
 from drytorch import Model
 from src.autoencoder import AbstractVQVAE, BaseWAutoEncoder, CounterfactualVQVAE, CounterfactualWAutoEncoder
@@ -159,9 +158,7 @@ class ModelNet40Split(PointCloudDataset):
         return self.pcd.shape[0]
 
     def __getitem__(self, index: int) -> tuple[Inputs, Targets]:
-        np_cloud, np_neighbours_indices, label = self.pcd[index], self.indices[index], self.labels[index]
-
-        # neighbours_indices = torch.from_numpy(np_neighbours_indices).long()
+        np_cloud, label = self.pcd[index], self.labels[index]
         label = torch.tensor(label, dtype=torch.long)
         if not torch.is_inference_mode_enabled():
             index_pool = np.arange(np_cloud.shape[0])
@@ -197,7 +194,7 @@ class ShapenetFlowSplit(PointCloudDataset):
         self.folder_id_list = list[str]()
         self.augment = augment_clouds()
         for path in paths:
-            pc, scale = normalise(np.load(path))
+            pc, _scale = normalise(np.load(path))
             self.pcd.append(pc.astype(np.float32))
             self.folder_id_list.append(path.parent.parent.name)
 
@@ -365,7 +362,7 @@ class DatasetEncoder(Generic[VQ], abc.ABC, metaclass=AbstractSingleton):
     def __len__(self) -> int:
         return self.dataset_len
 
-    def _get_data(self, index_list: list[int]) -> Generator[tuple[Inputs, torch.Tensor], None, None]:
+    def _get_data(self, index_list: list[int]) -> Generator[tuple[Inputs, torch.Tensor]]:
         """Common data loading logic."""
         dataset_batch = [self.dataset[i] for i in index_list]
         batched_cloud = torch.stack([data[0].cloud for data in dataset_batch]).to(self.device)
@@ -408,7 +405,7 @@ class WDatasetEncoder(DatasetEncoder[VQ], Dataset[tuple[WInputs, WTargets]]):
             batch_ae_data = self._run_autoencoder(batch_inputs)
             batch_w_q, batch_w_e, batch_one_hot_idx = batch_ae_data.w_q, batch_ae_data.w_e, batch_ae_data.one_hot_idx
 
-            for w_q, w_e, one_hot_idx in zip(batch_w_q, batch_w_e, batch_one_hot_idx):
+            for w_q, w_e, one_hot_idx in zip(batch_w_q, batch_w_e, batch_one_hot_idx, strict=False):
                 batch_data.append((WInputs(w_q), WTargets(w_e=w_e, one_hot_idx=one_hot_idx)))
 
         return batch_data
@@ -446,7 +443,7 @@ class WDatasetWithLogits(WDatasetEncoder[CounterfactualVQVAE], ClassifierMixin):
             batch_logits = self._run_classifier(self.classifier, batch_inputs)
             batch_w_q, batch_w_e, batch_one_hot_idx = batch_ae_data.w_q, batch_ae_data.w_e, batch_ae_data.one_hot_idx
 
-            for w_q, _, logit, one_hot_idx in zip(batch_w_q, batch_w_e, batch_logits, batch_one_hot_idx):
+            for w_q, _, logit, one_hot_idx in zip(batch_w_q, batch_w_e, batch_logits, batch_one_hot_idx, strict=False):
                 batch_data.append((
                     WInputs(w_q, logit),
                     WTargets(w_e=w_q, one_hot_idx=one_hot_idx, logits=logit)
@@ -490,7 +487,7 @@ class ReconstructedDatasetEncoder(DatasetEncoder[VQ], Dataset[tuple[Inputs, Targ
             batch_ae_data = self._run_autoencoder(batch_inputs)
             recons = batch_ae_data.recon
 
-            for recon, label in zip(recons, batch_labels):
+            for recon, label in zip(recons, batch_labels, strict=False):
                 batch_data.append((
                     Inputs(cloud=recon),
                     Targets(ref_cloud=recon, label=label)
@@ -530,7 +527,7 @@ class ReconstructedDatasetWithLogits(ReconstructedDatasetEncoder[CounterfactualV
             batch_ae_data = self._run_autoencoder(batch_inputs, batch_logits)
             recons = batch_ae_data.recon
 
-            for recon, label in zip(recons, batch_labels):
+            for recon, label in zip(recons, batch_labels, strict=False):
                 batch_data.append((
                     Inputs(cloud=recon),
                     Targets(ref_cloud=recon, label=label)
@@ -591,7 +588,7 @@ class CounterfactualDatasetEncoder(
             # For targets, use original labels when target_label is 'original'
             target_for_labels = batch_labels if self.target_label == 'original' else torch.tensor(self.target_label)
 
-            for recon, original_label in zip(recons, batch_labels):
+            for recon, original_label in zip(recons, batch_labels, strict=False):
                 final_label = original_label if self.target_label == 'original' else target_for_labels
                 batch_data.append((
                     Inputs(cloud=recon),

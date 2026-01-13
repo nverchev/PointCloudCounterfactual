@@ -61,7 +61,7 @@ def main(tune_cfg: DictConfig):
         loaded_cfg = yaml.safe_load(f)
         variation = loaded_cfg['variation']
 
-    study_name = '_'.join([tune_cfg.tune.study_name, version, variation] + tune_cfg.overrides[1:])
+    study_name = '_'.join([tune_cfg.tune.study_name, version, variation, *tune_cfg.overrides[1:]])
     study = optuna.create_study(study_name=study_name,
                                 storage=tune_cfg.storage,
                                 sampler=sampler,

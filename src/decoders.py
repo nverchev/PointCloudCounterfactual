@@ -53,7 +53,7 @@ class PosteriorDecoder(nn.Module):
         self.prob_proj = LinearLayer(self.n_classes, self.proj_dim, batch_norm=False)
         self.positional_encoding = nn.Parameter(torch.randn(1, self.n_codes, self.proj_dim))
         transformer_layers: list[nn.Module] = []
-        for hidden_dim, do in zip(self.h_dims, self.dropout):
+        for hidden_dim, do in zip(self.h_dims, self.dropout, strict=False):
             encoder_layer = nn.TransformerEncoderLayer(
                 d_model=self.proj_dim,
                 nhead=self.n_heads,
@@ -112,10 +112,10 @@ class WDecoderLinear(BaseWDecoder):
     def __init__(self) -> None:
         super().__init__()
         modules: list[nn.Module] = []
-        self.dropout: tuple[float, ...] = tuple([0., *self.dropout])
+        self.dropout: tuple[float, ...] = (0., *self.dropout)
         expanded_w_dim = self.w_dim * self.proj_dim
         dim_pairs = itertools.pairwise([self.z1_dim + self.z2_dim, *self.h_dims, expanded_w_dim])
-        for (in_dim, out_dim), do in zip(dim_pairs, self.dropout):
+        for (in_dim, out_dim), do in zip(dim_pairs, self.dropout, strict=False):
             modules.append(LinearLayer(in_dim, out_dim, act_cls=self.act_cls))
             modules.append(nn.Dropout(do))
         self.decode = nn.Sequential(*modules)
@@ -141,7 +141,7 @@ class WDecoderConvolution(BaseWDecoder):
         modules: list[nn.Module] = []
         total_h_dims = [h_dim * self.n_codes for h_dim in self.h_dims]
         dim_pairs = itertools.pairwise([(self.z1_dim + self.z2_dim) * self.n_codes, *total_h_dims])
-        for (in_dim, out_dim), do in zip(dim_pairs, self.dropout):
+        for (in_dim, out_dim), do in zip(dim_pairs, self.dropout, strict=False):
             modules.append(PointsConvLayer(in_dim, out_dim, groups=self.n_codes, act_cls=self.act_cls))
             modules.append(nn.Dropout(do))
         modules.append(
@@ -171,7 +171,7 @@ class WDecoderTransformers(BaseWDecoder):
         self.query_tokens = nn.Parameter(torch.randn(1, self.n_codes, self.proj_dim))
         self.key_tokens = nn.Parameter(torch.randn(1, self.n_codes, self.proj_dim))
         transformer_layers: list[nn.Module] = []
-        for hidden_dim, do in zip(self.h_dims, self.dropout):
+        for hidden_dim, do in zip(self.h_dims, self.dropout, strict=False):
             layer = nn.TransformerDecoderLayer(
                 d_model=self.proj_dim,
                 nhead=self.n_heads,

@@ -28,7 +28,7 @@ class DGCNN(nn.Module):
         conv_modules: list[torch.nn.Module] = [EdgeConvLayer(2 * IN_CHAN, self.h_dim[0], act_cls=self.act_cls)]
         in_dims = self.h_dim[:-1]
         out_dims = self.h_dim[1:]
-        for in_dim, out_dim in zip(in_dims, out_dims):
+        for in_dim, out_dim in zip(in_dims, out_dims, strict=False):
             conv_modules.append(EdgeConvLayer(2 * in_dim, out_dim, act_cls=self.act_cls))
         self.edge_convs = nn.Sequential(*conv_modules)
         self.final_conv = PointsConvLayer(sum(self.h_dim), self.emb_dim)
@@ -36,7 +36,7 @@ class DGCNN(nn.Module):
         mlp_modules: list[torch.nn.Module] = [LinearLayer(2 * self.emb_dim, self.mlp_dims[0], act_cls=self.act_cls)]
         in_dims = self.mlp_dims[:-1]
         out_dims = self.mlp_dims[1:]
-        for in_dim, out_dim, prob in zip(in_dims, out_dims, self.dropout):
+        for in_dim, out_dim, prob in zip(in_dims, out_dims, self.dropout, strict=False):
             mlp_modules.append(nn.Dropout(p=prob))
             mlp_modules.append(LinearLayer(in_dim, out_dim, act_cls=self.act_cls))
         mlp_modules.append(LinearLayer(self.mlp_dims[-1], self.num_classes, batch_norm=False))

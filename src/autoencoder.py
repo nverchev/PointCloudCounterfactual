@@ -81,7 +81,7 @@ class PseudoInputManager:
         x_reshaped = x.view(-1, dim_codes, embedding_dim).transpose(2, 1)
         return torch.cat((x_reshaped, self.pseudo_inputs))
 
-    def sample_pseudo_latent(self, batch_size: int) -> Generator[tuple[torch.Tensor, torch.Tensor], None, None]:
+    def sample_pseudo_latent(self, batch_size: int) -> Generator[tuple[torch.Tensor, torch.Tensor]]:
         """Sample pseudo latents."""
         for _ in range(batch_size):
             i = np.random.randint(self.n_pseudo_inputs)
@@ -235,7 +235,7 @@ class CounterfactualWAutoEncoder(BaseWAutoEncoder):
         if self.pseudo_manager is not None:
             split_index = [-self.pseudo_manager.n_pseudo_inputs]
             latent, pseudo_latent = torch.tensor_split(latent, split_index)
-            feature, _ = torch.tensor_split(features, split_index, dim=0)
+            features, _ = torch.tensor_split(features, split_index, dim=0)
             data.pseudo_mu1, data.pseudo_log_var1 = pseudo_latent.chunk(2, 2)
 
         data.mu1, data.log_var1 = latent.chunk(2, 2)
