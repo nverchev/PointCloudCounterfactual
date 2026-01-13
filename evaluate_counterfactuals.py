@@ -62,7 +62,7 @@ def evaluate_counterfactual_performance(
     classifier: Model[Inputs, Tensor],
     test_dataset: Dataset[tuple[Inputs, Targets]],
     vqvae: CounterfactualVQVAE,
-    num_classes: int,
+    n_classes: int,
     batch_size: int,
     target_value: float,
 ) -> None:
@@ -70,9 +70,9 @@ def evaluate_counterfactual_performance(
     metrics: list[Metric[Tensor, Targets]] = []
     loss = get_classification_loss()
 
-    for j in range(num_classes):
+    for j in range(n_classes):
         counterfactual_dataset = CounterfactualDatasetEncoder(
-            test_dataset, vqvae, classifier, num_classes=num_classes, target_label=j, target_value=target_value
+            test_dataset, vqvae, classifier, n_classes=n_classes, target_label=j, target_value=target_value
         )
         counterfactual_loader = DataLoader(dataset=counterfactual_dataset, batch_size=batch_size, pin_memory=False)
 
@@ -143,7 +143,7 @@ def evaluate_class_specific_counterfactuals(
                 i_instead_of_j_dataset,
                 vqvae,
                 classifier=classifier,
-                num_classes=num_classes,
+                n_classes=num_classes,
                 target_label=j,
                 target_value=target_value,
             )

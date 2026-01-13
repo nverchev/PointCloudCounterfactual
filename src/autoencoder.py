@@ -3,7 +3,7 @@
 import abc
 
 from collections.abc import Callable, Generator
-from typing import Any
+from typing import Any, Generic, TypeVar
 
 import numpy as np
 import torch
@@ -15,7 +15,7 @@ from src.decoders import PosteriorDecoder, PriorDecoder, get_decoder, get_w_deco
 from src.encoders import get_encoder, get_w_encoder
 from src.layers import TemperatureScaledSoftmax, TransferGrad, reset_child_params
 from src.neighbour_ops import pykeops_square_distance
-from src.utils import UsuallyFalse
+from src.control import UsuallyFalse
 
 
 class GaussianSampler:
@@ -397,7 +397,10 @@ class VectorQuantizer:
         return one_hot.scatter_(2, idx.view(batch, self.n_codes, 1), 1)
 
 
-class AbstractVQVAE[WA: BaseWAutoEncoder](AE, abc.ABC):
+WA = TypeVar('WA', bound=BaseWAutoEncoder, covariant=True)
+
+
+class AbstractVQVAE(AE, abc.ABC, Generic[WA]):
     """Abstract VQVAE with vector quantization."""
 
     _null_tensor = torch.empty(0)

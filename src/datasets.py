@@ -4,11 +4,13 @@ import abc
 import enum
 import itertools
 import json
+import h5py
+import logging
 import pathlib
 
 from abc import ABCMeta, abstractmethod
 from collections.abc import Callable, Generator, Iterable, Sized
-from typing import Any, Generic, Literal, TypeVar, override
+from typing import Any, Generic, Literal, TypeVar, override, cast
 
 import numpy as np
 import numpy.typing as npt
@@ -18,11 +20,13 @@ import torch.distributed as dist
 from torch.utils.data import Dataset
 
 from drytorch import Model
+
 from src.autoencoder import AbstractVQVAE, BaseWAutoEncoder, CounterfactualVQVAE, CounterfactualWAutoEncoder
 from src.config_options import Datasets, Experiment
 from src.data_structures import Inputs, Outputs, Targets, WInputs, WTargets
-from src.utils import Singleton, download_zip, load_h5_modelnet
-
+from src.neighbour_ops import index_k_neighbours
+from src.control import Singleton
+from src.download import download_extract_zip
 
 VQ = TypeVar('VQ', bound=AbstractVQVAE[BaseWAutoEncoder])
 
@@ -258,7 +262,7 @@ class ModelNet40Dataset(SplitCreator):
         self._download()
         self.pcd, self.indices, self.labels = {}, {}, {}
         for split in [Partitions.train, Partitions.test]:
-            pcd, indices, labels = load_h5_modelnet(
+            pcd, indices, labels = self.load_h5(
                 path=self.modelnet_path,
                 wild_str=f'*{split.name}*.h5',
                 input_points=cfg.data.n_input_points,
@@ -285,7 +289,7 @@ class ModelNet40Dataset(SplitCreator):
 
     def _download(self) -> None:
         url = 'https://gaimfs.ugent.be/Public/Dataset/modelnet40_hdf5_2048.zip'
-        return download_zip(target_folder=self.modelnet_path, url=url)
+        return download_extract_zip(target_folder=self.modelnet_path, url=url)
 
     def _train_val_to_train_and_val(self, val_every: int = 6) -> None:
         train_idx = list(range(self.pcd[Partitions.train].shape[0]))
@@ -295,6 +299,44 @@ class ModelNet40Dataset(SplitCreator):
             self.pcd[new_split] = self.pcd[Partitions.train][new_split_idx]
             self.indices[new_split] = self.indices[Partitions.train][new_split_idx]
             self.labels[new_split] = self.labels[Partitions.train][new_split_idx]
+
+    @staticmethod
+    def load_h5(
+        path: pathlib.Path, wild_str: str, input_points: int, k: int
+    ) -> tuple[npt.NDArray[Any], npt.NDArray[Any], npt.NDArray[Any]]:
+        """Loads and processes ModelNet data from H5 files, including point clouds, indices, and labels."""
+        pcd_list: list[npt.NDArray[Any]] = []
+        indices_list: list[npt.NDArray[Any]] = []
+        labels_list: list[npt.NDArray[Any]] = []
+
+        for h5_name in path.glob(wild_str):
+            with h5py.File(h5_name, 'r+') as f:
+                logging.info('Load: %s', h5_name)
+
+                # Use cast to resolve Dataset ambiguity
+                pcs_ds = cast(h5py.Dataset, f['data'])
+                pcs = pcs_ds[:].astype('float32')
+                pcs = pcs[:, :input_points, :]
+
+                label_ds = cast(h5py.Dataset, f['label'])
+                label = label_ds[:].astype('int64')
+
+                index_k = f'index_{k}'
+                if index_k in f:
+                    idx_ds = cast(h5py.Dataset, f[index_k])
+                    index = idx_ds[:].astype(np.short)
+                else:
+                    index = index_k_neighbours(pcs, k).astype(np.short)
+                    f.create_dataset(index_k, data=index)
+
+            pcd_list.append(pcs)
+            indices_list.append(index)
+            labels_list.append(label)
+
+        pcd = np.concatenate(pcd_list, axis=0)
+        indices = np.concatenate(indices_list, axis=0)
+        labels = np.concatenate(labels_list, axis=0)
+        return pcd, indices, labels.ravel()
 
 
 class ShapeNetDatasetFlow(SplitCreator):
@@ -538,11 +580,6 @@ class CounterfactualDatasetEncoder(
 ):
     """Dataset for counterfactual reconstruction with target conditioning."""
 
-    num_classes: int
-    target_label: int | Literal['original']
-    target_value: float
-    classifier: Model[Inputs, torch.Tensor]
-
     def __init__(
         self,
         dataset: Dataset[tuple[Inputs, Targets]],
@@ -550,13 +587,13 @@ class CounterfactualDatasetEncoder(
         classifier: Model[Inputs, torch.Tensor],
         target_label: int | Literal['original'] = 'original',
         target_value: float = 1.0,
-        num_classes: int = 2,
+        n_classes: int = 2,
     ) -> None:
         super().__init__(dataset=dataset, autoencoder=autoencoder)
-        self.num_classes = num_classes
+        self.num_classes: int = n_classes
         self.target_label: int | Literal['original'] = target_label  # don't convert to tensor yet
-        self.target_value = target_value
-        self.classifier = classifier
+        self.target_value: float = target_value
+        self.classifier: Model[Inputs, torch.Tensor] = classifier
         return
 
     @override
@@ -616,15 +653,15 @@ class BoundaryDataset(CounterfactualDatasetEncoder):
         autoencoder: CounterfactualVQVAE,
         classifier: Model[Inputs, torch.Tensor],
         target_label: int = 0,
-        num_classes: int = 2,
+        n_classes: int = 2,
     ) -> None:
         super().__init__(
             dataset=dataset,
             autoencoder=autoencoder,
             classifier=classifier,
             target_label=target_label,
-            target_value=1 / num_classes,  # Neutral probability
-            num_classes=num_classes,
+            target_value=1 / n_classes,  # Neutral probability
+            n_classes=n_classes,
         )
 
 
