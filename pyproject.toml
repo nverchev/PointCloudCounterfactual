@@ -46,3 +46,8 @@ default = true
 name = "cuda13.0"
 url = "https://download.pytorch.org/whl/cu130"
 packages = ["torch"]
+
+[dependency-groups]
+dev = [
+    "basedpyright>=1.37.1",
+]
