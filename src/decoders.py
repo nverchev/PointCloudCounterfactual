@@ -20,9 +20,9 @@ class PriorDecoder(nn.Module):
         super().__init__()
         cfg = Experiment.get_config()
         cfg_ae_arc = cfg.autoencoder.architecture
-        self.n_classes = cfg.data.dataset.n_classes
-        self.n_codes = cfg_ae_arc.n_codes
-        self.z2_dim = cfg_ae_arc.z2_dim
+        self.n_classes: int = cfg.data.dataset.n_classes
+        self.n_codes: int = cfg_ae_arc.n_codes
+        self.z2_dim: int = cfg_ae_arc.z2_dim
         self.prior = LinearLayer(self.n_classes, self.n_codes * 2 * self.z2_dim, batch_norm=False, act_cls=nn.Identity)
         return
 
@@ -39,17 +39,17 @@ class PosteriorDecoder(nn.Module):
         cfg = Experiment.get_config()
         cfg_ae_arc = cfg.autoencoder.architecture
         cfg_posterior = cfg_ae_arc.decoder.posterior_decoder
-        self.hidden_features = cfg_ae_arc.hidden_features
-        self.w_dim = cfg_ae_arc.w_dim
-        self.embedding_dim = cfg_ae_arc.embedding_dim
-        self.n_classes = cfg.data.dataset.n_classes
-        self.n_codes = cfg_ae_arc.n_codes
-        self.z2_dim = cfg_ae_arc.z2_dim
-        self.h_dims = cfg_posterior.hidden_dims
-        self.dropout = cfg_posterior.dropout
-        self.act_cls = cfg_posterior.act_cls
-        self.proj_dim = cfg_ae_arc.encoder.w_encoder.proj_dim
-        self.n_heads = cfg_posterior.n_heads
+        self.hidden_features: int = cfg_ae_arc.hidden_features
+        self.w_dim: int = cfg_ae_arc.w_dim
+        self.embedding_dim: int = cfg_ae_arc.embedding_dim
+        self.n_classes: int = cfg.data.dataset.n_classes
+        self.n_codes: int = cfg_ae_arc.n_codes
+        self.z2_dim: int = cfg_ae_arc.z2_dim
+        self.h_dims: tuple[int, ...] = cfg_posterior.hidden_dims
+        self.dropout: tuple[float, ...] = cfg_posterior.dropout
+        self.act_cls: ActClass = cfg_posterior.act_cls
+        self.proj_dim: int = cfg_ae_arc.encoder.w_encoder.proj_dim
+        self.n_heads: int = cfg_posterior.n_heads
         self.prob_proj = LinearLayer(self.n_classes, self.proj_dim, batch_norm=False)
         self.positional_encoding = nn.Parameter(torch.randn(1, self.n_codes, self.proj_dim))
         transformer_layers: list[nn.Module] = []
@@ -205,14 +205,14 @@ class BasePointDecoder(nn.Module, metaclass=abc.ABCMeta):
         super().__init__()
         cfg_ae_arc = Experiment.get_config().autoencoder.architecture
         cfg_decoder = cfg_ae_arc.decoder
-        self.h_dims_map = cfg_decoder.hidden_dims_map
-        self.h_dims_conv = cfg_decoder.hidden_dims_conv
-        self.w_dim = cfg_ae_arc.w_dim
-        self.act_cls = cfg_decoder.act_cls
-        self.filtering = cfg_decoder.filtering
-        self.sample_dim = cfg_decoder.sample_dim
-        self.n_components = cfg_decoder.n_components
-        self.tau = cfg_decoder.tau
+        self.h_dims_map: tuple[int, ...] = cfg_decoder.hidden_dims_map
+        self.h_dims_conv: tuple[int, ...] = cfg_decoder.hidden_dims_conv
+        self.w_dim: int = cfg_ae_arc.w_dim
+        self.act_cls: ActClass = cfg_decoder.act_cls
+        self.filtering: bool = cfg_decoder.filtering
+        self.sample_dim: int = cfg_decoder.sample_dim
+        self.n_components: int = cfg_decoder.n_components
+        self.tau: float = cfg_decoder.tau
 
     @abc.abstractmethod
     def forward(
@@ -238,9 +238,9 @@ class PCGen(BasePointDecoder):
         dim_pairs = itertools.pairwise([self.sample_dim, *self.h_dims_map])
         for in_dim, out_dim in dim_pairs:
             modules.append(PointsConvLayer(in_dim, out_dim, batch_norm=False, act_cls=torch.nn.ReLU))
+
         modules.append(PointsConvLayer(self.h_dims_map[-1], self.w_dim, batch_norm=False, act_cls=nn.Hardtanh))
         self.map_sample = nn.Sequential(*modules)
-
         self.group_conv = nn.ModuleList()
         self.group_final = nn.ModuleList()
 

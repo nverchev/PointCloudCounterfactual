@@ -75,7 +75,6 @@ class GeneralizedLinearLayer(nn.Module, metaclass=abc.ABCMeta):
         in_dim (int): The number of input features
         out_dim (int): The number of output features
         groups (int): The number of groups for the linear layer
-        batch_norm (bool): A boolean value indicating whether to include batch normalization in the layer
         bias (bool): A boolean value indicating whether the bias term is in the layer (and not in batch normalization)
         dense (nn.Module): The wrapped layer of the neural network
         bn (nn.Module): The batch normalization layer of the neural network, if included
@@ -95,15 +94,14 @@ class GeneralizedLinearLayer(nn.Module, metaclass=abc.ABCMeta):
         residual: bool = False,
     ) -> None:
         super().__init__()
-        self.in_dim = in_dim
-        self.out_dim = out_dim
-        self.groups = groups
-        self.batch_norm = batch_norm
-        self.bias = False if batch_norm else True
+        self.in_dim: int = in_dim
+        self.out_dim: int = out_dim
+        self.groups: int = groups
+        self.bias: bool = False if batch_norm else True
         self.dense = self.get_dense_layer()
-        self.bn_momentum = 0.1 if bn_momentum is None else bn_momentum
-        self.bn = self.get_bn_layer() if batch_norm else None
-        self.resnet = residual
+        self.bn_momentum: float = 0.1 if bn_momentum is None else bn_momentum
+        self.bn: nn.Module or None = self.get_bn_layer() if batch_norm else None
+        self.residual: bool = residual
         if act_cls is None:
             self.act = None
         else:
@@ -155,7 +153,7 @@ class GeneralizedLinearLayer(nn.Module, metaclass=abc.ABCMeta):
         y = self.bn(self.dense(x)) if self.bn is not None else self.dense(x)
         if self.act is not None:
             y = self.act(y)
-        if self.resnet:
+        if self.residual:
             return y + x.repeat_interleave(self.out_dim // self.in_dim + 1, 1)[:, : y.shape[1], ...]
         return y
 

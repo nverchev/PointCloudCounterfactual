@@ -51,7 +51,7 @@ class PseudoInputManager:
     """Manages pseudo inputs and their latent representations."""
 
     def __init__(self, n_pseudo_inputs: int, embedding_dim: int, z_dim: int, dim_codes: int):
-        self.n_pseudo_inputs = n_pseudo_inputs
+        self.n_pseudo_inputs: int = n_pseudo_inputs
         self.pseudo_inputs = nn.Parameter(torch.empty(n_pseudo_inputs, embedding_dim, dim_codes))
         self.pseudo_mu = nn.Parameter(torch.empty(n_pseudo_inputs, z_dim))
         self.pseudo_log_var = nn.Parameter(torch.empty(n_pseudo_inputs, z_dim))
@@ -93,9 +93,9 @@ class BaseWAutoEncoder(nn.Module, abc.ABC):
     def __init__(self):
         super().__init__()
         self.cfg_ae_arc = Experiment.get_config().autoencoder.architecture
-        self.dim_codes = self.cfg_ae_arc.n_codes
-        self.book_size = self.cfg_ae_arc.book_size
-        self.embedding_dim = self.cfg_ae_arc.embedding_dim
+        self.dim_codes: int = self.cfg_ae_arc.n_codes
+        self.book_size: int = self.cfg_ae_arc.book_size
+        self.embedding_dim: int = self.cfg_ae_arc.embedding_dim
         self.encoder = get_w_encoder()
         self.decoder = get_w_decoder()
         self.sampler = GaussianSampler()
@@ -176,11 +176,6 @@ class BaseWAutoEncoder(nn.Module, abc.ABC):
 class WAutoEncoder(BaseWAutoEncoder):
     """W autoencoder implementation."""
 
-    def __init__(self):
-        super().__init__()
-        cfg = Experiment.get_config()
-        self.n_classes = cfg.data.dataset.n_classes
-
     def encode(self, x: torch.Tensor | None) -> Outputs:
         """Encode with adversarial features."""
         input_tensor = self._get_input(x)
@@ -214,7 +209,7 @@ class CounterfactualWAutoEncoder(BaseWAutoEncoder):
         cfg = Experiment.get_config()
         cfg_ae_arc = cfg.autoencoder.architecture
         cfg_wae = cfg_ae_arc.encoder.w_encoder
-        self.n_classes = cfg.data.dataset.n_classes
+        self.n_classes: int = cfg.data.dataset.n_classes
 
         # Counterfactual-specific components
         self.softmax = nn.Softmax(dim=1)
@@ -314,8 +309,8 @@ class AutoEncoder(nn.Module, abc.ABC):
     def __init__(self):
         super().__init__()
         cfg_ae = Experiment.get_config().autoencoder
-        self.m_training = cfg_ae.architecture.training_output_points
-        self.m_test = cfg_ae.objective.n_inference_output_points
+        self.m_training: int = cfg_ae.architecture.training_output_points
+        self.m_test: int = cfg_ae.objective.n_inference_output_points
 
     @property
     def m(self) -> int:
@@ -371,15 +366,15 @@ class AE(AutoEncoder):
 class VectorQuantizer:
     """Handles vector quantization operations."""
 
-    def __init__(self, codebook: torch.Tensor, num_codes: int, embedding_dim: int):
+    def __init__(self, codebook: torch.Tensor, n_codes: int, embedding_dim: int):
         self.codebook = codebook
-        self.num_codes = num_codes
-        self.embedding_dim = embedding_dim
+        self.n_codes: int = n_codes
+        self.embedding_dim: int = embedding_dim
 
     def quantize(self, x: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor]:
         """Quantize input using codebook."""
         batch, _ = x.size()
-        x_flat = x.view(batch * self.num_codes, 1, self.embedding_dim)
+        x_flat = x.view(batch * self.n_codes, 1, self.embedding_dim)
         book_repeated = self.codebook.repeat(batch, 1, 1)
 
         dist = pykeops_square_distance(x_flat, book_repeated)
@@ -394,12 +389,12 @@ class VectorQuantizer:
         """Get embeddings from indices."""
         idx_expanded = idx.expand(-1, -1, self.embedding_dim)
         embeddings = book.gather(1, idx_expanded)
-        return embeddings.view(-1, self.num_codes * self.embedding_dim)
+        return embeddings.view(-1, self.n_codes * self.embedding_dim)
 
     def _create_one_hot(self, idx: torch.Tensor, batch: int, device: torch.device) -> torch.Tensor:
         """Create one-hot encoding of indices."""
-        one_hot = torch.zeros(batch, self.num_codes, self.codebook.shape[1], device=device)
-        return one_hot.scatter_(2, idx.view(batch, self.num_codes, 1), 1)
+        one_hot = torch.zeros(batch, self.n_codes, self.codebook.shape[1], device=device)
+        return one_hot.scatter_(2, idx.view(batch, self.n_codes, 1), 1)
 
 
 class AbstractVQVAE[WA: BaseWAutoEncoder](AE, abc.ABC):
@@ -411,9 +406,9 @@ class AbstractVQVAE[WA: BaseWAutoEncoder](AE, abc.ABC):
     def __init__(self):
         super().__init__()
         cfg_ae_arc = Experiment.get_config().autoencoder.architecture
-        self.n_codes = cfg_ae_arc.n_codes
-        self.book_size = cfg_ae_arc.book_size
-        self.embedding_dim = cfg_ae_arc.embedding_dim
+        self.n_codes: int = cfg_ae_arc.n_codes
+        self.book_size: int = cfg_ae_arc.book_size
+        self.embedding_dim: int = cfg_ae_arc.embedding_dim
         self.double_encoding = UsuallyFalse()
         self.codebook = nn.Parameter(torch.randn(self.n_codes, self.book_size, self.embedding_dim))
 

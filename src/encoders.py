@@ -6,7 +6,7 @@ import itertools
 import torch
 import torch.nn as nn
 
-from src.config_options import Encoders, Experiment, WEncoders
+from src.config_options import Encoders, Experiment, WEncoders, ActClass
 from src.data_structures import IN_CHAN
 from src.layers import EdgeConvLayer, LinearLayer, PointsConvLayer
 from src.neighbour_ops import get_graph_features, graph_max_pooling
@@ -33,21 +33,21 @@ class BaseWEncoder(nn.Module, metaclass=abc.ABCMeta):
         cfg_w_encoder = cfg_ae_arch.encoder.w_encoder
 
         # Latent space dimensions
-        self.w_dim = cfg_ae_arch.w_dim  # W-space dimension
-        self.embedding_dim = cfg_ae_arch.embedding_dim  # Input embedding dimension
-        self.z_dim = cfg_ae_arch.z1_dim  # Z-space dimension
+        self.w_dim: int = cfg_ae_arch.w_dim  # W-space dimension
+        self.embedding_dim: int = cfg_ae_arch.embedding_dim  # Input embedding dimension
+        self.z1_dim: int = cfg_ae_arch.z1_dim  # Z-space dimension
 
         # Vector quantization parameters
-        self.n_codes = cfg_ae_arch.n_codes  # Number of codebook vectors
-        self.book_size = cfg_ae_arch.book_size  # Size of each codebook
+        self.n_codes: int = cfg_ae_arch.n_codes  # Number of codebook vectors
+        self.book_size: int = cfg_ae_arch.book_size  # Size of each codebook
 
         # Network architecture parameters
-        self.proj_dim = cfg_w_encoder.proj_dim
-        self.n_heads = cfg_w_encoder.n_heads
-        self.h_dims_conv = cfg_w_encoder.hidden_dims_conv  # Hidden dimensions for the linear layers
-        self.h_dims_lin = cfg_w_encoder.hidden_dims_lin  # Hidden dimensions for the convolutional layers
-        self.dropout = cfg_w_encoder.dropout  # Dropout probabilities
-        self.act_cls = cfg_w_encoder.act_cls  # Activation function class
+        self.proj_dim: int = cfg_w_encoder.proj_dim
+        self.n_heads: int = cfg_w_encoder.n_heads
+        self.h_dims_conv: tuple[int, ...] = cfg_w_encoder.hidden_dims_conv  # Hidden dimensions for the linear layers
+        self.h_dims_lin: tuple[int, ...] = cfg_w_encoder.hidden_dims_lin  # Hidden dimensions for convolutional layers
+        self.dropout: tuple[float, ...] = cfg_w_encoder.dropout  # Dropout probabilities
+        self.act_cls: ActClass = cfg_w_encoder.act_cls  # Activation function class
 
     @abc.abstractmethod
     def forward(self, x: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor]:
@@ -78,7 +78,7 @@ class WEncoderConvolution(BaseWEncoder):
         for (in_dim, out_dim), do in zip(dim_pairs, self.dropout, strict=False):
             modules.append(LinearLayer(in_dim, out_dim, act_cls=self.act_cls))
             modules.append(nn.Dropout(do))
-        modules.append(LinearLayer(self.h_dims_lin[-1], 2 * self.z_dim, batch_norm=False))  # change to encode
+        modules.append(LinearLayer(self.h_dims_lin[-1], 2 * self.z1_dim, batch_norm=False))  # change to encode
         self.encode = nn.Sequential(*modules)
 
     def forward(self, x) -> tuple[torch.Tensor, torch.Tensor]:
@@ -115,7 +115,7 @@ class WEncoderTransformers(BaseWEncoder):
             transformer_layers.append(encoder_layer)
 
         self.transformer = nn.ModuleList(transformer_layers)
-        self.to_latent = LinearLayer(self.proj_dim, 2 * self.z_dim, batch_norm=False, act_cls=nn.Identity)
+        self.to_latent = LinearLayer(self.proj_dim, 2 * self.z1_dim, batch_norm=False, act_cls=nn.Identity)
 
     def forward(self, x: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor]:
         """Forward pass through transformer encoder."""
@@ -134,10 +134,10 @@ class BasePointEncoder(nn.Module, metaclass=abc.ABCMeta):
         super().__init__()
         cfg = Experiment.get_config()
         cfg_ae_arc = cfg.autoencoder.architecture
-        self.k = cfg_ae_arc.encoder.k
-        self.h_dim = cfg_ae_arc.encoder.hidden_dims
-        self.w_dim = cfg_ae_arc.w_dim
-        self.act_cls = cfg_ae_arc.encoder.act_cls
+        self.k: int = cfg_ae_arc.encoder.k
+        self.h_dim: tuple[int, ...] = cfg_ae_arc.encoder.hidden_dims
+        self.w_dim: int = cfg_ae_arc.w_dim
+        self.act_cls: ActClass = cfg_ae_arc.encoder.act_cls
 
     @abc.abstractmethod
     def forward(self, x: torch.Tensor, indices: torch.Tensor) -> torch.Tensor:
