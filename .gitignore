@@ -14,3 +14,4 @@ updat*/tensorboard_runs/
 *pyc
 optimization_db/
 /__pycache__
+/uv.lock
