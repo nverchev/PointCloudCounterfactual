@@ -1,4 +1,4 @@
-"""Visualize the hyperparameters' optimization's results for the w-autoencoder."""
+"""Visualize the hyperparameters' optimization's results for the autoencoder."""
 
 import hydra
 import optuna
