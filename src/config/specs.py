@@ -1,8 +1,9 @@
 """Specification for the configuration files."""
 
+import dataclasses
 import pathlib
+
 from contextlib import contextmanager
-from dataclasses import field
 from typing import Any, Annotated, Self
 from collections.abc import Iterator
 
@@ -44,7 +45,7 @@ class DatasetConfig:
 
     name: Datasets
     n_classes: PositiveInt
-    settings: dict[str, Any] = field(default_factory=dict)
+    settings: dict[str, Any] = dataclasses.field(default_factory=dict)
 
 
 @dataclass
@@ -99,7 +100,7 @@ class WEncoderConfig:
     cf_temperature: int
     act_name: str = ''
     gumbel: bool = True
-    act_cls: ActClass = field(init=False)
+    act_cls: ActClass = dataclasses.field(init=False)
 
     @model_validator(mode='after')
     def _resolve_activation(self) -> Self:
@@ -133,7 +134,7 @@ class EncoderConfig:
     hidden_dims: tuple[StrictlyPositiveInt, ...]
     w_encoder: WEncoderConfig
     act_name: str = ''
-    act_cls: ActClass = field(init=False)
+    act_cls: ActClass = dataclasses.field(init=False)
 
     @model_validator(mode='after')
     def _resolve_activation(self) -> Self:
@@ -161,7 +162,7 @@ class WDecoderConfig:
     hidden_dims: tuple[StrictlyPositiveInt, ...]
     dropout: tuple[PositiveFloat, ...]
     act_name: str = ''
-    act_cls: ActClass = field(init=False)
+    act_cls: ActClass = dataclasses.field(init=False)
 
     @model_validator(mode='after')
     def _resolve_activation(self) -> Self:
@@ -193,7 +194,7 @@ class PosteriorDecoderConfig:
     n_heads: StrictlyPositiveInt
     dropout: tuple[PositiveFloat, ...]
     act_name: str = ''
-    act_cls: ActClass = field(init=False)
+    act_cls: ActClass = dataclasses.field(init=False)
 
     @model_validator(mode='after')
     def _resolve_activation(self) -> Self:
@@ -237,7 +238,7 @@ class DecoderConfig:
     tau: PositiveFloat
     filtering: bool
     act_name: str = ''
-    act_cls: ActClass = field(init=False)
+    act_cls: ActClass = dataclasses.field(init=False)
 
     @model_validator(mode='after')
     def _resolve_activation(self) -> Self:
@@ -315,7 +316,7 @@ class ClassifierConfig:
     out_classes: StrictlyPositiveInt
     act_name: str = ''
     name: str = ''
-    act_cls: ActClass = field(init=False)
+    act_cls: ActClass = dataclasses.field(init=False)
 
     @model_validator(mode='after')
     def _resolve_activation(self) -> Self:
@@ -348,7 +349,7 @@ class SchedulerConfig:
     restart_interval: PositiveInt
     restart_fraction: PositiveInt
     warmup_steps: PositiveInt
-    settings: dict[str, Any] = field(default_factory=dict)
+    settings: dict[str, Any] = dataclasses.field(default_factory=dict)
 
 
 @dataclass
@@ -369,8 +370,8 @@ class LearningConfig:
     grad_op: GradOp | None
     clip_criterion: ClipCriterion
     scheduler: SchedulerConfig
-    opt_settings: dict[str, Any] = field(default_factory=dict)
-    optimizer_cls: type[torch.optim.Optimizer] = field(init=False)
+    opt_settings: dict[str, Any] = dataclasses.field(default_factory=dict)
+    optimizer_cls: type[torch.optim.Optimizer] = dataclasses.field(init=False)
 
     @model_validator(mode='after')
     def _resolve_optimizer(self) -> Self:
@@ -530,12 +531,12 @@ class TrackerList:
     sqlalchemy: bool
 
 
-@dataclass
+@dataclasses.dataclass
 class HydraSettings:
     """Subset of the current hydra settings."""
 
-    output_dir: pathlib.Path
-    job_logging: DictConfig
+    output_dir: pathlib.Path = dataclasses.field(init=False)
+    job_logging: DictConfig = dataclasses.field(init=False)
 
 
 @dataclass
@@ -568,7 +569,7 @@ class UserSettings:
     n_generated_output_points: int
     load_checkpoint: int = -1
     counterfactual_value: PositiveFloat = 1.0
-    hydra: HydraSettings = Field(init=False)
+    ydra = HydraSettings()
     path = PathSpecs()
 
     def __post_init__(self):
@@ -660,7 +661,7 @@ class ConfigAll:
     w_autoencoder: ConfigTrainWAE
     user: UserSettings
     data: DataConfig
-    tags: list[str] = field(default_factory=list)
+    tags: list[str] = dataclasses.field(default_factory=list)
     version = f'v{VERSION}'
     _lens: ConfigTrain | None = None
 
