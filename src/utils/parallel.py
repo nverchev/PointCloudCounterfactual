@@ -1,4 +1,4 @@
-"""Module where the parallelism is defined: change according to your needs."""
+"""Defines the settings for data-distributed parallelism."""
 
 import os
 import socket

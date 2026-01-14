@@ -13,8 +13,7 @@ from drytorch.utils.average import get_moving_average, get_trailing_mean
 from src.module import CounterfactualVQVAE, DGCNN
 from src.config import ConfigAll, Experiment, get_current_hydra_dir, get_trackers, hydra_main
 from src.data import Inputs, WDatasetWithLogits, get_datasets
-from src.train.learning_schema import get_learning_schema
-from src.train.metrics_and_losses import get_w_encoder_loss
+from src.train import get_learning_schema, get_w_autoencoder_loss
 from src.train.models import ModelEpoch
 from src.utils.parallel import DistributedWorker
 
@@ -46,7 +45,7 @@ def train_w_autoencoder(
     train_w_dataset = WDatasetWithLogits(train_dataset, vqvae, classifier)
     test_w_dataset = WDatasetWithLogits(test_dataset, vqvae, classifier)
     test_loader = DataLoader(dataset=test_w_dataset, batch_size=cfg_w_ae.train.batch_size_per_device, pin_memory=False)
-    loss_calc = get_w_encoder_loss()
+    loss_calc = get_w_autoencoder_loss()
 
     with cfg.focus(cfg.w_autoencoder):
         learning_schema = get_learning_schema()

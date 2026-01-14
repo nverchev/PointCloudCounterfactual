@@ -1,3 +1,5 @@
+"""Hydra configuration."""
+
 import functools
 import pathlib
 from typing import cast

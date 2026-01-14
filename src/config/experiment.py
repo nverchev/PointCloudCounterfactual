@@ -1,4 +1,4 @@
-"""Registers the specification to the experiment."""
+"""Contains the Experiment class for the project and related helper functions."""
 
 import pathlib
 import sys
@@ -13,7 +13,7 @@ from src.config.specs import ConfigAll
 
 
 class Experiment(drytorch.Experiment[ConfigAll]):
-    """Specifications for the current experiment."""
+    """Contains the specifications for the current experiment."""
 
     pass
 

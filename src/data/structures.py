@@ -1,13 +1,10 @@
-"""Classes containing data samples and outputs."""
+"""Classes for inputs, outputs and targets."""
 
 import dataclasses
 
 from typing import NamedTuple, Self
 
 import torch
-
-IN_CHAN = 3
-OUT_CHAN = 3
 
 
 class Inputs(NamedTuple):

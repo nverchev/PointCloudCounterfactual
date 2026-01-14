@@ -1,3 +1,5 @@
+"""Defines all the options in the specifications."""
+
 import enum
 
 

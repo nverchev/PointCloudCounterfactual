@@ -1,7 +1,8 @@
-"""Package containing dataset classes."""
+"""Package containing dataset classes and data types."""
 
 from src.data.dataset import get_dataset, get_datasets
-from src.data.encoded import (
+from src.data.modelnet import ModelNet40Dataset
+from src.data.processed import (
     WDatasetEncoder,
     WDatasetWithLogits,
     ReconstructedDatasetEncoder,
@@ -10,12 +11,16 @@ from src.data.encoded import (
     ReconstructedDatasetWithLogits,
     CounterfactualDatasetEncoder,
 )
-from src.data.modelnet import ModelNet40Dataset
 from src.data.protocols import PointCloudDataset, Partitions
 from src.data.shapenet import ShapeNetDatasetFlow
 from src.data.structures import Inputs, Outputs, Targets, WInputs, WTargets
 
+IN_CHAN = 3
+OUT_CHAN = 3
+
 __all__ = [
+    'IN_CHAN',
+    'OUT_CHAN',
     'BoundaryDataset',
     'CounterfactualDatasetEncoder',
     'Inputs',

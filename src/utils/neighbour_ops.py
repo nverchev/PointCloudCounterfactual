@@ -1,4 +1,4 @@
-"""Module providing point cloud operations for nearest neighbor computations and graph feature extraction."""
+"""Point cloud operations for nearest neighbor computations and graph feature extraction."""
 
 from typing import Any
 

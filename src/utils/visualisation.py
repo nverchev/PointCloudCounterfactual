@@ -1,4 +1,4 @@
-"""A module for visualizing point clouds and latent spaces using PyVista and Visdom."""
+"""Visualization utilities for point clouds and metrics."""
 
 import pathlib
 

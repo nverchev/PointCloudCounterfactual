@@ -1,4 +1,4 @@
-"""Module that defines the datasets for the project."""
+"""Classes with Dataset that have been preprocessed for use with VQVAE models."""
 
 import abc
 import itertools

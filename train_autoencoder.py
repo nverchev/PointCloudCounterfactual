@@ -12,9 +12,9 @@ from drytorch.utils.average import get_moving_average, get_trailing_mean
 from src.module import VQVAE, get_autoencoder
 from src.config import ConfigAll, Experiment, get_current_hydra_dir, get_trackers, hydra_main
 from src.data import get_datasets
+from src.train import get_autoencoder_loss, get_learning_schema
 from src.train.hooks import DiscreteSpaceOptimizer
-from src.train.learning_schema import get_learning_schema
-from src.train.metrics_and_losses import get_autoencoder_loss, get_emd_loss, get_recon_loss
+from src.train.metrics_and_losses import get_emd_loss, get_recon_loss
 from src.utils.parallel import DistributedWorker
 
 

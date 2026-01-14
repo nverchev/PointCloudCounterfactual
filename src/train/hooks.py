@@ -1,4 +1,4 @@
-"""Hooks for model training and optimization."""
+"""Hooks to execute during training."""
 
 from typing import cast
 

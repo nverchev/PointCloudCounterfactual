@@ -1,4 +1,4 @@
-"""Configuration for the experiment."""
+"""Package for configuring for the experiment."""
 
 from src.config.specs import ConfigAll
 from src.config.hydra import hydra_main, get_current_hydra_dir, get_config_all

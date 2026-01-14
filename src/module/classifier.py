@@ -1,4 +1,4 @@
-"""Module with the classifier architecture definition."""
+"""Classifier architecture."""
 
 import torch
 
@@ -6,7 +6,8 @@ from torch import nn
 from torch.nn import functional as F
 
 from src.config.experiment import Experiment
-from src.data.structures import IN_CHAN, Inputs
+from src.data import IN_CHAN
+from src.data.structures import Inputs
 from src.module.layers import EdgeConvLayer, LinearLayer, PointsConvLayer
 from src.utils.neighbour_ops import get_graph_features
 

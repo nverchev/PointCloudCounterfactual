@@ -1,4 +1,4 @@
-"""Module for learning scheme configuration."""
+"""Module for the learning schema configuration."""
 
 from drytorch import LearningSchema
 from drytorch.core import protocols as p

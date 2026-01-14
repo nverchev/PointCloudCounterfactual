@@ -1,3 +1,5 @@
+"""Functions for downloading data."""
+
 import logging
 import pathlib
 import zipfile

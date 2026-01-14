@@ -1,4 +1,4 @@
-"""Contains decoder classes."""
+"""Decoder architecture."""
 
 import abc
 import itertools
@@ -10,7 +10,7 @@ import torch.nn.functional as F
 from src.config import ActClass
 from src.config.experiment import Experiment
 from src.config.options import Decoders
-from src.data.structures import OUT_CHAN
+from src.data import OUT_CHAN
 from src.module.layers import PointsConvLayer
 from src.utils.neighbour_ops import graph_filtering
 

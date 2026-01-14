@@ -1,4 +1,4 @@
-"""Module package."""
+"""Package for architecture modules."""
 
 from src.module.autoencoders import VQVAE, CounterfactualVQVAE, get_autoencoder
 from src.module.decoders import get_decoder

@@ -1,4 +1,4 @@
-"""This module contains classes for various layers in the neural network."""
+"""Classes for various layers in the neural network."""
 
 import abc
 import functools

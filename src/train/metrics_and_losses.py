@@ -1,4 +1,4 @@
-"""Module containing metrics and losses used for training and evaluation."""
+"""Metrics and losses used for training and evaluation."""
 
 import math
 
@@ -256,7 +256,7 @@ def get_classification_loss() -> LossBase[torch.Tensor, Targets]:
     return get_cross_entropy_loss() | get_accuracy() | get_macro_accuracy()
 
 
-def get_w_encoder_loss() -> LossBase[Outputs, WTargets]:
+def get_w_autoencoder_loss() -> LossBase[Outputs, WTargets]:
     """Get encoder loss combining NLL, KLD and adversarial losses."""
     c_kld1 = Experiment.get_config().w_autoencoder.objective.c_kld1
     c_kld2 = Experiment.get_config().w_autoencoder.objective.c_kld2

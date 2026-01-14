@@ -1,4 +1,4 @@
-"""ModelNet40 dataset."""
+"""Dataset for the ModelNet40 dataset."""
 
 import logging
 import pathlib

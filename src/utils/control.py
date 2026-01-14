@@ -1,4 +1,4 @@
-"""Module for classes pertaining to control flow."""
+"""Classes pertaining to control flow."""
 
 
 class UsuallyFalse:

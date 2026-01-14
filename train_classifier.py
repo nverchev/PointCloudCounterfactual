@@ -15,8 +15,7 @@ from drytorch.utils.average import get_trailing_mean
 from src.module import DGCNN
 from src.config import ConfigAll, Experiment, get_current_hydra_dir, get_trackers, hydra_main
 from src.data import get_datasets
-from src.train.learning_schema import get_learning_schema
-from src.train.metrics_and_losses import get_classification_loss
+from src.train import get_classification_loss, get_learning_schema
 from src.utils.parallel import DistributedWorker
 from src.utils.visualisation import plot_confusion_matrix_heatmap
 

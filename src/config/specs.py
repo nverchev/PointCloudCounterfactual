@@ -1,4 +1,4 @@
-"""Contains the specification for the configuration files."""
+"""Specification for the configuration files."""
 
 import pathlib
 from contextlib import contextmanager

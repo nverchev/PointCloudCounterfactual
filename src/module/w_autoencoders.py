@@ -1,3 +1,5 @@
+"""W-autoencoder architecture."""
+
 import abc
 from collections.abc import Callable, Generator
 

@@ -1,4 +1,4 @@
-"""Contains encoder classes."""
+"""Encoder architecture."""
 
 import abc
 import itertools
@@ -8,7 +8,7 @@ import torch.nn as nn
 
 from src.config import ActClass, Experiment
 from src.config.options import Encoders
-from src.data.structures import IN_CHAN
+from src.data import IN_CHAN
 from src.module.layers import EdgeConvLayer, PointsConvLayer
 from src.utils.neighbour_ops import get_graph_features, graph_max_pooling
 

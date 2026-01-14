@@ -1,3 +1,5 @@
+"""Configuration for the environment."""
+
 import enum
 import pathlib
 import tomllib

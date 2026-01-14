@@ -1,3 +1,5 @@
+"""Protocols for datasets."""
+
 import abc
 import enum
 from abc import ABCMeta, abstractmethod

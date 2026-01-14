@@ -1,3 +1,5 @@
+"""Encoder architecture for the W-Autoencoder."""
+
 import abc
 import itertools
 

@@ -1,13 +1,14 @@
 """DRYTorch Model subtypes."""
 
 from drytorch import Model
-from drytorch.lib.models import Input, Output
+
+from src.data import WInputs, Outputs
 
 
-class ModelEpoch(Model[Input, Output]):
+class ModelEpoch(Model[WInputs, Outputs]):
     """This class adds a hook to include the epoch in the outputs (to anneal the kld loss)."""
 
-    def __call__(self, inputs: Input) -> Output:
+    def __call__(self, inputs: WInputs) -> Outputs:
         outputs = super().__call__(inputs)
         outputs.model_epoch = self.epoch
         return outputs
