@@ -87,8 +87,8 @@ class WEncoderConfig:
         proj_dim (StrictlyPositiveInt): Number of dimensions in expanded embedding
         dropout (tuple[PositiveFloat]): Dropout probabilities for the linear layers
         cf_temperature (int): Temperature for the probabilities (closer to zero means closer to samplings)
-        act_name (str): The name of the PyTorch activation function (e.g., 'ReLU', 'LeakyReLU')
         gumbel (bool): Whether to use Gumbel Softmax to add noise to the codes
+        act_name (str): The name of the PyTorch activation function (e.g., 'ReLU', 'LeakyReLU')
     """
 
     architecture: WEncoders
@@ -98,14 +98,18 @@ class WEncoderConfig:
     proj_dim: StrictlyPositiveInt
     dropout: tuple[PositiveFloat, ...]
     cf_temperature: int
-    act_name: str = ''
     gumbel: bool = True
-    act_cls: ActClass = dataclasses.field(init=False)
+    act_name: str = ''
+
+    @property
+    def act_cls(self) -> ActClass:
+        """The activation class."""
+        return get_activation_cls(self.act_name) if self.act_name else DEFAULT_ACT
 
     @model_validator(mode='after')
-    def _resolve_activation(self) -> Self:
+    def _check_activation(self) -> Self:
         """Resolve activation class from name."""
-        self.act_cls = get_activation_cls(self.act_name) if self.act_name else DEFAULT_ACT
+        _ = get_activation_cls(self.act_name) if self.act_name else DEFAULT_ACT
         return self
 
     @model_validator(mode='after')
@@ -134,12 +138,16 @@ class EncoderConfig:
     hidden_dims: tuple[StrictlyPositiveInt, ...]
     w_encoder: WEncoderConfig
     act_name: str = ''
-    act_cls: ActClass = dataclasses.field(init=False)
+
+    @property
+    def act_cls(self) -> ActClass:
+        """The activation class."""
+        return get_activation_cls(self.act_name) if self.act_name else DEFAULT_ACT
 
     @model_validator(mode='after')
-    def _resolve_activation(self) -> Self:
+    def _check_activation(self) -> Self:
         """Resolve activation class from name."""
-        self.act_cls = get_activation_cls(self.act_name) if self.act_name else DEFAULT_ACT
+        _ = get_activation_cls(self.act_name) if self.act_name else DEFAULT_ACT
         return self
 
 
@@ -162,12 +170,16 @@ class WDecoderConfig:
     hidden_dims: tuple[StrictlyPositiveInt, ...]
     dropout: tuple[PositiveFloat, ...]
     act_name: str = ''
-    act_cls: ActClass = dataclasses.field(init=False)
+
+    @property
+    def act_cls(self) -> ActClass:
+        """The activation class."""
+        return get_activation_cls(self.act_name) if self.act_name else DEFAULT_ACT
 
     @model_validator(mode='after')
-    def _resolve_activation(self) -> Self:
+    def _check_activation(self) -> Self:
         """Resolve activation class from name."""
-        self.act_cls = get_activation_cls(self.act_name) if self.act_name else DEFAULT_ACT
+        _ = get_activation_cls(self.act_name) if self.act_name else DEFAULT_ACT
         return self
 
     @model_validator(mode='after')
@@ -194,12 +206,16 @@ class PosteriorDecoderConfig:
     n_heads: StrictlyPositiveInt
     dropout: tuple[PositiveFloat, ...]
     act_name: str = ''
-    act_cls: ActClass = dataclasses.field(init=False)
+
+    @property
+    def act_cls(self) -> ActClass:
+        """The activation class."""
+        return get_activation_cls(self.act_name) if self.act_name else DEFAULT_ACT
 
     @model_validator(mode='after')
-    def _resolve_activation(self) -> Self:
+    def _check_activation(self) -> Self:
         """Resolve activation class from name."""
-        self.act_cls = get_activation_cls(self.act_name) if self.act_name else DEFAULT_ACT
+        _ = get_activation_cls(self.act_name) if self.act_name else DEFAULT_ACT
         return self
 
     @model_validator(mode='after')
@@ -238,12 +254,16 @@ class DecoderConfig:
     tau: PositiveFloat
     filtering: bool
     act_name: str = ''
-    act_cls: ActClass = dataclasses.field(init=False)
+
+    @property
+    def act_cls(self) -> ActClass:
+        """The activation class."""
+        return get_activation_cls(self.act_name) if self.act_name else DEFAULT_ACT
 
     @model_validator(mode='after')
-    def _resolve_activation(self) -> Self:
+    def _check_activation(self) -> Self:
         """Resolve activation class from name."""
-        self.act_cls = get_activation_cls(self.act_name) if self.act_name else DEFAULT_ACT
+        get_activation_cls(self.act_name) if self.act_name else DEFAULT_ACT
         return self
 
 
@@ -304,8 +324,8 @@ class ClassifierConfig:
         mlp_dims (tuple[StrictlyPositiveInt]): Dimensions for the MLP layers
         dropout (tuple[PositiveFloat]): Dropout probabilities for the MLP layers
         out_classes (StrictlyPositiveInt): The number of output classes for the classifier
-        act_name (str): The name of the PyTorch activation function
         name (str): The name of the model
+        act_name (str): The name of the PyTorch activation function
     """
 
     k: StrictlyPositiveInt
@@ -314,14 +334,18 @@ class ClassifierConfig:
     mlp_dims: tuple[StrictlyPositiveInt, ...]
     dropout: tuple[PositiveFloat, ...]
     out_classes: StrictlyPositiveInt
-    act_name: str = ''
     name: str = ''
-    act_cls: ActClass = dataclasses.field(init=False)
+    act_name: str = ''
+
+    @property
+    def act_cls(self) -> ActClass:
+        """The activation class."""
+        return get_activation_cls(self.act_name) if self.act_name else DEFAULT_ACT
 
     @model_validator(mode='after')
-    def _resolve_activation(self) -> Self:
+    def _check_activation(self) -> Self:
         """Resolve activation class from name."""
-        self.act_cls = get_activation_cls(self.act_name) if self.act_name else DEFAULT_ACT
+        get_activation_cls(self.act_name) if self.act_name else DEFAULT_ACT
         return self
 
     @model_validator(mode='after')
@@ -371,12 +395,15 @@ class LearningConfig:
     clip_criterion: ClipCriterion
     scheduler: SchedulerConfig
     opt_settings: dict[str, Any] = dataclasses.field(default_factory=dict)
-    optimizer_cls: type[torch.optim.Optimizer] = dataclasses.field(init=False)
+
+    @property
+    def optimizer_cls(self) -> type[torch.optim.Optimizer]:
+        return get_optim_cls(self.optimizer_name)
 
     @model_validator(mode='after')
-    def _resolve_optimizer(self) -> Self:
+    def _check_optimizer(self) -> Self:
         """Resolve optimizer class from name."""
-        self.optimizer_cls = get_optim_cls(self.optimizer_name)
+        _ = get_optim_cls(self.optimizer_name)
         return self
 
 
@@ -554,7 +581,7 @@ class UserSettings:
         n_generated_output_points (int): The number of points to generate during inference
         load_checkpoint (int): The checkpoint to load if available. Default is the last one (-1)
         counterfactual_value (PositiveFloat): The counterfactual strength value
-        hydra: Subset of the current hydra settings
+        hydra (HydraSettings): Subset of the current hydra settings
         path (PathSpecs): Specifications for paths that override .env settings
     """
 
