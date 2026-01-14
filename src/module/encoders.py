@@ -35,6 +35,7 @@ class LDGCNN(BasePointEncoder):
         modules: list[nn.Module] = []
         for in_dim, out_dim in itertools.pairwise(self.h_dim):
             modules.append(PointsConvLayer(in_dim, out_dim, act_cls=self.act_cls))
+
         self.points_convs = nn.Sequential(*modules)
         self.final_conv = PointsConvLayer(sum(self.h_dim), self.w_dim, batch_norm=False)
 
@@ -62,6 +63,7 @@ class DGCNN(BasePointEncoder):
         modules = [EdgeConvLayer(2 * IN_CHAN, self.h_dim[0])]
         for in_dim, out_dim in itertools.pairwise(self.h_dim):
             modules.append(EdgeConvLayer(2 * in_dim, out_dim, act_cls=self.act_cls))
+
         self.edge_convs = nn.Sequential(*modules)
         self.final_conv = PointsConvLayer(sum(self.h_dim), self.w_dim, batch_norm=False, act_cls=nn.Identity)
 

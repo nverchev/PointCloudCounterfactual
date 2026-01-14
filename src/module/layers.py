@@ -29,6 +29,13 @@ class CanReset(Protocol):
         """Reset parameters of the layer."""
 
 
+@runtime_checkable
+class HasInplace(Protocol):
+    """Protocol for classes that have an inplace option."""
+
+    inplace: bool
+
+
 class View(nn.Module):
     """A simple module that reshapes the input tensor according to the specified shape.
 
@@ -103,12 +110,11 @@ class GeneralizedLinearLayer(nn.Module, metaclass=abc.ABCMeta):
         self.bn: nn.Module | None = self.get_bn_layer() if batch_norm else None
         self.residual: bool = residual
         if act_cls is None:
-            self.act = None
+            self.act: nn.Module | None = None
         else:
-            try:
-                self.act = act_cls(inplace=True)  # type: ignore  # pyright: ignore
-            except TypeError:
-                self.act = act_cls()
+            self.act = act_cls()
+            if isinstance(self.act, HasInplace):
+                self.act.inplace = True
 
         if DEBUG_MODE:
             self.register_forward_hook(debug_check)

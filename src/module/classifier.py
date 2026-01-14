@@ -1,5 +1,7 @@
 """Classifier architecture."""
 
+import itertools
+
 import torch
 
 from torch import nn
@@ -19,29 +21,26 @@ class DGCNN(nn.Module):
         super().__init__()
         cfg = Experiment.get_config()
         cfg_class_ae = cfg.classifier.architecture
-        self.k = cfg_class_ae.k
+        self.k: int = cfg_class_ae.k
         self.act_cls = cfg_class_ae.act_cls
-        self.h_dim = cfg_class_ae.hidden_dims
-        self.emb_dim = cfg_class_ae.emb_dim
-        self.mlp_dims = cfg_class_ae.mlp_dims
-        self.dropout = cfg_class_ae.dropout
-        self._classes = cfg_class_ae.out_classes
-        self.num_classes = cfg.data.dataset.n_classes
-        conv_modules: list[torch.nn.Module] = [EdgeConvLayer(2 * IN_CHAN, self.h_dim[0], act_cls=self.act_cls)]
-        in_dims = self.h_dim[:-1]
-        out_dims = self.h_dim[1:]
-        for in_dim, out_dim in zip(in_dims, out_dims, strict=False):
+        self.h_dims: tuple[int, ...] = cfg_class_ae.hidden_dims
+        self.emb_dim: int = cfg_class_ae.emb_dim
+        self.mlp_dims: tuple[int, ...] = cfg_class_ae.mlp_dims
+        self.dropout: tuple[float, ...] = cfg_class_ae.dropout
+        self.n_classes: int = cfg.data.dataset.n_classes
+        conv_modules: list[torch.nn.Module] = [EdgeConvLayer(2 * IN_CHAN, self.h_dims[0], act_cls=self.act_cls)]
+        for in_dim, out_dim in itertools.pairwise(self.h_dims):
             conv_modules.append(EdgeConvLayer(2 * in_dim, out_dim, act_cls=self.act_cls))
-        self.edge_convs = nn.Sequential(*conv_modules)
-        self.final_conv = PointsConvLayer(sum(self.h_dim), self.emb_dim)
 
+        self.edge_convs = nn.Sequential(*conv_modules)
+        self.final_conv = PointsConvLayer(sum(self.h_dims), self.emb_dim)
         mlp_modules: list[torch.nn.Module] = [LinearLayer(2 * self.emb_dim, self.mlp_dims[0], act_cls=self.act_cls)]
-        in_dims = self.mlp_dims[:-1]
-        out_dims = self.mlp_dims[1:]
-        for in_dim, out_dim, prob in zip(in_dims, out_dims, self.dropout, strict=False):
+
+        for (in_dim, out_dim), prob in zip(itertools.pairwise(self.mlp_dims), self.dropout, strict=False):
             mlp_modules.append(nn.Dropout(p=prob))
             mlp_modules.append(LinearLayer(in_dim, out_dim, act_cls=self.act_cls))
-        mlp_modules.append(LinearLayer(self.mlp_dims[-1], self.num_classes, batch_norm=False))
+
+        mlp_modules.append(LinearLayer(self.mlp_dims[-1], self.n_classes, batch_norm=False))
         self.mlp = nn.Sequential(*mlp_modules)
 
     def forward(self, inputs: Inputs) -> torch.Tensor:
