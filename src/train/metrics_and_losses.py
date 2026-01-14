@@ -7,7 +7,6 @@ import torch
 import torch.nn.functional as F
 
 
-# from emd import emdModule
 from structural_losses import match_cost
 from torch import nn
 from torcheval.metrics.functional import multiclass_accuracy, multiclass_f1_score
@@ -50,10 +49,8 @@ def torch_chamfer(t1: torch.Tensor, t2: torch.Tensor) -> torch.Tensor:
 
 def get_emd_loss() -> LossBase[Outputs, Targets]:
     """Calculate earthmover's distance between two point clouds using PyTorch backend."""
-    # emd_dist = emdModule()
 
     def _emd(data: Outputs, targets: Targets) -> torch.Tensor:
-        # return torch.sqrt(emd_dist(data.recon.contiguous(), targets.ref_cloud.contiguous(), 0.005, 50)[0]).sum(1)
         return match_cost(data.recon, targets.ref_cloud)
 
     return Loss(_emd, name='EMD')
