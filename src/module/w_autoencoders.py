@@ -216,8 +216,6 @@ class CounterfactualWAutoEncoder(BaseWAutoEncoder):
         self.relaxed_softmax = TemperatureScaledSoftmax(dim=1, temperature=cfg_wae.cf_temperature)
         self.z2_inference = PriorDecoder()
         self.posterior = PosteriorDecoder()
-        # self.adversarial = nn.Linear(cfg_ae_arc.z1_dim, self.n_classes)
-
         return
 
     def encode(self, x: torch.Tensor | None) -> Outputs:
@@ -235,10 +233,6 @@ class CounterfactualWAutoEncoder(BaseWAutoEncoder):
 
         data.mu1, data.log_var1 = latent.chunk(2, 2)
         data.h = features
-
-        # Adversarial predictions
-        # data.y1 = self.adversarial(data.mu1.detach())
-        # data.y2 = frozen_forward(self.adversarial, data.mu1)
         data.z1 = self.sampler.sample(data.mu1, data.log_var1)
         return data
 
