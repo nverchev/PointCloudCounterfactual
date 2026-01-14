@@ -10,10 +10,10 @@ import torch
 from numpy import typing as npt
 from torch.utils.data import Dataset
 
-from src.dataset.augmentations import augment_clouds, jitter_cloud, normalise
+from src.data.augmentations import augment_clouds, jitter_cloud, normalise
 from src.config.experiment import Experiment
-from src.data_types import Inputs, Targets
-from src.dataset.protocols import PointCloudDataset, Partitions, SplitCreator
+from src.data.structures import Inputs, Targets
+from src.data.protocols import PointCloudDataset, Partitions, SplitCreator
 from src.utils.download import download_extract_zip
 from src.utils.neighbour_ops import index_k_neighbours
 

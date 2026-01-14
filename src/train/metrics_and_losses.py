@@ -15,7 +15,7 @@ from torcheval.metrics.functional import multiclass_accuracy, multiclass_f1_scor
 from drytorch.lib.objectives import Loss, LossBase, Metric
 from src.config.experiment import Experiment
 from src.config.options import ModelHead, ReconLosses
-from src.data_types import Outputs, Targets, WTargets
+from src.data.structures import Outputs, Targets, WTargets
 from src.utils.neighbour_ops import pykeops_square_distance, torch_square_distance
 
 

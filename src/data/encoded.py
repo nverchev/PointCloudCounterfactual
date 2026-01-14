@@ -13,9 +13,10 @@ from torch.utils.data import Dataset
 
 from drytorch import Model
 
-from src.module import AbstractVQVAE, BaseWAutoEncoder, CounterfactualVQVAE, CounterfactualWAutoEncoder
-from src.data_types import Inputs, Outputs, Targets, WInputs, WTargets
-from src.dataset.protocols import AbstractSingleton
+from src.module.autoencoders import AbstractVQVAE, CounterfactualVQVAE
+from src.module.w_autoencoders import BaseWAutoEncoder, CounterfactualWAutoEncoder
+from src.data.structures import Inputs, Outputs, Targets, WInputs, WTargets
+from src.data.protocols import AbstractSingleton
 
 VQ = TypeVar('VQ', bound=AbstractVQVAE[BaseWAutoEncoder])
 

@@ -3,7 +3,7 @@
 import torch
 
 from src.config import ConfigAll, Experiment, hydra_main
-from src.dataset import get_dataset, PointCloudDataset, Partitions
+from src.data import get_dataset, PointCloudDataset, Partitions
 from src.utils.visualisation import render_cloud
 
 

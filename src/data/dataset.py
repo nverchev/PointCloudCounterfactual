@@ -1,40 +1,10 @@
-"""Package containing dataset classes."""
-
 from typing import Any
 
 from torch import distributed as dist
 
-from src.config.experiment import Experiment
+from src.config import Experiment
 from src.config.options import Datasets
-from src.dataset.protocols import PointCloudDataset, Partitions
-from src.dataset.modelnet import ModelNet40Dataset
-from src.dataset.shapenet import ShapeNetDatasetFlow
-from src.dataset.encoded import (
-    WDatasetEncoder,
-    WDatasetWithLogits,
-    ReconstructedDatasetEncoder,
-    BoundaryDataset,
-    WDatasetWithLogitsFrozen,
-    ReconstructedDatasetWithLogits,
-    CounterfactualDatasetEncoder,
-)
-
-__all__ = [
-    'BoundaryDataset',
-    'CounterfactualDatasetEncoder',
-    'ModelNet40Dataset',
-    'Partitions',
-    'PointCloudDataset',
-    'ReconstructedDatasetEncoder',
-    'ReconstructedDatasetWithLogits',
-    'ShapeNetDatasetFlow',
-    'WDatasetEncoder',
-    'WDatasetWithLogits',
-    'WDatasetWithLogitsFrozen',
-    'get_dataset',
-    'get_dataset_multiprocess_safe',
-    'get_datasets',
-]
+from src.data import Partitions, PointCloudDataset, ModelNet40Dataset, ShapeNetDatasetFlow
 
 
 def get_dataset(partition: Partitions) -> PointCloudDataset:
@@ -52,7 +22,7 @@ def get_dataset(partition: Partitions) -> PointCloudDataset:
     return dataset
 
 
-def get_datasets() -> tuple[PointCloudDataset, PointCloudDataset]:
+def _get_datasets() -> tuple[PointCloudDataset, PointCloudDataset]:
     """Get the correct datasets for training and testing."""
     cfg = Experiment.get_config()
     train_dataset = get_dataset(Partitions.train_val if cfg.final else Partitions.train)
@@ -60,7 +30,7 @@ def get_datasets() -> tuple[PointCloudDataset, PointCloudDataset]:
     return train_dataset, test_dataset
 
 
-def get_dataset_multiprocess_safe() -> tuple[PointCloudDataset, PointCloudDataset]:
+def get_datasets() -> tuple[PointCloudDataset, PointCloudDataset]:
     """Get the correct datasets for training and testing, but in a multiprocess safe way."""
     cfg = Experiment.get_config()
     datasets: tuple[PointCloudDataset, PointCloudDataset] | None = None
@@ -68,11 +38,11 @@ def get_dataset_multiprocess_safe() -> tuple[PointCloudDataset, PointCloudDatase
         rank = dist.get_rank()
         for i in range(cfg.user.n_subprocesses):
             if rank == i:
-                datasets = get_datasets()
+                datasets = _get_datasets()
 
             dist.barrier() if cfg.user.cpu else dist.barrier(device_ids=[rank])
     else:
-        datasets = get_datasets()
+        datasets = _get_datasets()
 
     if datasets is None:
         raise RuntimeError('Datasets could not be created.')

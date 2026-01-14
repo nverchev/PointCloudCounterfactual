@@ -5,7 +5,7 @@ from typing import ClassVar, Any
 
 from torch.utils.data import Dataset
 
-from src.data_types import Inputs, Targets
+from src.data.structures import Inputs, Targets
 
 
 class PointCloudDataset(Dataset[tuple[Inputs, Targets]], metaclass=ABCMeta):

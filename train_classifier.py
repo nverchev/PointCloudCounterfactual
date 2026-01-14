@@ -14,7 +14,7 @@ from drytorch.utils.average import get_trailing_mean
 
 from src.module import DGCNN
 from src.config import ConfigAll, Experiment, get_current_hydra_dir, get_trackers, hydra_main
-from src.dataset import get_dataset_multiprocess_safe
+from src.data import get_datasets
 from src.train.learning_schema import get_learning_schema
 from src.train.metrics_and_losses import get_classification_loss
 from src.utils.parallel import DistributedWorker
@@ -29,7 +29,7 @@ def train_classifier() -> None:
 
     module = DGCNN()
     model = Model(module, name=cfg_class.architecture.name, device=cfg_user.device)
-    train_dataset, test_dataset = get_dataset_multiprocess_safe()  # test is validation unless final=True
+    train_dataset, test_dataset = get_datasets()  # test is validation unless final=True
     train_loader = DataLoader(dataset=train_dataset, batch_size=cfg_class.train.batch_size_per_device)
     test_loader = DataLoader(dataset=test_dataset, batch_size=cfg_class.train.batch_size_per_device)
     loss_calc = get_classification_loss()

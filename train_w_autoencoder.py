@@ -12,8 +12,7 @@ from drytorch.utils.average import get_moving_average, get_trailing_mean
 
 from src.module import CounterfactualVQVAE, DGCNN
 from src.config import ConfigAll, Experiment, get_current_hydra_dir, get_trackers, hydra_main
-from src.data_types import Inputs
-from src.dataset import get_dataset_multiprocess_safe, WDatasetWithLogits
+from src.data import Inputs, WDatasetWithLogits, get_datasets
 from src.train.learning_schema import get_learning_schema
 from src.train.metrics_and_losses import get_w_encoder_loss
 from src.train.models import ModelEpoch
@@ -42,7 +41,7 @@ def train_w_autoencoder(
     if not cfg_user.load_checkpoint:
         module.recursive_reset_parameters()
 
-    train_dataset, test_dataset = get_dataset_multiprocess_safe()  # test is validation unless final=True
+    train_dataset, test_dataset = get_datasets()  # test is validation unless final=True
 
     train_w_dataset = WDatasetWithLogits(train_dataset, vqvae, classifier)
     test_w_dataset = WDatasetWithLogits(test_dataset, vqvae, classifier)

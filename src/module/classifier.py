@@ -6,7 +6,7 @@ from torch import nn
 from torch.nn import functional as F
 
 from src.config.experiment import Experiment
-from src.data_types import IN_CHAN, Inputs
+from src.data.structures import IN_CHAN, Inputs
 from src.module.layers import EdgeConvLayer, LinearLayer, PointsConvLayer
 from src.utils.neighbour_ops import get_graph_features
 

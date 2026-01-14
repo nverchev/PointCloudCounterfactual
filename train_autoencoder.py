@@ -9,9 +9,9 @@ from drytorch.core.exceptions import TrackerNotActiveError
 from drytorch.lib.hooks import EarlyStoppingCallback, Hook, StaticHook, call_every, saving_hook
 from drytorch.utils.average import get_moving_average, get_trailing_mean
 
-from src.module import AbstractVQVAE, get_autoencoder
+from src.module import VQVAE, get_autoencoder
 from src.config import ConfigAll, Experiment, get_current_hydra_dir, get_trackers, hydra_main
-from src.dataset import get_dataset_multiprocess_safe
+from src.data import get_datasets
 from src.train.hooks import DiscreteSpaceOptimizer
 from src.train.learning_schema import get_learning_schema
 from src.train.metrics_and_losses import get_autoencoder_loss, get_emd_loss, get_recon_loss
@@ -32,7 +32,7 @@ def train_autoencoder(trial: Trial | None = None) -> None:
     cfg_early = cfg_ae.train.early_stopping
     ae = get_autoencoder()
     model = Model(ae, name=cfg_ae.architecture.name, device=cfg_user.device)
-    train_dataset, test_dataset = get_dataset_multiprocess_safe()  # test is validation unless final=True
+    train_dataset, test_dataset = get_datasets()  # test is validation unless final=True
     train_loader = DataLoader(
         dataset=train_dataset, batch_size=cfg_ae.train.batch_size_per_device, n_workers=cfg_user.n_workers
     )
@@ -49,7 +49,7 @@ def train_autoencoder(trial: Trial | None = None) -> None:
     if cfg_user.load_checkpoint:
         trainer.load_checkpoint(cfg_user.load_checkpoint)
 
-    if isinstance(ae, AbstractVQVAE):
+    if isinstance(ae, VQVAE):
         rearrange_hook = StaticHook(DiscreteSpaceOptimizer(diagnostic)).bind(call_every(cfg_ae.diagnose_every))
         trainer.post_epoch_hooks.register(rearrange_hook)
 

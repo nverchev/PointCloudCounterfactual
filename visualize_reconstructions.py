@@ -8,8 +8,7 @@ from drytorch import Model
 
 from src.module import CounterfactualVQVAE
 from src.config import ConfigAll, Experiment, hydra_main
-from src.data_types import Inputs
-from src.dataset import Partitions, get_dataset
+from src.data import Inputs, Partitions, get_dataset
 from src.utils.visualisation import render_cloud
 
 

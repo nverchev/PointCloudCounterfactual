@@ -9,9 +9,9 @@ import torch.nn as nn
 
 from src.config import Experiment
 from src.config.options import ModelHead
-from src.data_types import Inputs, Outputs
+from src.data.structures import Inputs, Outputs
 from src.module import get_decoder, get_encoder
-from src.module.w_autoencoder import BaseWAutoEncoder, WAutoEncoder, CounterfactualWAutoEncoder
+from src.module.w_autoencoders import BaseWAutoEncoder, WAutoEncoder, CounterfactualWAutoEncoder
 from src.module.layers import TransferGrad, reset_child_params
 from src.utils.neighbour_ops import pykeops_square_distance
 from src.utils.control import UsuallyFalse
