@@ -9,14 +9,13 @@ uv sync
 uv pip install tqdm
 uv pip install tensorboard
 ```
-- install the packages in the external folder:
+- install the structural loss from the external folder:
 ```console
 uv pip install external/pytorch_structural_losses/ --no-build-isolation --link-mode=copy
-uv pip install external/emd/ --no-build-isolation --link-mode=copy
 ```
 - set up local path directories by adding them in a .env file (the datasets should download automatically):
 ```.env
-DATASET_DIR={your dataset directory} 
-ROOT_EXP_DIR={the directory for your experiments} 
+DATASET_DIR={your dataset directory}
+ROOT_EXP_DIR={the directory for your experiments}
 ```
 - execute run.sh
