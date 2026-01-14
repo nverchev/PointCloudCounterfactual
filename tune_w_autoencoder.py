@@ -84,7 +84,7 @@ def tune(tune_cfg: DictConfig):
         n_min_trials=tune_cfg.tune.n_min_trials,
     )
     sampler = optuna.samplers.GPSampler(warn_independent_sampling=False)
-    study_name = get_study_name(tune_cfg.study_name, tune_cfg.overrides[1:])
+    study_name = get_study_name(tune_cfg.tune.study_name, tune_cfg.overrides[1:])
     study = optuna.create_study(
         study_name=study_name, storage=tune_cfg.storage, sampler=sampler, pruner=pruner, load_if_exists=True
     )
