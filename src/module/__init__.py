@@ -3,15 +3,13 @@
 from src.config.experiment import Experiment
 from src.config.options import Encoders, Decoders, WEncoders, WDecoders, ModelHead
 from src.module.autoencoder import (
-    CounterfactualWAutoEncoder,
     AutoEncoder,
     AE,
     AbstractVQVAE,
     VQVAE,
-    BaseWAutoEncoder,
-    WAutoEncoder,
     CounterfactualVQVAE,
 )
+from src.module.w_autoencoder import BaseWAutoEncoder, WAutoEncoder, CounterfactualWAutoEncoder
 from src.module.classifier import DGCNN
 from src.module.decoders import (
     BasePointDecoder,
