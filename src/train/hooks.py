@@ -95,7 +95,7 @@ class WandbLogReconstruction:
         self._num_samples = num_samples
         self.run = Wandb.get_current().run
         inputs, targets = take_from_dataset(dataset, num_samples)
-        for i, (input_, label) in enumerate(zip(inputs.cloud.numpy(), targets.label, strict=False)):
+        for i, (input_, label) in enumerate(zip(inputs.cloud.numpy(), targets.label, strict=True)):
             self.run.log({f'Sample {i} with label: {label.item()}': wandb.Object3D(input_)})
 
         return
@@ -135,7 +135,7 @@ class TensorBoardLogReconstruction:
         self._num_samples = num_samples
         self.writer = TensorBoard.get_current().writer
         inputs, targets = take_from_dataset(dataset, num_samples)
-        for i, (input_, label) in enumerate(zip(inputs.cloud, targets.label, strict=False)):
+        for i, (input_, label) in enumerate(zip(inputs.cloud, targets.label, strict=True)):
             self.writer.add_mesh(
                 tag=f'Sample {i} with label: {label.item()}',
                 vertices=input_.unsqueeze(0),

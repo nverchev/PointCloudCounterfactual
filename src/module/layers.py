@@ -261,7 +261,7 @@ def frozen_forward(network: nn.Module, x: torch.Tensor) -> Any:
     output = network(x)
 
     # Restore original requires_grad flags
-    for p, req in zip(network.parameters(), was_requires_grad, strict=False):
+    for p, req in zip(network.parameters(), was_requires_grad, strict=True):
         p.requires_grad_(req)
 
     return output

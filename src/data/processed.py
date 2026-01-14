@@ -82,7 +82,7 @@ class WDatasetEncoder(DatasetEncoder[VQ], Dataset[tuple[WInputs, WTargets]]):
             batch_ae_data = self._run_autoencoder(batch_inputs)
             batch_w_q, batch_w_e, batch_one_hot_idx = batch_ae_data.w_q, batch_ae_data.w_e, batch_ae_data.one_hot_idx
 
-            for w_q, w_e, one_hot_idx in zip(batch_w_q, batch_w_e, batch_one_hot_idx, strict=False):
+            for w_q, w_e, one_hot_idx in zip(batch_w_q, batch_w_e, batch_one_hot_idx, strict=True):
                 batch_data.append((WInputs(w_q), WTargets(w_e=w_e, one_hot_idx=one_hot_idx)))
 
         return batch_data
@@ -120,7 +120,7 @@ class WDatasetWithLogits(WDatasetEncoder[CounterfactualVQVAE], ClassifierMixin):
             batch_logits = self._run_classifier(self.classifier, batch_inputs)
             batch_w_q, batch_w_e, batch_one_hot_idx = batch_ae_data.w_q, batch_ae_data.w_e, batch_ae_data.one_hot_idx
 
-            for w_q, _, logit, one_hot_idx in zip(batch_w_q, batch_w_e, batch_logits, batch_one_hot_idx, strict=False):
+            for w_q, _, logit, one_hot_idx in zip(batch_w_q, batch_w_e, batch_logits, batch_one_hot_idx, strict=True):
                 batch_data.append((WInputs(w_q, logit), WTargets(w_e=w_q, one_hot_idx=one_hot_idx, logits=logit)))
 
         return batch_data
@@ -159,7 +159,7 @@ class ReconstructedDatasetEncoder(DatasetEncoder[VQ], Dataset[tuple[Inputs, Targ
             batch_ae_data = self._run_autoencoder(batch_inputs)
             recons = batch_ae_data.recon
 
-            for recon, label in zip(recons, batch_labels, strict=False):
+            for recon, label in zip(recons, batch_labels, strict=True):
                 batch_data.append((Inputs(cloud=recon), Targets(ref_cloud=recon, label=label)))
 
         return batch_data
@@ -196,7 +196,7 @@ class ReconstructedDatasetWithLogits(ReconstructedDatasetEncoder[CounterfactualV
             batch_ae_data = self._run_autoencoder(batch_inputs, batch_logits)
             recons = batch_ae_data.recon
 
-            for recon, label in zip(recons, batch_labels, strict=False):
+            for recon, label in zip(recons, batch_labels, strict=True):
                 batch_data.append((Inputs(cloud=recon), Targets(ref_cloud=recon, label=label)))
 
         return batch_data
@@ -249,7 +249,7 @@ class CounterfactualDatasetEncoder(
             # For targets, use original labels when target_label is 'original'
             target_for_labels = batch_labels if self.target_label == 'original' else torch.tensor(self.target_label)
 
-            for recon, original_label in zip(recons, batch_labels, strict=False):
+            for recon, original_label in zip(recons, batch_labels, strict=True):
                 final_label = original_label if self.target_label == 'original' else target_for_labels
                 batch_data.append((Inputs(cloud=recon), Targets(ref_cloud=recon, label=final_label)))
 
