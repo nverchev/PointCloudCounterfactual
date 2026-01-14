@@ -42,7 +42,7 @@ class MatchCostFunction(Function):
         return grad1 * grad_output_expand, grad2 * grad_output_expand
 
     @classmethod
-    def apply(cls, x: torch.Tensor, *y: torch.Tensor) -> torch.Tensor:
+    def apply(cls, x: torch.Tensor, y: torch.Tensor) -> torch.Tensor:
         """Apply the function to two tensors."""
         return cast(torch.Tensor, super().apply(x, y))
 
