@@ -1,6 +1,5 @@
 """Contains the Experiment class for the project and related helper functions."""
 
-import pathlib
 import sys
 
 from hydra.core import utils as hydra_utils
@@ -18,10 +17,11 @@ class Experiment(drytorch.Experiment[ConfigAll]):
     pass
 
 
-def get_trackers(cfg: ConfigAll, hydra_dir: pathlib.Path) -> list[Tracker]:
+def get_trackers(cfg: ConfigAll) -> list[Tracker]:
     """Get trackers from according to the user configuration."""
     cfg_trackers = cfg.user.trackers
-    hydra_utils.configure_log(None)  # type:ignore # pyright:ignore --- correct way to restart logging in subprocesses
+    cfg_hydra = cfg.user.hydra
+    hydra_utils.configure_log(cfg_hydra.job_logging)
     drytorch.init_trackers(mode='hydra')
     tracker_list: list[Tracker] = []
     if sys.gettrace():  # skip in debug mode
@@ -37,7 +37,7 @@ def get_trackers(cfg: ConfigAll, hydra_dir: pathlib.Path) -> list[Tracker]:
     if cfg_trackers.hydra:
         from drytorch.trackers.hydra import HydraLink
 
-        tracker_list.append(HydraLink(hydra_dir=hydra_dir))
+        tracker_list.append(HydraLink(hydra_dir=cfg.user.hydra.output_dir))
 
     if cfg_trackers.csv:
         from drytorch.trackers.csv import CSVDumper

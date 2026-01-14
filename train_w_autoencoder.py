@@ -1,7 +1,5 @@
 """Train the w-autoencoder."""
 
-import pathlib
-
 from typing import TYPE_CHECKING, Any
 
 import torch
@@ -11,7 +9,7 @@ from drytorch.lib.hooks import EarlyStoppingCallback
 from drytorch.utils.average import get_moving_average, get_trailing_mean
 
 from src.module import CounterfactualVQVAE, DGCNN
-from src.config import ConfigAll, Experiment, get_current_hydra_dir, get_trackers, hydra_main
+from src.config import ConfigAll, Experiment, get_trackers, hydra_main
 from src.data import Inputs, WDatasetWithLogits, get_datasets
 from src.train import get_learning_schema, get_w_autoencoder_loss
 from src.train.models import ModelEpoch
@@ -79,9 +77,9 @@ def train_w_autoencoder(
     return
 
 
-def setup_and_train(cfg: ConfigAll, hydra_dir: pathlib.Path) -> None:
+def setup_and_train(cfg: ConfigAll) -> None:
     """Set up the experiment, load the classifier and the autoencoder, and train the w-autoencoder."""
-    trackers = get_trackers(cfg, hydra_dir)
+    trackers = get_trackers(cfg)
     exp = Experiment(cfg, name=cfg.name, par_dir=cfg.user.path.version_dir, tags=cfg.tags)
     for tracker in trackers:
         exp.trackers.subscribe(tracker)
@@ -114,11 +112,10 @@ def setup_and_train(cfg: ConfigAll, hydra_dir: pathlib.Path) -> None:
 def main(cfg: ConfigAll) -> None:
     """Main entry point for module that creates subprocesses in parallel mode."""
     n_processes = cfg.user.n_subprocesses
-    hydra_dir = get_current_hydra_dir()
     if n_processes:
-        DistributedWorker(setup_and_train, n_processes).spawn(cfg, hydra_dir)
+        DistributedWorker(setup_and_train, n_processes).spawn(cfg)
     else:
-        setup_and_train(cfg, hydra_dir)
+        setup_and_train(cfg)
 
 
 if __name__ == '__main__':

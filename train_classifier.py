@@ -1,7 +1,5 @@
 """Module for training and testing a DGCNN classifier on point cloud data."""
 
-import pathlib
-
 import torch
 import torch.distributed as dist
 
@@ -13,7 +11,7 @@ from drytorch.lib.hooks import EarlyStoppingCallback, call_every, saving_hook
 from drytorch.utils.average import get_trailing_mean
 
 from src.module import DGCNN
-from src.config import ConfigAll, Experiment, get_current_hydra_dir, get_trackers, hydra_main
+from src.config import ConfigAll, Experiment, get_trackers, hydra_main
 from src.data import get_datasets
 from src.train import get_classification_loss, get_learning_schema
 from src.utils.parallel import DistributedWorker
@@ -94,9 +92,9 @@ def train_classifier() -> None:
     return
 
 
-def setup_and_train(cfg: ConfigAll, hydra_dir: pathlib.Path) -> None:
+def setup_and_train(cfg: ConfigAll) -> None:
     """Set up the experiment and launch the classifier training."""
-    trackers = get_trackers(cfg, hydra_dir)
+    trackers = get_trackers(cfg)
     exp = Experiment(cfg, name=cfg.name, par_dir=cfg.user.path.version_dir, tags=cfg.tags)
     resume = cfg.user.load_checkpoint != 0
     for tracker in trackers:
@@ -112,11 +110,10 @@ def setup_and_train(cfg: ConfigAll, hydra_dir: pathlib.Path) -> None:
 def main(cfg: ConfigAll) -> None:
     """Main entry point for module that creates subprocesses in parallel mode."""
     n_processes = cfg.user.n_subprocesses
-    hydra_dir = get_current_hydra_dir()
     if n_processes:
-        DistributedWorker(setup_and_train, n_processes).spawn(cfg, hydra_dir)
+        DistributedWorker(setup_and_train, n_processes).spawn(cfg)
     else:
-        setup_and_train(cfg, hydra_dir)
+        setup_and_train(cfg)
 
 
 if __name__ == '__main__':

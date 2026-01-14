@@ -9,8 +9,8 @@ n_subprocesses: 0  # number of subprocesses used for training (0 for no parallel
 checkpoint_every: 100  # save a checkpoint of the model after every n epochs
 load_checkpoint: 0  # load a checkpoint from the experiments folder, -1 indicates loading the latest checkpoint
 
-
-trackers:   # optional trackers for monitoring the experiment
+# Optional trackers for monitoring the experiment
+trackers:
   hydra: true  # saves a local copy of the config file
   tensorboard: true  # start a tensorboard server and log metrics
   wandb: false  # logs metrics to wandb
@@ -21,15 +21,14 @@ trackers:   # optional trackers for monitoring the experiment
 counterfactual_value: 1  # value associated with the counterfactual evaluation (the larger, the bigger the change)
 n_generated_output_points: ${autoencoder.architecture.training_output_points}  # number of output points generated
 
-# options for generating samples (for visualization only)
+# Options for generating samples (for visualization only)
 generate:
   batch_size: 16  # number of samples to generate when visualizing reconstructions or counterfactuals
   bias_dim: 0   # insert a bias term in the latent space
   bias_value: 0.  # value of the bias term
 
-# options for plotting
+# Options for plotting
 plot:
     interactive: false  # use plotly on the browser to visualize the results
     indices_to_reconstruct: [0, 9, 16, 20, 25, 34, 39, 44, 46, 66, 91, 98]  # indices of the clouds to reconstruct
     double_encoding: false  # reconstruct the point cloud input from the continuous latent space
-

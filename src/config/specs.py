@@ -11,6 +11,7 @@ from pydantic import Field, model_validator
 from pydantic.dataclasses import dataclass
 
 from src.config.environment import EnvSettings, VERSION
+from src.config.hydra import HydraSettings
 from src.config.torch import ActClass, get_activation_cls, get_optim_cls, set_seed, DEFAULT_ACT
 from src.config.options import (
     Datasets,
@@ -538,12 +539,13 @@ class UserSettings:
         n_subprocesses: The number of subprocesses for training
         generate (GenerationOptions): Options for generating a point cloud
         plot (PlottingOptions): Options for plotting and visualization
-        path (PathSpecs): Specifications for paths that override .env settings
         seed (Optional[int]): The seed for PyTorch/NumPy randomness. If None, no seed is set
         checkpoint_every (PositiveInt): The number of epochs between saving checkpoints
         n_generated_output_points (int): The number of points to generate during inference
         load_checkpoint (int): The checkpoint to load if available. Default is the last one (-1)
         counterfactual_value (PositiveFloat): The counterfactual strength value
+        hydra: Subset of the current hydra settings
+        path (PathSpecs): Specifications for paths that override .env settings
     """
 
     cpu: bool
@@ -557,6 +559,7 @@ class UserSettings:
     n_generated_output_points: int
     load_checkpoint: int = -1
     counterfactual_value: PositiveFloat = 1.0
+    hydra: HydraSettings = Field(init=False)
     path = PathSpecs()
 
     def __post_init__(self):

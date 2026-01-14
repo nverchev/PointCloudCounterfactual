@@ -1,7 +1,5 @@
 """Train the outer encoder to learn a discrete representation."""
 
-import pathlib
-
 from typing import TYPE_CHECKING, Any
 
 from drytorch import DataLoader, Diagnostic, Model, Test, Trainer
@@ -10,7 +8,7 @@ from drytorch.lib.hooks import EarlyStoppingCallback, Hook, StaticHook, call_eve
 from drytorch.utils.average import get_moving_average, get_trailing_mean
 
 from src.module import VQVAE, get_autoencoder
-from src.config import ConfigAll, Experiment, get_current_hydra_dir, get_trackers, hydra_main
+from src.config import ConfigAll, Experiment, get_trackers, hydra_main
 from src.data import get_datasets
 from src.train import get_autoencoder_loss, get_learning_schema
 from src.train.hooks import DiscreteSpaceOptimizer
@@ -90,9 +88,9 @@ def train_autoencoder(trial: Trial | None = None) -> None:
     return
 
 
-def setup_and_train(cfg: ConfigAll, hydra_dir: pathlib.Path) -> None:
+def setup_and_train(cfg: ConfigAll) -> None:
     """Set up experiment and start training cycle."""
-    trackers = get_trackers(cfg, hydra_dir)
+    trackers = get_trackers(cfg)
     exp = Experiment(cfg, name=cfg.name, par_dir=cfg.user.path.version_dir, tags=cfg.tags)
     for tracker in trackers:
         exp.trackers.subscribe(tracker)
@@ -107,11 +105,10 @@ def setup_and_train(cfg: ConfigAll, hydra_dir: pathlib.Path) -> None:
 def main(cfg: ConfigAll) -> None:
     """Main entry point for module that creates subprocesses in parallel mode."""
     n_processes = cfg.user.n_subprocesses
-    hydra_dir = get_current_hydra_dir()
     if n_processes:
-        DistributedWorker(setup_and_train, n_processes).spawn(cfg, hydra_dir)
+        DistributedWorker(setup_and_train, n_processes).spawn(cfg)
     else:
-        setup_and_train(cfg, hydra_dir)
+        setup_and_train(cfg)
 
 
 if __name__ == '__main__':
