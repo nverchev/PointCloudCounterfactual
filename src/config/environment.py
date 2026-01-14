@@ -42,4 +42,4 @@ class ConfigPath(enum.StrEnum):
 
     def relative(self) -> str:
         """Relative path to folder"""
-        return f'../{self.get_folder()}/{self}'
+        return f'../../{self.get_folder()}/{self}'
