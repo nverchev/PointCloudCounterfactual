@@ -494,13 +494,11 @@ class PlottingOptions:
 
     Attributes:
         interactive (bool): Whether to enable 3D plotting when using pyvista
-        indices_to_reconstruct (list[PositiveInt]): A list with indices of evaluation test samples to reconstruct
-        double_encoding (bool): Whether to reconstruct samples based on the retrieved codes
+        sample_indices (list[PositiveInt]): A list with indices of the evaluation samples to plot
     """
 
     interactive: bool
-    indices_to_reconstruct: list[PositiveInt]
-    double_encoding: bool
+    sample_indices: list[PositiveInt]
 
 
 @dataclass

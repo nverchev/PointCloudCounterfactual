@@ -19,7 +19,7 @@ def generate_random_samples() -> None:
     cfg_ae = cfg.autoencoder
     cfg_user = cfg.user
     cfg_generate = cfg_user.generate
-    save_dir = cfg.user.path.version_dir / 'images' / cfg.name
+    save_dir = cfg.user.path.version_dir / 'images' / cfg.name / 'generated'
 
     module = CounterfactualVQVAE().eval()
     model = Model(module, name=cfg_ae.architecture.name, device=cfg_user.device)
@@ -35,7 +35,7 @@ def generate_random_samples() -> None:
     cloud: torch.Tensor
     for i, cloud in enumerate(clouds):
         np_cloud = cloud.cpu().numpy()
-        render_cloud((np_cloud,), title=f'generated_{i}', interactive=cfg_user.plot.interactive, save_dir=save_dir)
+        render_cloud((np_cloud,), title=str(i), interactive=cfg_user.plot.interactive, save_dir=save_dir)
 
 
 @hydra_main

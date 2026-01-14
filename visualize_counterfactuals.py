@@ -14,17 +14,28 @@ from src.data import Inputs, Partitions, get_dataset
 from src.utils.visualisation import render_cloud
 
 
-torch.inference_mode()
+def calculate_and_print_probs(
+    classifier: Model[Inputs, torch.Tensor],
+    cloud: torch.Tensor,
+    label_prefix: str,
+) -> torch.Tensor:
+    """Calculate probabilities and print them."""
+    logits = classifier(Inputs(cloud=cloud))
+    probs = torch.softmax(logits, dim=1).cpu().numpy()[0]
+    print(f'{label_prefix}: ({" ".join(f"{p:.2f}" for p in probs)})')
+    return logits
 
 
-def visualize_counterfactuals() -> None:
-    """Visualize the selected point clouds in the dataset."""
+@torch.inference_mode()
+def create_and_render_counterfactuals() -> None:
+    """Create and visualize the selected point clouds in the dataset."""
     cfg = Experiment.get_config()
     cfg_ae = cfg.autoencoder
     cfg_user = cfg.user
-    save_dir = cfg.user.path.version_dir / 'images' / cfg.name
+    interactive = cfg_user.plot.interactive
+    save_dir_base = cfg.user.path.version_dir / 'images' / cfg.name
 
-    value = cfg_user.counterfactual_value
+    counterfactual_value = cfg_user.counterfactual_value
     dgcnn_module = DGCNN().eval()
     classifier = Model(dgcnn_module, name=cfg.classifier.architecture.name, device=cfg.user.device)
     classifier.load_state()
@@ -36,68 +47,51 @@ def visualize_counterfactuals() -> None:
     model = Model(vqvae_module, name=cfg_ae.architecture.name, device=cfg_user.device)
     model.load_state()
 
-    for i in cfg_user.plot.indices_to_reconstruct:
+    for i in cfg_user.plot.sample_indices:
         assert isinstance(test_dataset, Sized)
-        if i < len(test_dataset):
+        if i >= len(test_dataset):
             raise ValueError(f'Index {i} is too large for the selected dataset of length {len(test_dataset)}')
 
-        input_pc = test_dataset[i][0].cloud
-        indices = test_dataset[i][0].indices
-        label = test_dataset[i][1].label
-
-        render_cloud((input_pc.numpy(),), title=f'sample_{i}', interactive=cfg_user.plot.interactive, save_dir=save_dir)
-        input_pc = input_pc.to(model.device)
-        indices = indices.to(model.device)
-        with torch.inference_mode():
-            logits = classifier(Inputs(cloud=input_pc.unsqueeze(0), indices=indices))
-        np_probs = torch.softmax(logits, dim=1).cpu().numpy()
+        save_dir = save_dir_base / f'sample_{i}'
+        sample_i = test_dataset[i][0]
+        cloud = sample_i.cloud.to(model.device).unsqueeze(0)
+        indices = sample_i.indices.to(model.device).unsqueeze(0)
+        sample_i = Inputs(cloud=cloud, indices=indices)
+        label_i = test_dataset[i][1].label
+        input_pc = cloud.squeeze().cpu().numpy()
+        logits = calculate_and_print_probs(classifier, sample_i.cloud, f'Probs for sample {i} with label {label_i}')
+        data = vqvae_module(sample_i)
+        recon = data.recon.detach().squeeze().cpu().numpy()
+        _ = calculate_and_print_probs(classifier, data.recon, 'Reconstruction')
         relaxed_probs = torch.softmax(logits / cfg.autoencoder.architecture.encoder.w_encoder.cf_temperature, dim=1)
-        print(f'Probs for sample {i} with label {label}: (', end='')
-        for prob in np_probs[0]:
-            print(f'{prob:.2f}', end=' ')
-        print(')')
-
         with vqvae_module.double_encoding:
-            inputs = Inputs(input_pc.unsqueeze(0), indices=indices)
-            data = vqvae_module.encode(inputs)
+            data = vqvae_module.encode(sample_i)
             data.probs = relaxed_probs
-            data = vqvae_module.decode(data, inputs)
+            data = vqvae_module.decode(data, sample_i)
 
-        with torch.inference_mode():
-            logits = classifier(Inputs(cloud=data.recon))
-        np_recon = data.recon.detach().squeeze().cpu().numpy()
-        render_cloud((np_recon,), title=f'reconstruction_{i}', interactive=cfg_user.plot.interactive, save_dir=save_dir)
-        recon_probs = torch.softmax(logits, dim=1).cpu().numpy()
-        print(f'Reconstruction {i}: (', end='')
-        for prob in recon_probs[0]:
-            print(f'{prob:.2f}', end=' ')
-
-        print(')')
-
-        np_recons = list[npt.NDArray[Any]]()
+        double_recon = data.recon.detach().squeeze().cpu().numpy()
+        _ = calculate_and_print_probs(classifier, data.recon, 'Double Reconstruction')
+        counterfactuals = list[npt.NDArray[Any]]()
         for j in range(num_classes):
             with vqvae_module.double_encoding:
                 target = torch.zeros_like(relaxed_probs)
                 target[:, j] = 1
-                data.probs = (1 - value) * relaxed_probs + value * target
-                data = vqvae_module.decode(data, inputs)
-                np_recon = data.recon.detach().squeeze().cpu().numpy()
-                render_cloud(
-                    (np_recon,),
-                    title=f'counterfactual_{i}_to_{j}',
-                    interactive=cfg_user.plot.interactive,
-                    save_dir=save_dir,
-                )
-                np_recons.append(np_recon)
-                with torch.inference_mode():
-                    probs = torch.softmax(classifier(Inputs(cloud=data.recon)), dim=1).cpu().numpy()
+                data.probs = (1 - counterfactual_value) * relaxed_probs + counterfactual_value * target
+                data = vqvae_module.decode(data, sample_i)
+                _ = calculate_and_print_probs(classifier, data.recon, f'Counterfactual to {j}')
+                counterfactual = data.recon.detach().squeeze().cpu().numpy()
+                counterfactuals.append(counterfactual)
 
-                print(f'Counterfactual {i} to {j}: (', end='')
-                for prob in probs[0]:
-                    print(f'{prob:.2f}', end=' ')
-                print(')')
+        print()
+        render_cloud((input_pc,), title=f'Sample with Label {label_i}', interactive=interactive, save_dir=save_dir)
+        render_cloud((recon,), title='Reconstruction', interactive=interactive, save_dir=save_dir)
+        render_cloud((double_recon,), title='Double Reconstruction', interactive=interactive, save_dir=save_dir)
+        for j in range(num_classes):
+            counterfactual = (counterfactuals[j],)
+            render_cloud(counterfactual, title=f'Counterfactual_to_{j}', interactive=interactive, save_dir=save_dir)
 
-        render_cloud(np_recons, title=f'counterfactuals_{i}', interactive=cfg_user.plot.interactive, save_dir=save_dir)
+        render_cloud(counterfactuals, title='Counterfactuals', interactive=interactive, save_dir=save_dir)
+        return
 
 
 @hydra_main
@@ -105,7 +99,8 @@ def main(cfg: ConfigAll) -> None:
     """Set up the experiment and launch the counterfactual visualization."""
     exp = Experiment(cfg, name=cfg.name, par_dir=cfg.user.path.version_dir, tags=cfg.tags)
     with exp.create_run(resume=True):
-        visualize_counterfactuals()
+        create_and_render_counterfactuals()
+
     return
 
 

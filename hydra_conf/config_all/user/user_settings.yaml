@@ -30,5 +30,4 @@ generate:
 # Options for plotting
 plot:
     interactive: false  # use plotly on the browser to visualize the results
-    indices_to_reconstruct: [0, 9, 16, 20, 25, 34, 39, 44, 46, 66, 91, 98]  # indices of the clouds to reconstruct
-    double_encoding: false  # reconstruct the point cloud input from the continuous latent space
+    sample_indices: [0, 9, 16, 20, 25, 34, 39, 44, 46, 66, 91, 98]  # indices of the clouds to reconstruct

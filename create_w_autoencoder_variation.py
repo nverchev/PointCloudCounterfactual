@@ -1,4 +1,4 @@
-"""Create a variation of an existing experiment allowing for a different w_autoencoder architecture."""
+"""Create a variation of the main experiment allowing for a different w_autoencoder architecture."""
 
 import torch
 
