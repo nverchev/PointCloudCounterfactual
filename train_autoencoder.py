@@ -10,7 +10,7 @@ from drytorch.lib.hooks import EarlyStoppingCallback, Hook, StaticHook, call_eve
 from drytorch.utils.average import get_moving_average, get_trailing_mean
 
 from src.module import AbstractVQVAE, get_autoencoder
-from src.config_options import ConfigAll, Experiment, get_current_hydra_dir, get_trackers, hydra_main
+from src.config import ConfigAll, Experiment, get_current_hydra_dir, get_trackers, hydra_main
 from src.dataset import get_dataset_multiprocess_safe
 from src.train.hooks import DiscreteSpaceOptimizer
 from src.train.learning_schema import get_learning_schema

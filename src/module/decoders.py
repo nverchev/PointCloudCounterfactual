@@ -7,10 +7,11 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
-from src.config_options import ActClass, Experiment
+from src.config import ActClass
+from src.config.experiment import Experiment
 from src.data_types import OUT_CHAN
 from src.module.layers import LinearLayer, PointsConvLayer
-from src.neighbour_ops import graph_filtering
+from src.utils.neighbour_ops import graph_filtering
 
 
 class PriorDecoder(nn.Module):

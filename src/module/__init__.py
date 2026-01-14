@@ -1,6 +1,7 @@
 """Module package."""
 
-from src.config_options import ModelHead, Experiment, Decoders, WDecoders, Encoders, WEncoders
+from src.config.experiment import Experiment
+from src.config.options import Encoders, Decoders, WEncoders, WDecoders, ModelHead
 from src.module.autoencoder import (
     CounterfactualWAutoEncoder,
     AutoEncoder,

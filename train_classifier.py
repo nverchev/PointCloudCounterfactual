@@ -13,7 +13,7 @@ from drytorch.lib.hooks import EarlyStoppingCallback, call_every, saving_hook
 from drytorch.utils.average import get_trailing_mean
 
 from src.module import DGCNN
-from src.config_options import ConfigAll, Experiment, get_current_hydra_dir, get_trackers, hydra_main
+from src.config import ConfigAll, Experiment, get_current_hydra_dir, get_trackers, hydra_main
 from src.dataset import get_dataset_multiprocess_safe
 from src.train.learning_schema import get_learning_schema
 from src.train.metrics_and_losses import get_classification_loss

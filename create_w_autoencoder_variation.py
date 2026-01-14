@@ -4,10 +4,9 @@ import torch
 
 from drytorch import Model
 from drytorch.lib.checkpoints import LocalCheckpoint
-from src.autoencoder import CounterfactualVQVAE
-from src.classifier import DGCNN
-from src.config_options import ConfigAll, Experiment, hydra_main
 
+from src.module import CounterfactualVQVAE, DGCNN
+from src.config import Experiment, hydra_main, ConfigAll
 
 torch.inference_mode()
 

@@ -12,10 +12,9 @@ from drytorch.core import protocols as p
 from drytorch.lib.objectives import Metric, compute_metrics
 
 from src.module import CounterfactualVQVAE, DGCNN
-from src.config_options import ConfigAll, Experiment, hydra_main
-from src.dataset import Partitions, get_dataset
+from src.config import ConfigAll, Experiment, hydra_main
+from src.dataset import CounterfactualDatasetEncoder, ReconstructedDatasetWithLogits, Partitions, get_dataset
 from src.data_types import Inputs, Targets
-from src.dataset import CounterfactualDatasetEncoder, ReconstructedDatasetWithLogits
 from src.train.metrics_and_losses import get_classification_loss
 
 

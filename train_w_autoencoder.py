@@ -9,8 +9,9 @@ import torch
 from drytorch import DataLoader, Model, Test, Trainer
 from drytorch.lib.hooks import EarlyStoppingCallback
 from drytorch.utils.average import get_moving_average, get_trailing_mean
+
 from src.module import CounterfactualVQVAE, DGCNN
-from src.config_options import ConfigAll, Experiment, get_current_hydra_dir, get_trackers, hydra_main
+from src.config import ConfigAll, Experiment, get_current_hydra_dir, get_trackers, hydra_main
 from src.data_types import Inputs
 from src.dataset import get_dataset_multiprocess_safe, WDatasetWithLogits
 from src.train.learning_schema import get_learning_schema

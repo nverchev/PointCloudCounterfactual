@@ -10,7 +10,7 @@ from numpy import typing as npt
 from torch.utils.data import Dataset
 
 from src.dataset.augmentations import augment_clouds, normalise
-from src.config_options import Experiment
+from src.config.experiment import Experiment
 from src.data_types import Inputs, Targets
 from src.dataset.protocols import PointCloudDataset, Partitions, SplitCreator
 

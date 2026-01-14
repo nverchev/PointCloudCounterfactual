@@ -4,7 +4,8 @@ from typing import Any
 
 from torch import distributed as dist
 
-from src.config_options import Experiment, Datasets
+from src.config.experiment import Experiment
+from src.config.options import Datasets
 from src.dataset.protocols import PointCloudDataset, Partitions
 from src.dataset.modelnet import ModelNet40Dataset
 from src.dataset.shapenet import ShapeNetDatasetFlow

@@ -7,7 +7,7 @@ import numpy as np
 import torch
 from numpy import typing as npt
 
-from src.config_options import Experiment
+from src.config.experiment import Experiment
 
 
 def normalise(cloud: npt.NDArray[Any]) -> tuple[npt.NDArray[Any], float]:

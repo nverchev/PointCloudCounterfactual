@@ -3,8 +3,9 @@
 import torch
 
 from drytorch import Model
+
 from src.module import CounterfactualVQVAE
-from src.config_options import ConfigAll, Experiment, hydra_main
+from src.config import ConfigAll, Experiment, hydra_main
 from src.utils.visualisation import render_cloud
 
 

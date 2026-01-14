@@ -3,7 +3,9 @@
 from drytorch import LearningSchema
 from drytorch.core import protocols as p
 from drytorch.lib import gradient_ops, schedulers
-from src.config_options import ClipCriterion, Experiment, GradOp, LearningConfig, SchedulerConfig, Schedulers
+from src.config.experiment import Experiment
+from src.config.options import GradOp, ClipCriterion, Schedulers
+from src.config.specs import SchedulerConfig, LearningConfig
 
 
 def get_scheduler(config: SchedulerConfig) -> schedulers.AbstractScheduler:

@@ -11,11 +11,11 @@ from numpy import typing as npt
 from torch.utils.data import Dataset
 
 from src.dataset.augmentations import augment_clouds, jitter_cloud, normalise
-from src.config_options import Experiment
+from src.config.experiment import Experiment
 from src.data_types import Inputs, Targets
 from src.dataset.protocols import PointCloudDataset, Partitions, SplitCreator
-from src.download import download_extract_zip
-from src.neighbour_ops import index_k_neighbours
+from src.utils.download import download_extract_zip
+from src.utils.neighbour_ops import index_k_neighbours
 
 
 class ModelNet40Split(PointCloudDataset):

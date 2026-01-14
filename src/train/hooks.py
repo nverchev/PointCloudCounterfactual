@@ -12,7 +12,7 @@ from drytorch.core import protocols as p
 from drytorch.lib.load import take_from_dataset
 from drytorch.lib.runners import ModelRunner
 from src.module import AbstractVQVAE, WAutoEncoder
-from src.config_options import Experiment
+from src.config.experiment import Experiment
 from src.data_types import Inputs, Outputs, Targets
 
 

@@ -7,8 +7,9 @@ import numpy.typing as npt
 import torch
 
 from drytorch import Model
+
 from src.module import CounterfactualVQVAE, DGCNN
-from src.config_options import ConfigAll, Experiment, hydra_main
+from src.config import ConfigAll, Experiment, hydra_main
 from src.data_types import Inputs
 from src.dataset import Partitions, get_dataset
 from src.utils.visualisation import render_cloud

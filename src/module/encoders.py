@@ -6,10 +6,11 @@ import itertools
 import torch
 import torch.nn as nn
 
-from src.config_options import Experiment, ActClass
+from src.config import ActClass
+from src.config.experiment import Experiment
 from src.data_types import IN_CHAN
 from src.module.layers import EdgeConvLayer, LinearLayer, PointsConvLayer
-from src.neighbour_ops import get_graph_features, graph_max_pooling
+from src.utils.neighbour_ops import get_graph_features, graph_max_pooling
 
 
 class BaseWEncoder(nn.Module, metaclass=abc.ABCMeta):

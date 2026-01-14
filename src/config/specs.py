@@ -1,165 +1,33 @@
-"""Defines and registers the configuration for the experiment."""
+"""Contains the specification for the configuration files."""
 
-import enum
-import functools
 import pathlib
-import sys
-import tomllib
-
-from collections.abc import Callable, Iterator
 from contextlib import contextmanager
 from dataclasses import field
-from typing import Annotated, Any, Self, cast
+from typing import Any, Annotated, Self
+from collections.abc import Iterator
 
-import hydra
-import hydra.core.utils as hydra_utils
-import numpy as np
 import torch
-
-from hydra.core import config_store, hydra_config
-from hydra.core.global_hydra import GlobalHydra
-from hydra.core.hydra_config import HydraConfig
-from omegaconf import DictConfig, OmegaConf
 from pydantic import Field, model_validator
 from pydantic.dataclasses import dataclass
-from pydantic_settings import BaseSettings, SettingsConfigDict
 
-import drytorch
-
+from src.config.environment import EnvSettings, VERSION
+from src.config.torch import ActClass, get_activation_cls, get_optim_cls, set_seed, DEFAULT_ACT
+from src.config.options import (
+    Datasets,
+    Encoders,
+    Decoders,
+    WEncoders,
+    WDecoders,
+    ModelHead,
+    GradOp,
+    ClipCriterion,
+    Schedulers,
+    ReconLosses,
+)
 
 PositiveInt = Annotated[int, Field(ge=0)]
 StrictlyPositiveInt = Annotated[int, Field(gt=0)]
 PositiveFloat = Annotated[float, Field(ge=0)]
-type ActClass = Callable[[], torch.nn.Module]
-
-ACT: ActClass = functools.partial(torch.nn.LeakyReLU, negative_slope=0.2)
-
-with open(pathlib.Path(__file__).resolve().parent.parent / 'pyproject.toml', 'rb') as f:
-    pyproject = tomllib.load(f)
-    VERSION = pyproject['project']['version']
-
-
-class EnvSettings(BaseSettings):
-    dataset_dir: pathlib.Path = pathlib.Path('./datasets')
-    root_exp_dir: pathlib.Path = pathlib.Path('./experiments')
-    metadata_dir: pathlib.Path = pathlib.Path('./dataset_metadata')
-    model_config = SettingsConfigDict(env_file='.env')
-
-
-class ConfigPath(enum.StrEnum):
-    """Configuration paths relative to the project root."""
-
-    CONFIG_ALL = 'config_all'
-    TUNE_AUTOENCODER = 'tune_autoencoder'
-    TUNE_W_AUTOENCODER = 'tune_w_autoencoder'
-
-    @classmethod
-    def get_folder(cls) -> str:
-        """Return folder_name."""
-        return 'hydra_conf'
-
-    def get_path(self) -> pathlib.Path:
-        """Return folder path."""
-        return pathlib.Path(__file__).parent.parent / self.get_folder() / self
-
-    def absolute(self) -> str:
-        """Absolute path to folder"""
-        return str(self.get_path().absolute().resolve())
-
-    def relative(self) -> str:
-        """Relative path to folder"""
-        return f'../{self.get_folder()}/{self}'
-
-
-def _get_activation_cls(act_name: str) -> ActClass:
-    try:
-        return getattr(torch.nn.modules.activation, act_name)
-    except AttributeError as ae:
-        raise ValueError(f'Input act_name "{act_name}" is not the name of a pytorch activation.') from ae
-
-
-def _get_optim_cls(optimizer_name: str) -> type[torch.optim.Optimizer]:
-    try:
-        return getattr(torch.optim, optimizer_name)
-    except AttributeError as ae:
-        raise ValueError(f'Input opt_name "{optimizer_name}" is not the name of a pytorch optimizer.') from ae
-
-
-class Datasets(enum.StrEnum):
-    """Dataset names."""
-
-    ModelNet = enum.auto()
-    ShapenetFlow = enum.auto()
-
-
-class Encoders(enum.StrEnum):
-    """Encoder names."""
-
-    LDGCNN = enum.auto()
-    DGCNN = enum.auto()
-
-
-class Decoders(enum.StrEnum):
-    """Encoder names."""
-
-    PCGen = enum.auto()
-
-
-class WEncoders(enum.StrEnum):
-    """Encoder names for the W-autoencoder."""
-
-    Convolution = enum.auto()
-    Transformers = enum.auto()
-
-
-class WDecoders(enum.StrEnum):
-    """Decoder names for the W-autoencoder."""
-
-    Convolution = enum.auto()
-    Linear = enum.auto()
-    TransformerCross = enum.auto()
-
-
-class ModelHead(enum.StrEnum):
-    """Model type."""
-
-    AE = enum.auto()
-    VQVAE = enum.auto()
-    CounterfactualVQVAE = enum.auto()
-
-
-class GradOp(enum.StrEnum):
-    """Gradient operation names."""
-
-    GradParamNormalizer = enum.auto()
-    GradZScoreNormalizer = enum.auto()
-    GradNormClipper = enum.auto()
-    GradValueClipper = enum.auto()
-    HistClipper = enum.auto()
-    ParamHistClipper = enum.auto()
-    NoOp = enum.auto()
-
-
-class ClipCriterion(enum.StrEnum):
-    """Clipping criterion names."""
-
-    ZStat = enum.auto()
-    EMA = enum.auto()
-
-
-class Schedulers(enum.StrEnum):
-    """Scheduler names."""
-
-    Constant = enum.auto()
-    Cosine = enum.auto()
-    Exponential = enum.auto()
-
-
-class ReconLosses(enum.StrEnum):
-    """Loss names."""
-
-    Chamfer = enum.auto()
-    ChamferEMD = enum.auto()
 
 
 @dataclass
@@ -229,11 +97,13 @@ class WEncoderConfig:
     cf_temperature: int
     act_name: str = ''
     gumbel: bool = True
+    act_cls: ActClass = field(init=False)
 
-    @property
-    def act_cls(self) -> ActClass:
-        """The activation class."""
-        return _get_activation_cls(self.act_name) if self.act_name else ACT
+    @model_validator(mode='after')
+    def _resolve_activation(self) -> Self:
+        """Resolve activation class from name."""
+        self.act_cls = get_activation_cls(self.act_name) if self.act_name else DEFAULT_ACT
+        return self
 
     @model_validator(mode='after')
     def _check_length_dropout(self) -> Self:
@@ -261,11 +131,13 @@ class EncoderConfig:
     hidden_dims: tuple[StrictlyPositiveInt, ...]
     w_encoder: WEncoderConfig
     act_name: str = ''
+    act_cls: ActClass = field(init=False)
 
-    @property
-    def act_cls(self) -> ActClass:
-        """The activation class."""
-        return _get_activation_cls(self.act_name) if self.act_name else ACT
+    @model_validator(mode='after')
+    def _resolve_activation(self) -> Self:
+        """Resolve activation class from name."""
+        self.act_cls = get_activation_cls(self.act_name) if self.act_name else DEFAULT_ACT
+        return self
 
 
 @dataclass
@@ -287,11 +159,13 @@ class WDecoderConfig:
     hidden_dims: tuple[StrictlyPositiveInt, ...]
     dropout: tuple[PositiveFloat, ...]
     act_name: str = ''
+    act_cls: ActClass = field(init=False)
 
-    @property
-    def act_cls(self):
-        """The activation class."""
-        return _get_activation_cls(self.act_name) if self.act_name else ACT
+    @model_validator(mode='after')
+    def _resolve_activation(self) -> Self:
+        """Resolve activation class from name."""
+        self.act_cls = get_activation_cls(self.act_name) if self.act_name else DEFAULT_ACT
+        return self
 
     @model_validator(mode='after')
     def _check_length_dropout(self) -> Self:
@@ -317,11 +191,13 @@ class PosteriorDecoderConfig:
     n_heads: StrictlyPositiveInt
     dropout: tuple[PositiveFloat, ...]
     act_name: str = ''
+    act_cls: ActClass = field(init=False)
 
-    @property
-    def act_cls(self):
-        """The activation class."""
-        return _get_activation_cls(self.act_name) if self.act_name else ACT
+    @model_validator(mode='after')
+    def _resolve_activation(self) -> Self:
+        """Resolve activation class from name."""
+        self.act_cls = get_activation_cls(self.act_name) if self.act_name else DEFAULT_ACT
+        return self
 
     @model_validator(mode='after')
     def _check_length_dropout(self) -> Self:
@@ -359,11 +235,13 @@ class DecoderConfig:
     tau: PositiveFloat
     filtering: bool
     act_name: str = ''
+    act_cls: ActClass = field(init=False)
 
-    @property
-    def act_cls(self):
-        """The activation class."""
-        return _get_activation_cls(self.act_name) if self.act_name else ACT
+    @model_validator(mode='after')
+    def _resolve_activation(self) -> Self:
+        """Resolve activation class from name."""
+        self.act_cls = get_activation_cls(self.act_name) if self.act_name else DEFAULT_ACT
+        return self
 
 
 @dataclass
@@ -435,11 +313,13 @@ class ClassifierConfig:
     out_classes: StrictlyPositiveInt
     act_name: str = ''
     name: str = ''
+    act_cls: ActClass = field(init=False)
 
-    @property
-    def act_cls(self):
-        """The activation class."""
-        return _get_activation_cls(self.act_name) if self.act_name else ACT
+    @model_validator(mode='after')
+    def _resolve_activation(self) -> Self:
+        """Resolve activation class from name."""
+        self.act_cls = get_activation_cls(self.act_name) if self.act_name else DEFAULT_ACT
+        return self
 
     @model_validator(mode='after')
     def _check_length_dropout(self) -> Self:
@@ -488,11 +368,13 @@ class LearningConfig:
     clip_criterion: ClipCriterion
     scheduler: SchedulerConfig
     opt_settings: dict[str, Any] = field(default_factory=dict)
+    optimizer_cls: type[torch.optim.Optimizer] = field(init=False)
 
-    @property
-    def optimizer_cls(self) -> type[torch.optim.Optimizer]:
-        """The optimizer class."""
-        return _get_optim_cls(self.optimizer_name)
+    @model_validator(mode='after')
+    def _resolve_optimizer(self) -> Self:
+        """Resolve optimizer class from name."""
+        self.optimizer_cls = get_optim_cls(self.optimizer_name)
+        return self
 
 
 @dataclass
@@ -678,15 +560,9 @@ class UserSettings:
     path = PathSpecs()
 
     def __post_init__(self):
-        self._set_seed()
-
-    def _set_seed(self) -> None:
         if self.seed is not None:
-            torch.manual_seed(self.seed)
-            torch.cuda.manual_seed(self.seed)
-            torch.backends.cudnn.deterministic = True
-            torch.backends.cudnn.benchmark = False
-            np.random.seed(self.seed)
+            set_seed(self.seed)
+
         return
 
     @property
@@ -806,103 +682,3 @@ class ConfigAll:
             yield self
         finally:
             self._lens = None
-
-
-class Experiment(drytorch.Experiment[ConfigAll]):
-    """Specifications for the current experiment."""
-
-    pass
-
-
-def get_config_all(overrides: list[str] | None = None) -> ConfigAll:
-    """Get hydra configuration without starting a run."""
-    GlobalHydra.instance().clear()
-
-    with hydra.initialize(version_base=None, config_path=ConfigPath.CONFIG_ALL.relative()):
-        dict_cfg = hydra.compose(config_name='defaults', overrides=overrides)
-        cfg = cast(ConfigAll, OmegaConf.to_object(dict_cfg))
-
-        if overrides is not None:
-            update_exp_name(cfg, overrides)
-        return cfg
-
-
-def get_current_hydra_dir() -> pathlib.Path:
-    """Get the path to the current hydra run."""
-    config = hydra_config.HydraConfig.get()
-    return pathlib.Path(config.runtime.output_dir)
-
-
-def get_trackers(cfg: ConfigAll, hydra_dir: pathlib.Path) -> list[drytorch.Tracker]:
-    """Get trackers from according to the user configuration."""
-    cfg_trackers = cfg.user.trackers
-    hydra_utils.configure_log(None)  # type:ignore # pyright:ignore --- correct way to restart logging in subprocesses
-    drytorch.init_trackers(mode='hydra')
-    tracker_list: list[drytorch.Tracker] = []
-    if sys.gettrace():  # skip in debug mode
-        return tracker_list
-
-    if cfg_trackers.wandb:
-        import wandb
-
-        from drytorch.trackers.wandb import Wandb
-
-        tracker_list.append(Wandb(settings=wandb.Settings(project=cfg.project)))
-
-    if cfg_trackers.hydra:
-        from drytorch.trackers.hydra import HydraLink
-
-        tracker_list.append(HydraLink(hydra_dir=hydra_dir))
-
-    if cfg_trackers.csv:
-        from drytorch.trackers.csv import CSVDumper
-
-        tracker_list.append(CSVDumper())
-
-    if cfg_trackers.tensorboard:
-        from drytorch.trackers.tensorboard import TensorBoard
-
-        tracker_list.append(TensorBoard())
-
-    if cfg_trackers.sqlalchemy:
-        import sqlalchemy
-
-        from drytorch.trackers.sqlalchemy import SQLConnection
-
-        engine_path = cfg.user.path.version_dir / 'metrics.db'
-        cfg.user.path.version_dir.mkdir(exist_ok=True)
-        engine = sqlalchemy.create_engine(f'sqlite:///{engine_path}')
-        tracker_list.append(SQLConnection(engine=engine))
-
-    return tracker_list
-
-
-def hydra_main(func: Callable[[ConfigAll], None]) -> Callable[[], None]:
-    """Start hydra run and Converts dict_cfg to ConfigAll."""
-
-    @hydra.main(version_base=None, config_path=str(ConfigPath.CONFIG_ALL.absolute()), config_name='defaults')
-    @functools.wraps(func)
-    def wrapper(dict_cfg: DictConfig) -> None:
-        """Convert configuration to the stored object"""
-        cfg = cast(ConfigAll, OmegaConf.to_object(dict_cfg))
-        overrides = HydraConfig.get().overrides.task
-        update_exp_name(cfg, overrides)
-        return func(cfg)
-
-    return wrapper.__call__
-
-
-def update_exp_name(cfg: ConfigAll, overrides: list[str]) -> None:
-    """Adds the overrides to the name for the experiment."""
-    overrides = [
-        override
-        for override in overrides
-        if override.split('.')[0] != 'user' and override.split('=')[0] not in ('final', 'variation')
-    ]
-    cfg.variation = '_'.join([cfg.variation, *overrides]).replace('/', '_')
-    cfg.tags = overrides
-    return
-
-
-cs = config_store.ConfigStore.instance()  # type: ignore
-cs.store(name='config_all', node=ConfigAll)

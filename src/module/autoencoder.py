@@ -9,13 +9,13 @@ import numpy as np
 import torch
 import torch.nn as nn
 
-from src.config_options import Experiment
+from src.config.experiment import Experiment
 from src.data_types import Inputs, Outputs, WInputs
 from src.module import PosteriorDecoder, PriorDecoder, get_decoder, get_w_decoder
 from src.module import get_encoder, get_w_encoder
 from src.module.layers import TemperatureScaledSoftmax, TransferGrad, reset_child_params
-from src.neighbour_ops import pykeops_square_distance
-from src.control import UsuallyFalse
+from src.utils.neighbour_ops import pykeops_square_distance
+from src.utils.control import UsuallyFalse
 
 
 class GaussianSampler:

@@ -15,8 +15,9 @@ from optuna.visualization import plot_param_importances
 from drytorch import init_trackers
 from drytorch.contrib.optuna import get_final_value, suggest_overrides
 from drytorch.core.exceptions import ConvergenceError
+
 from src.utils import tuning
-from src.config_options import VERSION, ConfigPath, Experiment, get_config_all
+from src.config import ConfigPath, Experiment, get_config_all, VERSION
 from train_autoencoder import train_autoencoder
 
 
