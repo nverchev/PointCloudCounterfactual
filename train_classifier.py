@@ -15,7 +15,7 @@ from src.config import ConfigAll, Experiment, get_trackers, hydra_main
 from src.data import get_datasets
 from src.train import get_classification_loss, get_learning_schema
 from src.utils.parallel import DistributedWorker
-from src.utils.visualisation import plot_confusion_matrix_heatmap
+from src.utils.visualization import plot_confusion_matrix_heatmap
 
 
 def train_classifier() -> None:

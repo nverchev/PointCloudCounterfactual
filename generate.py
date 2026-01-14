@@ -6,7 +6,7 @@ from drytorch import Model
 
 from src.module import CounterfactualVQVAE
 from src.config import ConfigAll, Experiment, hydra_main
-from src.utils.visualisation import render_cloud
+from src.utils.visualization import render_cloud
 
 
 torch.inference_mode()

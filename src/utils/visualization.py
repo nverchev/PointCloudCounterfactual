@@ -89,8 +89,8 @@ def render_cloud(
         plotter.show()
     else:
         save_dir.mkdir(exist_ok=True, parents=True)
-        save_name = save_dir / title
-        plotter.screenshot(save_name.with_suffix('.png'), window_size=(1024, 1024), transparent_background=True)
+        file = save_dir / (title + '.png')
+        plotter.screenshot(file, window_size=(1024, 1024), transparent_background=True)
     plotter.close()
     return
 

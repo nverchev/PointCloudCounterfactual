@@ -11,19 +11,20 @@ from drytorch import Model
 from src.module import CounterfactualVQVAE, DGCNN
 from src.config import ConfigAll, Experiment, hydra_main
 from src.data import Inputs, Partitions, get_dataset
-from src.utils.visualisation import render_cloud
+from src.utils.visualization import render_cloud
 
 
 def calculate_and_print_probs(
     classifier: Model[Inputs, torch.Tensor],
     cloud: torch.Tensor,
     label_prefix: str,
-) -> torch.Tensor:
+) -> tuple[torch.Tensor, str]:
     """Calculate probabilities and print them."""
     logits = classifier(Inputs(cloud=cloud))
     probs = torch.softmax(logits, dim=1).cpu().numpy()[0]
-    print(f'{label_prefix}: ({" ".join(f"{p:.2f}" for p in probs)})')
-    return logits
+    str_out = f'{label_prefix}: ({" ".join(f"{p:.2f}" for p in probs)})'
+    print(str_out)
+    return logits, str_out
 
 
 @torch.inference_mode()
@@ -58,11 +59,13 @@ def create_and_render_counterfactuals() -> None:
         indices = sample_i.indices.to(model.device).unsqueeze(0)
         sample_i = Inputs(cloud=cloud, indices=indices)
         label_i = test_dataset[i][1].label
+        print(f'Sample {i} with label {label_i}:')
+
         input_pc = cloud.squeeze().cpu().numpy()
-        logits = calculate_and_print_probs(classifier, sample_i.cloud, f'Probs for sample {i} with label {label_i}')
+        logits, str_original = calculate_and_print_probs(classifier, sample_i.cloud, 'Original')
         data = vqvae_module(sample_i)
         recon = data.recon.detach().squeeze().cpu().numpy()
-        _ = calculate_and_print_probs(classifier, data.recon, 'Reconstruction')
+        _, str_recon = calculate_and_print_probs(classifier, data.recon, 'Reconstruction')
         relaxed_probs = torch.softmax(logits / cfg.autoencoder.architecture.encoder.w_encoder.cf_temperature, dim=1)
         with vqvae_module.double_encoding:
             data = vqvae_module.encode(sample_i)
@@ -70,28 +73,30 @@ def create_and_render_counterfactuals() -> None:
             data = vqvae_module.decode(data, sample_i)
 
         double_recon = data.recon.detach().squeeze().cpu().numpy()
-        _ = calculate_and_print_probs(classifier, data.recon, 'Double Reconstruction')
+        _, str_double_recon = calculate_and_print_probs(classifier, data.recon, 'Double Reconstruction')
         counterfactuals = list[npt.NDArray[Any]]()
+        str_counterfactual = list[str]()
         for j in range(num_classes):
             with vqvae_module.double_encoding:
                 target = torch.zeros_like(relaxed_probs)
                 target[:, j] = 1
                 data.probs = (1 - counterfactual_value) * relaxed_probs + counterfactual_value * target
                 data = vqvae_module.decode(data, sample_i)
-                _ = calculate_and_print_probs(classifier, data.recon, f'Counterfactual to {j}')
+                _, str_out = calculate_and_print_probs(classifier, data.recon, f'Counterfactual to {j}')
+                str_counterfactual.append(str_out)
                 counterfactual = data.recon.detach().squeeze().cpu().numpy()
                 counterfactuals.append(counterfactual)
 
         print()
-        render_cloud((input_pc,), title=f'Sample with Label {label_i}', interactive=interactive, save_dir=save_dir)
-        render_cloud((recon,), title='Reconstruction', interactive=interactive, save_dir=save_dir)
-        render_cloud((double_recon,), title='Double Reconstruction', interactive=interactive, save_dir=save_dir)
+        render_cloud((input_pc,), title=str_original, interactive=interactive, save_dir=save_dir)
+        render_cloud((recon,), title=str_recon, interactive=interactive, save_dir=save_dir)
+        render_cloud((double_recon,), title=str_double_recon, interactive=interactive, save_dir=save_dir)
         for j in range(num_classes):
-            counterfactual = (counterfactuals[j],)
-            render_cloud(counterfactual, title=f'Counterfactual_to_{j}', interactive=interactive, save_dir=save_dir)
+            render_cloud((counterfactuals[j],), title=str_counterfactual[j], interactive=interactive, save_dir=save_dir)
 
         render_cloud(counterfactuals, title='Counterfactuals', interactive=interactive, save_dir=save_dir)
-        return
+
+    return
 
 
 @hydra_main
