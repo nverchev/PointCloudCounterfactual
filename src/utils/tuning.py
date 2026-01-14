@@ -2,6 +2,10 @@
 
 import numpy as np
 import optuna
+import yaml
+from optuna import visualization
+
+from src.config import VERSION, ConfigPath
 
 
 def get_past_final_values(trial: optuna.Trial) -> list[float]:
@@ -38,3 +42,23 @@ def impute_failed_trial(trial: optuna.Trial) -> float:
     worst_fn = min if trial.study.direction == optuna.study.StudyDirection.MAXIMIZE else max
     trial.set_user_attr('imputed', True)
     return worst_fn(past_final_values)
+
+
+def visualize_study(study: optuna.Study, renderer: str) -> None:
+    """Visualize the optimization study."""
+    visualization.plot_optimization_history(study).show(renderer=renderer)
+    visualization.plot_slice(study).show(renderer=renderer)
+    visualization.plot_contour(study).show(renderer=renderer)
+    visualization.plot_parallel_coordinate(study).show(renderer=renderer)
+    visualization.plot_param_importances(study).show(renderer=renderer)
+    return
+
+
+def get_study_name(base_name: str, overrides: list[str]) -> str:
+    """Get the study name from the configuration."""
+    version = f'v{VERSION}'
+    with (ConfigPath.CONFIG_ALL.get_path() / 'defaults').with_suffix('.yaml').open() as f:
+        loaded_cfg = yaml.safe_load(f)
+        variation = loaded_cfg['variation']
+
+    return '_'.join([base_name, version, variation, *overrides])

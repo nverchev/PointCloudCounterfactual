@@ -7,7 +7,6 @@ from collections.abc import Callable
 import hydra
 import optuna
 import torch
-import yaml
 
 from omegaconf import DictConfig
 from optuna.visualization import plot_param_importances
@@ -17,9 +16,10 @@ from drytorch.contrib.optuna import get_final_value, suggest_overrides
 from drytorch.core.exceptions import ConvergenceError
 from drytorch.core.register import register_model, unregister_model
 
-from src.utils import tuning
 from src.module import CounterfactualVQVAE, DGCNN
-from src.config import ConfigPath, Experiment, get_config_all, VERSION
+from src.config import ConfigPath, Experiment, get_config_all
+from src.utils.tuning import impute_failed_trial, impute_pruned_trial, get_study_name
+
 from train_w_autoencoder import train_w_autoencoder
 
 
@@ -57,10 +57,10 @@ def set_objective(tune_cfg: DictConfig) -> Callable[[optuna.Trial], float]:
             try:
                 train_w_autoencoder(new_vqvae_module, classifier, name=new_autoencoder.name, trial=trial)
             except optuna.TrialPruned:
-                return tuning.impute_pruned_trial(trial)
+                return impute_pruned_trial(trial)
 
             except ConvergenceError:
-                return tuning.impute_failed_trial(trial)
+                return impute_failed_trial(trial)
 
             finally:
                 unregister_model(classifier)  # classifier can be safely reused for other experiments
@@ -84,12 +84,7 @@ def tune(tune_cfg: DictConfig):
         n_min_trials=tune_cfg.tune.n_min_trials,
     )
     sampler = optuna.samplers.GPSampler(warn_independent_sampling=False)
-    version = f'v{VERSION}'
-    with (ConfigPath.CONFIG_ALL.get_path() / 'defaults').with_suffix('.yaml').open() as f:
-        loaded_cfg = yaml.safe_load(f)
-        variation = loaded_cfg['variation']
-
-    study_name = '_'.join([tune_cfg.tune.study_name, version, variation, *tune_cfg.overrides[1:]])
+    study_name = get_study_name(tune_cfg.study_name, tune_cfg.overrides[1:])
     study = optuna.create_study(
         study_name=study_name, storage=tune_cfg.storage, sampler=sampler, pruner=pruner, load_if_exists=True
     )
