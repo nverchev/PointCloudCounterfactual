@@ -7,7 +7,7 @@ import tomllib
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
-with open(pathlib.Path(__file__).resolve().parent.parent / 'pyproject.toml', 'rb') as f:
+with open(pathlib.Path(__file__).resolve().parent.parent.parent / 'pyproject.toml', 'rb') as f:
     pyproject = tomllib.load(f)
 
 VERSION = pyproject['project']['version']

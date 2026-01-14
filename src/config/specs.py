@@ -7,11 +7,12 @@ from typing import Any, Annotated, Self
 from collections.abc import Iterator
 
 import torch
+
 from pydantic import Field, model_validator
 from pydantic.dataclasses import dataclass
+from omegaconf import DictConfig
 
 from src.config.environment import EnvSettings, VERSION
-from src.config.hydra import HydraSettings
 from src.config.torch import ActClass, get_activation_cls, get_optim_cls, set_seed, DEFAULT_ACT
 from src.config.options import (
     Datasets,
@@ -527,6 +528,14 @@ class TrackerList:
     csv: bool
     tensorboard: bool
     sqlalchemy: bool
+
+
+@dataclass
+class HydraSettings:
+    """Subset of the current hydra settings."""
+
+    output_dir: pathlib.Path
+    job_logging: DictConfig
 
 
 @dataclass

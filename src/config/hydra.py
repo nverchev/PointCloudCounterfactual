@@ -1,8 +1,6 @@
 """Hydra configuration."""
 
-from dataclasses import dataclass
 import functools
-import pathlib
 from typing import cast
 from collections.abc import Callable
 
@@ -13,16 +11,8 @@ from hydra.core.hydra_config import HydraConfig
 from omegaconf import OmegaConf, DictConfig
 
 from src.config.environment import ConfigPath
-from src.config.specs import ConfigAll
+from src.config.specs import ConfigAll, HydraSettings
 from src.config.experiment import update_exp_name
-
-
-@dataclass
-class HydraSettings:
-    """Subset of the current hydra settings."""
-
-    output_dir: pathlib.Path
-    job_logging: DictConfig
 
 
 def hydra_main(func: Callable[[ConfigAll], None]) -> Callable[[], None]:
