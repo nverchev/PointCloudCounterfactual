@@ -1,10 +1,12 @@
 """Hydra configuration."""
 
 import functools
+import pathlib
 from typing import cast
 from collections.abc import Callable
 
 import hydra
+from hydra.conf import HydraConf
 from hydra.core import config_store
 from hydra.core.global_hydra import GlobalHydra
 from hydra.core.hydra_config import HydraConfig
@@ -22,9 +24,10 @@ def hydra_main(func: Callable[[ConfigAll], None]) -> Callable[[], None]:
     @functools.wraps(func)
     def wrapper(dict_cfg: DictConfig) -> None:
         """Convert configuration to the stored object"""
+        hydra_dict_cfg = HydraConfig.get()
         cfg = cast(ConfigAll, OmegaConf.to_object(dict_cfg))
-        cfg.user.hydra = get_hydra_settings(dict_cfg)
-        overrides = HydraConfig.get().overrides.task
+        cfg.user.hydra = get_hydra_settings(hydra_dict_cfg)
+        overrides = hydra_dict_cfg.overrides.task
         update_exp_name(cfg, overrides)
         return func(cfg)
 
@@ -36,9 +39,10 @@ def get_config_all(overrides: list[str] | None = None) -> ConfigAll:
     GlobalHydra.instance().clear()
 
     with hydra.initialize(version_base=None, config_path=ConfigPath.CONFIG_ALL.relative()):
+        hydra_dict_cfg = HydraConfig.get()
         dict_cfg = hydra.compose(config_name='defaults', overrides=overrides)
         cfg = cast(ConfigAll, OmegaConf.to_object(dict_cfg))
-        cfg.user.hydra = get_hydra_settings(dict_cfg)
+        cfg.user.hydra = get_hydra_settings(hydra_dict_cfg)
 
         if overrides is not None:
             update_exp_name(cfg, overrides)
@@ -46,11 +50,11 @@ def get_config_all(overrides: list[str] | None = None) -> ConfigAll:
         return cfg
 
 
-def get_hydra_settings(dict_cfg: DictConfig) -> HydraSettings:
+def get_hydra_settings(dict_cfg: HydraConf) -> HydraSettings:
     """Get subset of hydra settings."""
     settings = HydraSettings()
-    settings.output_dir = dict_cfg.hydra.runtime.output_dir
-    settings.job_logging = dict_cfg.hydra.job_logging
+    settings.output_dir = pathlib.Path(dict_cfg.run.dir)
+    settings.job_logging = cast(DictConfig, dict_cfg.job_logging)  # correct annotation
     return settings
 
 
