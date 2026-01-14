@@ -119,7 +119,10 @@ class BaseWAutoEncoder(nn.Module, abc.ABC):
 
     def update_codebook(self, codebook: torch.Tensor) -> None:
         """Update codebook tensor."""
+        del self._codebook
+
         self.register_buffer('_codebook', codebook.data, persistent=False)
+        return
 
     def forward(self, x: WInputs) -> Outputs:
         """Forward pass."""
