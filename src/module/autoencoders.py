@@ -7,10 +7,11 @@ from typing import Any, Generic, TypeVar
 import torch
 import torch.nn as nn
 
-from src.config.experiment import Experiment
+from src.config import Experiment
+from src.config.options import ModelHead
 from src.data_types import Inputs, Outputs
-from src.module import get_decoder, BaseWAutoEncoder, WAutoEncoder, CounterfactualWAutoEncoder
-from src.module import get_encoder
+from src.module import get_decoder, get_encoder
+from src.module.w_autoencoder import BaseWAutoEncoder, WAutoEncoder, CounterfactualWAutoEncoder
 from src.module.layers import TransferGrad, reset_child_params
 from src.utils.neighbour_ops import pykeops_square_distance
 from src.utils.control import UsuallyFalse
@@ -220,3 +221,15 @@ class CounterfactualVQVAE(AbstractVQVAE[CounterfactualWAutoEncoder]):
     ) -> Outputs:
         """Generate counterfactual samples."""
         return super().generate(batch_size=batch_size, initial_sampling=initial_sampling, z1_bias=z1_bias, probs=probs)
+
+
+def get_autoencoder() -> AutoEncoder:
+    """Factory function to create the appropriate autoencoder."""
+    model_registry = {ModelHead.AE: AE, ModelHead.VQVAE: VQVAE, ModelHead.CounterfactualVQVAE: CounterfactualVQVAE}
+
+    model_head = Experiment.get_config().autoencoder.architecture.head
+
+    if model_head not in model_registry:
+        raise ValueError(f'Unknown model head: {model_head}')
+
+    return model_registry[model_head]()
