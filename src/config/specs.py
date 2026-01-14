@@ -569,7 +569,7 @@ class UserSettings:
     n_generated_output_points: int
     load_checkpoint: int = -1
     counterfactual_value: PositiveFloat = 1.0
-    ydra = HydraSettings()
+    hydra = HydraSettings()
     path = PathSpecs()
 
     def __post_init__(self):

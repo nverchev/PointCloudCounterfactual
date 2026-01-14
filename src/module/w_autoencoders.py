@@ -9,8 +9,8 @@ from torch import nn as nn
 
 from src.config import Experiment
 from src.data.structures import Outputs, WInputs
-from src.module import get_w_encoder, get_w_decoder
-from src.module.w_decoders import PriorDecoder, PosteriorDecoder
+from src.module.w_decoders import PriorDecoder, PosteriorDecoder, get_w_decoder
+from src.module.w_encoders import get_w_encoder
 from src.module.layers import reset_child_params, TemperatureScaledSoftmax
 from src.utils.neighbour_ops import pykeops_square_distance
 

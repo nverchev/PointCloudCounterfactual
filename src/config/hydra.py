@@ -48,7 +48,10 @@ def get_config_all(overrides: list[str] | None = None) -> ConfigAll:
 
 def get_hydra_settings(dict_cfg: DictConfig) -> HydraSettings:
     """Get subset of hydra settings."""
-    return HydraSettings(output_dir=dict_cfg.hydra.runtime.output_dir, job_logging=dict_cfg.hydra.job_logging)
+    settings = HydraSettings()
+    settings.output_dir = dict_cfg.hydra.runtime.output_dir
+    settings.job_logging = dict_cfg.hydra.job_logging
+    return settings
 
 
 cs = config_store.ConfigStore.instance()  # type: ignore

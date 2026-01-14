@@ -34,7 +34,7 @@ class ConfigPath(enum.StrEnum):
 
     def get_path(self) -> pathlib.Path:
         """Return folder path."""
-        return pathlib.Path(__file__).parent.parent / self.get_folder() / self
+        return pathlib.Path(__file__).parent.parent.parent / self.get_folder() / self
 
     def absolute(self) -> str:
         """Absolute path to folder"""

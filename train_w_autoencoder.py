@@ -10,7 +10,8 @@ from drytorch.utils.average import get_moving_average, get_trailing_mean
 
 from src.module import CounterfactualVQVAE, DGCNN
 from src.config import ConfigAll, Experiment, get_trackers, hydra_main
-from src.data import Inputs, WDatasetWithLogits, get_datasets
+from src.data import Inputs, get_datasets
+from src.data.processed import WDatasetWithLogits
 from src.train import get_learning_schema, get_w_autoencoder_loss
 from src.train.models import ModelEpoch
 from src.utils.parallel import DistributedWorker

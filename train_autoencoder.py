@@ -7,9 +7,9 @@ from drytorch.core.exceptions import TrackerNotActiveError
 from drytorch.lib.hooks import EarlyStoppingCallback, Hook, StaticHook, call_every, saving_hook
 from drytorch.utils.average import get_moving_average, get_trailing_mean
 
+from src.data import get_datasets
 from src.module import VQVAE, get_autoencoder
 from src.config import ConfigAll, Experiment, get_trackers, hydra_main
-from src.data import get_datasets
 from src.train import get_autoencoder_loss, get_learning_schema
 from src.train.hooks import DiscreteSpaceOptimizer
 from src.train.metrics_and_losses import get_emd_loss, get_recon_loss

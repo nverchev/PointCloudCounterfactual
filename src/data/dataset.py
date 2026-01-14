@@ -6,7 +6,9 @@ from torch import distributed as dist
 
 from src.config import Experiment
 from src.config.options import Datasets
-from src.data import Partitions, PointCloudDataset, ModelNet40Dataset, ShapeNetDatasetFlow
+from src.data.modelnet import ModelNet40Dataset
+from src.data.protocols import Partitions, PointCloudDataset
+from src.data.shapenet import ShapeNetDatasetFlow
 
 
 def get_dataset(partition: Partitions) -> PointCloudDataset:
