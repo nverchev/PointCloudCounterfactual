@@ -194,7 +194,8 @@ class WAutoEncoder(BaseWAutoEncoder):
         """Decode with counterfactual generation."""
         data.z1 = self.sampler.sample(data.mu1, data.log_var1)
         data.z2 = torch.zeros((data.z1.shape[0], self.cfg_ae_arc.z2_dim))
-        data.w_recon = self.decoder(data.z1, data.z2)
+        z = torch.cat((data.z1, data.z2), dim=2)
+        data.w_recon = self.decoder(z, data.w_q)
         data.w_dist_2, data.idx = self.distance_calc.compute_distances(
             data.w_recon, self.codebook, self.dim_codes, self.embedding_dim
         )
@@ -241,7 +242,8 @@ class CounterfactualWAutoEncoder(BaseWAutoEncoder):
         probs = self._get_probabilities(data, logits)
         data.p_mu2, data.p_log_var2 = self.z2_inference(probs).chunk(2, 2)
         data.z2 = self._compute_z2(data, probs)
-        data.w_recon = self.decoder(data.z1, data.z2)
+        z = torch.cat((data.z1, data.z2), dim=2)
+        data.w_recon = self.decoder(z, data.w_q)
         data.w_dist_2, data.idx = self.distance_calc.compute_distances(
             data.w_recon, self.codebook, self.dim_codes, self.embedding_dim
         )
@@ -275,6 +277,7 @@ class CounterfactualWAutoEncoder(BaseWAutoEncoder):
     def forward(self, x: WInputs) -> Outputs:
         """Forward pass with logits."""
         data = self.encode(x.w_q)
+        data.w_q = x.w_q
         return self.decode(data, x.logits)
 
     @torch.inference_mode()

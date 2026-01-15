@@ -162,8 +162,8 @@ class WDecoderTransformers(BaseWDecoder):
 
     def __init__(self) -> None:
         super().__init__()
-        self.z1_proj = LinearLayer(self.z2_dim, self.proj_dim, batch_norm=False)
-        self.z2_proj = LinearLayer(self.z2_dim, self.proj_dim, batch_norm=False)
+        self.z_proj = LinearLayer(self.z1_dim + self.z2_dim, self.proj_dim, batch_norm=False)
+        self.w_proj = LinearLayer(self.w_dim, self.proj_dim, batch_norm=False)
         self.query_tokens = nn.Parameter(torch.randn(1, self.n_codes, self.proj_dim))
         self.key_tokens = nn.Parameter(torch.randn(1, self.n_codes, self.proj_dim))
         transformer_layers: list[nn.Module] = []
@@ -181,19 +181,51 @@ class WDecoderTransformers(BaseWDecoder):
 
         self.transformer = nn.ModuleList(transformer_layers)
         self.compress = LinearLayer(self.proj_dim, self.embedding_dim, batch_norm=False, act_cls=nn.Identity)
+        self.init_token = nn.Parameter(torch.randn(1, 1, self.embedding_dim))
+        return
 
-    def forward(self, z1: torch.Tensor, z2: torch.Tensor) -> torch.Tensor:
-        """Forward pass through transformer encoder."""
-        batch_size = z1.shape[0]
-        z1_proj = self.z1_proj(z1).view(batch_size, self.n_codes, self.proj_dim)
-        z2_proj = self.z2_proj(z2).view(batch_size, self.n_codes, self.proj_dim)
-        x = z1_proj + self.query_tokens.expand(batch_size, -1, -1)
-        y = z2_proj + self.key_tokens.expand(batch_size, -1, -1)
+    def forward(self, z: torch.Tensor, w_q: torch.Tensor) -> torch.Tensor:
+        batch_size = z.shape[0]
+        z_proj = self.z_proj(z).view(batch_size, self.n_codes, self.proj_dim)
+        memory = z_proj + self.key_tokens.expand(batch_size, -1, -1)
+        target = w_q.view(batch_size, self.n_codes, self.embedding_dim)
+        target_plus_init = torch.cat([self.init_token.expand(batch_size, 1, -1), target], dim=1)
+        target_minus_end = target_plus_init[:, :-1, :]
+        tgt = self.w_proj(target_minus_end) + self.query_tokens.expand(batch_size, -1, -1)
+        mask = torch.triu(torch.ones(self.n_codes, self.n_codes), diagonal=1).bool().to(tgt.device)
         for layer in self.transformer:
-            x = layer(x, y)
+            tgt = layer(tgt, memory, tgt_mask=mask)
 
+        x = tgt
         x = self.compress(x)
-        return x.view(batch_size, self.n_codes * self.embedding_dim)
+        return x.view(batch_size, self.w_dim)
+
+    def autoregressive_generation(self, z: torch.Tensor, w_q: torch.Tensor) -> torch.Tensor:
+        """Generate a point cloud autoregressively from the latent space."""
+        batch_size = z.shape[0]
+        z_proj = self.z_proj(z).view(batch_size, self.n_codes, self.proj_dim)
+        memory = z_proj + self.key_tokens.expand(batch_size, -1, -1)
+        current_seq = self.w_proj(self.init_token.expand(batch_size, 1, -1)) + self.query_tokens[:, :1, :]
+        sequence = []
+        for i in range(self.n_codes):
+            seq_len = current_seq.size(1)
+            tgt_mask = torch.triu(
+                torch.ones(seq_len, seq_len, device=current_seq.device),
+                diagonal=1,
+            ).bool()
+
+            out_i = current_seq
+            for layer in self.transformer:
+                out_i = layer(out_i, memory, tgt_mask=tgt_mask)
+
+            out_compressed = self.compress(out_i[:, -1:, :])
+            sequence.append(out_compressed)
+            if i < self.n_codes - 1:
+                next_input = self.w_proj(out_compressed) + self.query_tokens[:, i + 1 : i + 2, :]
+                current_seq = torch.cat([current_seq, next_input], dim=1)
+
+        x = torch.cat(sequence, dim=1)
+        return x.view(batch_size, self.w_dim)
 
 
 def get_w_decoder() -> BaseWDecoder:
