@@ -36,7 +36,7 @@ class DGCNN(nn.Module):
         self.final_conv = PointsConvLayer(sum(self.h_dims), self.emb_dim)
         mlp_modules: list[torch.nn.Module] = [LinearLayer(2 * self.emb_dim, self.mlp_dims[0], act_cls=self.act_cls)]
 
-        for (in_dim, out_dim), prob in zip(itertools.pairwise(self.mlp_dims), self.dropout, strict=True):
+        for (in_dim, out_dim), prob in zip(itertools.pairwise(self.mlp_dims), self.dropout, strict=False):
             mlp_modules.append(nn.Dropout(p=prob))
             mlp_modules.append(LinearLayer(in_dim, out_dim, act_cls=self.act_cls))
 
