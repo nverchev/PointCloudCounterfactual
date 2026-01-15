@@ -275,7 +275,6 @@ class CounterfactualWAutoEncoder(BaseWAutoEncoder):
     def forward(self, x: WInputs) -> Outputs:
         """Forward pass with logits."""
         data = self.encode(x.w_q)
-        data.w_q = x.w_q
         return self.decode(data, x.logits)
 
     @torch.inference_mode()
