@@ -76,8 +76,13 @@ def update_exp_name(cfg: ConfigAll, overrides: list[str]) -> None:
     return
 
 
-def set_tuning_logging():
+def set_tuning_logging() -> None:
     """Set the logging for tuning runs."""
-    drytorch.init_trackers(mode='minimal')
     if 'PARALLEL_SEQ' in os.environ:
+        drytorch.remove_all_default_trackers()
+        drytorch.extend_default_trackers([logging.BuiltinLogger()])
         logging.set_verbosity(logging.INFO_LEVELS.test)
+    else:
+        drytorch.init_trackers(mode='minimal')
+
+    return
