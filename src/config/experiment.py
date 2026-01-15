@@ -1,12 +1,14 @@
 """Contains the Experiment class for the project and related helper functions."""
 
+import os
 import sys
 
 from hydra.core import utils as hydra_utils
 
 import drytorch
 
-from drytorch.core.track import Tracker
+from drytorch.core import track
+from drytorch.trackers import logging
 
 from src.config.specs import ConfigAll
 
@@ -17,13 +19,13 @@ class Experiment(drytorch.Experiment[ConfigAll]):
     pass
 
 
-def get_trackers(cfg: ConfigAll) -> list[Tracker]:
+def get_trackers(cfg: ConfigAll) -> list[track.Tracker]:
     """Get trackers from according to the user configuration."""
     cfg_trackers = cfg.user.trackers
     cfg_hydra = cfg.user.hydra
     hydra_utils.configure_log(cfg_hydra.job_logging)
     drytorch.init_trackers(mode='hydra')
-    tracker_list: list[Tracker] = []
+    tracker_list: list[track.Tracker] = []
     if sys.gettrace():  # skip in debug mode
         return tracker_list
 
@@ -72,3 +74,10 @@ def update_exp_name(cfg: ConfigAll, overrides: list[str]) -> None:
     cfg.variation = '_'.join([cfg.variation, *overrides]).replace('/', '_')
     cfg.tags = overrides
     return
+
+
+def set_tuning_logging():
+    """Set the logging for tuning runs."""
+    drytorch.init_trackers(mode='minimal')
+    if 'PARALLEL_SEQ' in os.environ:
+        logging.set_verbosity(logging.INFO_LEVELS.test)

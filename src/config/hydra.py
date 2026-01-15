@@ -53,7 +53,7 @@ def get_config_all(overrides: list[str] | None = None) -> ConfigAll:
 def get_hydra_settings(dict_cfg: HydraConf) -> HydraSettings:
     """Get subset of hydra settings."""
     settings = HydraSettings()
-    settings.output_dir = pathlib.Path(dict_cfg.run.dir)
+    settings.output_dir = pathlib.Path(dict_cfg.runtime.output_dir)
     settings.job_logging = cast(DictConfig, dict_cfg.job_logging)  # correct annotation
     return settings
 
