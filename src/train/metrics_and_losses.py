@@ -257,7 +257,8 @@ def get_w_autoencoder_loss() -> LossBase[Outputs, WTargets]:
     """Get encoder loss combining NLL, KLD and adversarial losses."""
     c_kld1 = Experiment.get_config().w_autoencoder.objective.c_kld1
     c_kld2 = Experiment.get_config().w_autoencoder.objective.c_kld2
-    loss = get_mse_loss() + get_annealing() * (c_kld1 * get_kld1_loss() + c_kld2 * get_kld2_loss()) | get_w_accuracy()
+    kld_loss = get_annealing() * (c_kld1 * get_kld1_loss() + c_kld2 * get_kld2_loss())
+    loss = get_mse_loss() + get_adversarial_loss() + kld_loss | get_w_accuracy()
     return loss
 
 
