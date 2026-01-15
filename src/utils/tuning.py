@@ -13,12 +13,12 @@ def get_past_final_values(trial: optuna.Trial) -> list[float]:
     study = trial.study
     *past_trials, _current_trial = study.get_trials(deepcopy=False)
     real_completed_trials = [
-        t
-        for t in past_trials
+        past_trial
+        for past_trial in past_trials
         if (
-            t.state == optuna.trial.TrialState.COMPLETE
-            and t.value is not None
-            and not t.user_attrs.get('imputed', False)
+            past_trial.state == optuna.trial.TrialState.COMPLETE
+            and past_trial.value is not None
+            and not past_trial.user_attrs.get('imputed', False)
         )
     ]
     if len(real_completed_trials) < 10:
