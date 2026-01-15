@@ -163,7 +163,7 @@ class WDecoderTransformers(BaseWDecoder):
     def __init__(self) -> None:
         super().__init__()
         self.z_proj = LinearLayer(self.z1_dim + self.z2_dim, self.proj_dim, batch_norm=False)
-        self.w_proj = LinearLayer(self.w_dim, self.proj_dim, batch_norm=False)
+        self.w_proj = LinearLayer(self.embedding_dim, self.proj_dim, batch_norm=False)
         self.query_tokens = nn.Parameter(torch.randn(1, self.n_codes, self.proj_dim))
         self.key_tokens = nn.Parameter(torch.randn(1, self.n_codes, self.proj_dim))
         transformer_layers: list[nn.Module] = []
