@@ -21,31 +21,19 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-trackers = [
+track_all = [
     "tensorboard>=2.20.0",
     "wandb>=0.23.1",
     "sqlalchemy>=2.0.0",
     "tqdm"
 ]
-finetuning = [
+finetune = [
     "optuna>=4.6.0",
 ]
-visualization = [
+visualize = [
         "pyvista>=0.46.4",
         "seaborn>=0.13.2",
 ]
-
-[tool.uv]
-
-[[tool.uv.index]]
-name = "pypi"
-url = "https://pypi.org/simple"
-default = true
-
-[[tool.uv.index]]
-name = "cuda13.0"
-url = "https://download.pytorch.org/whl/cu130"
-packages = ["torch"]
 
 [dependency-groups]
 dev = [

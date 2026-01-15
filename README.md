@@ -1,7 +1,18 @@
 # Towards Point Cloud Counterfactual Explanations
 
 Code from the paper published at EUSIPCO 2025. To replicate the results, please follow the instructions:
-- make sure that torch.cuda and the local toolkit version match, otherwise modify the pyproject.toml file.
+- Specify the index for the correct cuda version in the uv.toml file (locally or in the uv global config):
+```toml
+[[index]]
+name = "pypi"
+url = "https://pypi.org/simple"
+default = true
+
+[[index]]
+name = "pytorch"
+url = "https://download.pytorch.org/whl/cu130"  # change this to match your cuda toolkit version
+packages = ["torch", "torchvision", "torchaudio"]
+```
 - modify the hydra_conf/config_all/user/user_settings.yaml to select the trackers you want to use.
 - install the project dependencies and the trackers. For example:
 ```console
