@@ -11,11 +11,10 @@ import torch
 from omegaconf import DictConfig
 from optuna.visualization import plot_param_importances
 
-from drytorch import init_trackers
 from drytorch.contrib.optuna import get_final_value, suggest_overrides
 from drytorch.core.exceptions import ConvergenceError
 
-from src.config import ConfigPath, Experiment, get_config_all
+from src.config import ConfigPath, Experiment, get_config_all, set_tuning_logging
 from src.utils.tuning import impute_failed_trial, impute_pruned_trial, get_study_name
 
 from train_autoencoder import train_autoencoder
@@ -50,7 +49,7 @@ def set_objective(tune_cfg: DictConfig) -> Callable[[optuna.Trial], float]:
 @hydra.main(version_base=None, config_path=ConfigPath.TUNE_AUTOENCODER.absolute(), config_name='defaults')
 def main(tune_cfg: DictConfig):
     """Set up the study and launch the optimization."""
-    init_trackers(mode='minimal')
+    set_tuning_logging()
     pathlib.Path(tune_cfg.db_location).mkdir(exist_ok=True)
     pruner = optuna.pruners.MedianPruner(
         n_startup_trials=tune_cfg.tune.n_startup_trials,
