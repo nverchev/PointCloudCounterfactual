@@ -86,6 +86,7 @@ class WEncoderConvolution(BaseWEncoder):
         for (in_dim, out_dim), do in zip(dim_pairs, self.dropout, strict=False):
             modules.append(LinearLayer(in_dim, out_dim, act_cls=self.act_cls))
             modules.append(nn.Dropout(do))
+
         modules.append(LinearLayer(self.h_dims_lin[-1], 2 * self.z1_dim, batch_norm=False))  # change to encode
         self.encode = nn.Sequential(*modules)
 
@@ -107,7 +108,7 @@ class WEncoderTransformers(BaseWEncoder):
 
     def __init__(self) -> None:
         super().__init__()
-        self.input_proj = LinearLayer(self.embedding_dim, self.proj_dim, batch_norm=False, act_cls=nn.Identity)
+        self.input_proj = LinearLayer(self.embedding_dim, self.proj_dim, batch_norm=False)
         self.positional_encoding = nn.Parameter(torch.randn(1, self.n_codes, self.proj_dim))
         transformer_layers: list[nn.Module] = []
         for hidden_dim, do in zip(self.h_dims_lin, self.dropout, strict=False):
@@ -123,9 +124,10 @@ class WEncoderTransformers(BaseWEncoder):
             transformer_layers.append(encoder_layer)
 
         self.transformer = nn.ModuleList(transformer_layers)
-        self.to_latent = LinearLayer(self.proj_dim, 2 * self.z1_dim, batch_norm=False, act_cls=nn.Identity)
+        self.to_latent = LinearLayer(self.proj_dim, 2 * self.z1_dim, batch_norm=False)
+        return
 
-    def forward(self, x: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor]:
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
         """Forward pass through transformer encoder."""
         batch_size = x.shape[0]
         x = self.input_proj(x.view(batch_size, self.n_codes, self.embedding_dim))
@@ -134,4 +136,4 @@ class WEncoderTransformers(BaseWEncoder):
             h = layer(h)
 
         z = self.to_latent(h)
-        return x, z
+        return z

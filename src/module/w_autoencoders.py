@@ -31,27 +31,27 @@ class DistanceCalculator:
 
     @staticmethod
     def compute_distances(
-        x: torch.Tensor, codebook: torch.Tensor, dim_codes: int, embedding_dim: int
+        x: torch.Tensor, codebook: torch.Tensor, n_codes: int, embedding_dim: int
     ) -> tuple[torch.Tensor, torch.Tensor]:
         """Calculate distances from embeddings and return closest indices."""
         batch, _ = x.shape
-        x = x.view(batch * dim_codes, 1, embedding_dim)
+        x = x.view(batch * n_codes, 1, embedding_dim)
         book = codebook.detach().repeat(batch, 1, 1)
         dist = pykeops_square_distance(x, book)
         idx = dist.argmin(axis=2)
-        dist_sum = dist.sum(1).view(batch, dim_codes, codebook.shape[1])
-        idx_reshaped = idx.view(batch, dim_codes, 1)
+        dist_sum = dist.sum(1).view(batch, n_codes, codebook.shape[1])
+        idx_reshaped = idx.view(batch, n_codes, 1)
         return dist_sum, idx_reshaped
 
 
 class PseudoInputManager:
     """Manages pseudo inputs and their latent representations."""
 
-    def __init__(self, n_pseudo_inputs: int, embedding_dim: int, z_dim: int, dim_codes: int):
+    def __init__(self, n_pseudo_inputs: int, embedding_dim: int, z1_dim: int, n_codes: int):
         self.n_pseudo_inputs: int = n_pseudo_inputs
-        self.pseudo_inputs = nn.Parameter(torch.empty(n_pseudo_inputs, embedding_dim, dim_codes))
-        self.pseudo_mu = nn.Parameter(torch.empty(n_pseudo_inputs, z_dim))
-        self.pseudo_log_var = nn.Parameter(torch.empty(n_pseudo_inputs, z_dim))
+        self.pseudo_inputs = nn.Parameter(torch.empty(n_pseudo_inputs, n_codes, embedding_dim))
+        self.pseudo_mu = nn.Parameter(torch.empty(n_pseudo_inputs, z1_dim))
+        self.pseudo_log_var = nn.Parameter(torch.empty(n_pseudo_inputs, z1_dim))
         self.updated = False
         self.initialize_parameters()
 
@@ -69,12 +69,12 @@ class PseudoInputManager:
         self.updated = True
         return
 
-    def get_combined_input(self, x: torch.Tensor | None, dim_codes: int, embedding_dim: int) -> torch.Tensor:
+    def get_combined_input(self, x: torch.Tensor | None, n_codes: int, embedding_dim: int) -> torch.Tensor:
         """Combine input with pseudo inputs."""
         if x is None:
             return self.pseudo_inputs
 
-        x_reshaped = x.view(-1, dim_codes, embedding_dim).transpose(2, 1)
+        x_reshaped = x.view(-1, n_codes, embedding_dim).transpose(2, 1)
         return torch.cat((x_reshaped, self.pseudo_inputs))
 
     def sample_pseudo_latent(self, batch_size: int) -> Generator[tuple[torch.Tensor, torch.Tensor]]:
@@ -90,7 +90,7 @@ class BaseWAutoEncoder(nn.Module, abc.ABC):
     def __init__(self):
         super().__init__()
         self.cfg_ae_arc = Experiment.get_config().autoencoder.architecture
-        self.dim_codes: int = self.cfg_ae_arc.n_codes
+        self.n_codes: int = self.cfg_ae_arc.n_codes
         self.book_size: int = self.cfg_ae_arc.book_size
         self.embedding_dim: int = self.cfg_ae_arc.embedding_dim
         self.encoder = get_w_encoder()
@@ -104,7 +104,7 @@ class BaseWAutoEncoder(nn.Module, abc.ABC):
                 self.cfg_ae_arc.n_pseudo_inputs,
                 self.cfg_ae_arc.embedding_dim,
                 self.cfg_ae_arc.z1_dim,
-                self.dim_codes,
+                self.n_codes,
             )
         else:
             self.pseudo_manager = None
@@ -162,7 +162,7 @@ class BaseWAutoEncoder(nn.Module, abc.ABC):
         if self.pseudo_manager is None:
             return x if x is not None else torch.empty(0)
 
-        return self.pseudo_manager.get_combined_input(x, self.dim_codes, self.embedding_dim)
+        return self.pseudo_manager.get_combined_input(x, self.n_codes, self.embedding_dim)
 
     def recursive_reset_parameters(self):
         """Reset all parameters."""
@@ -178,9 +178,13 @@ class WAutoEncoder(BaseWAutoEncoder):
 
     def encode(self, x: torch.Tensor | None) -> Outputs:
         """Encode with adversarial features."""
-        input_tensor = self._get_input(x)
-        _, latent = self.encoder(input_tensor)
         data = Outputs()
+        if x is not None:
+            data.h = x  # using the original input for encoding z2
+
+        input_tensor = self._get_input(x)
+        latent = self.encoder(input_tensor)
+
         if self.pseudo_manager is not None:
             split_index = [-self.pseudo_manager.n_pseudo_inputs]
             latent, pseudo_latent = torch.tensor_split(latent, split_index)
@@ -196,7 +200,7 @@ class WAutoEncoder(BaseWAutoEncoder):
         data.z2 = torch.zeros((data.z1.shape[0], self.cfg_ae_arc.z2_dim))
         data.w_recon = self.decoder(data.z1, data.z2)
         data.w_dist_2, data.idx = self.distance_calc.compute_distances(
-            data.w_recon, self.codebook, self.dim_codes, self.embedding_dim
+            data.w_recon, self.codebook, self.n_codes, self.embedding_dim
         )
         return data
 
@@ -220,30 +224,30 @@ class CounterfactualWAutoEncoder(BaseWAutoEncoder):
 
     def encode(self, x: torch.Tensor | None) -> Outputs:
         """Encode with adversarial features."""
-        input_tensor = self._get_input(x)
-        features, latent = self.encoder(input_tensor)
-
         data = Outputs()
+        if x is not None:
+            data.h = x  # using the original input for encoding z2
+
+        input_tensor = self._get_input(x)
+        latent = self.encoder(input_tensor)
 
         if self.pseudo_manager is not None:
             split_index = [-self.pseudo_manager.n_pseudo_inputs]
             latent, pseudo_latent = torch.tensor_split(latent, split_index)
-            features, _ = torch.tensor_split(features, split_index, dim=0)
             data.pseudo_mu1, data.pseudo_log_var1 = pseudo_latent.chunk(2, 2)
 
         data.mu1, data.log_var1 = latent.chunk(2, 2)
-        data.h = features
         data.z1 = self.sampler.sample(data.mu1, data.log_var1)
         return data
 
     def decode(self, data: Outputs, logits: torch.Tensor | None = None) -> Outputs:
         """Decode with counterfactual generation."""
-        probs = self._get_probabilities(data, logits)
-        data.p_mu2, data.p_log_var2 = self.z2_inference(probs).chunk(2, 2)
-        data.z2 = self._compute_z2(data, probs)
+        data.probs = self._get_probabilities(data, logits)
+        data.p_mu2, data.p_log_var2 = self.z2_inference(data.probs).chunk(2, 2)
+        data.z2 = self._compute_z2(data)
         data.w_recon = self.decoder(data.z1, data.z2)
         data.w_dist_2, data.idx = self.distance_calc.compute_distances(
-            data.w_recon, self.codebook, self.dim_codes, self.embedding_dim
+            data.w_recon, self.codebook, self.n_codes, self.embedding_dim
         )
         return data
 
@@ -260,14 +264,14 @@ class CounterfactualWAutoEncoder(BaseWAutoEncoder):
 
         raise AttributeError('Either logits, approximated logits, or probs must be set.')
 
-    def _compute_z2(self, data: Outputs, probs: torch.Tensor) -> torch.Tensor:
+    def _compute_z2(self, data: Outputs) -> torch.Tensor:
         """Compute z2 latent variable."""
         if not hasattr(data, 'h'):
             # No features available, sample from prior
             return self.sampler.sample(data.p_mu2, data.p_log_var2)
 
         # Use posterior with features
-        data.d_mu2, data.d_log_var2 = self.posterior(probs, data.h).chunk(2, 2)
+        data.d_mu2, data.d_log_var2 = self.posterior(data.probs, data.h).chunk(2, 2)
         mu_combined = data.d_mu2 + data.p_mu2
         log_var_combined = data.d_log_var2 + data.p_log_var2
         return self.sampler.sample(mu_combined, log_var_combined)
