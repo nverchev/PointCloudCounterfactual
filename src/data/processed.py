@@ -136,8 +136,10 @@ class WDatasetWithLogitsFrozen(WDatasetWithLogits):
         classifier: Model[Inputs, torch.Tensor],
     ) -> None:
         super().__init__(dataset=dataset, autoencoder=autoencoder, classifier=classifier)
+
+        batch_size = 32  # Assuming hardware can support batches of 32 on inference for encoder / classifier
         self.w_dataset: list[tuple[WInputs, WTargets]] = []
-        for batch_idx in itertools.batched(range(len(self)), 32, strict=True):
+        for batch_idx in itertools.batched(range(len(self)), batch_size, strict=False):
             self.w_dataset.extend(super().__getitems__(list(batch_idx)))
 
         return

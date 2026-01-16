@@ -116,12 +116,12 @@ class GeneralizedLinearLayer(nn.Module, metaclass=abc.ABCMeta):
             if isinstance(self.act, HasInplace):
                 self.act.inplace = True
 
+        self.init = self.get_init(self.act)
+        self.init(cast(torch.Tensor, self.dense.weight))
         if DEBUG_MODE:
             self.register_forward_hook(debug_check)
             self.register_full_backward_hook(debug_check)
 
-        self.init = self.get_init(self.act)
-        self.init(cast(torch.Tensor, self.dense.weight))
         return
 
     @staticmethod
@@ -136,14 +136,19 @@ class GeneralizedLinearLayer(nn.Module, metaclass=abc.ABCMeta):
         """
         if act is None:
             return functools.partial(nn.init.xavier_normal_, gain=1)
+
         if isinstance(act, nn.Identity):  # this is for the final output layer
             return functools.partial(nn.init.xavier_normal_, gain=0.01)
+
         if isinstance(act, nn.ReLU):
             return functools.partial(nn.init.kaiming_uniform_, nonlinearity='relu')
+
         if isinstance(act, nn.LeakyReLU):
             return functools.partial(nn.init.kaiming_uniform_, a=act.negative_slope)
+
         if isinstance(act, nn.Hardtanh):
             return functools.partial(nn.init.xavier_normal_, gain=nn.init.calculate_gain('tanh'))
+
         return lambda x: x
 
     @abc.abstractmethod
@@ -159,8 +164,10 @@ class GeneralizedLinearLayer(nn.Module, metaclass=abc.ABCMeta):
         y = self.bn(self.dense(x)) if self.bn is not None else self.dense(x)
         if self.act is not None:
             y = self.act(y)
+
         if self.residual:
             return y + x.repeat_interleave(self.out_dim // self.in_dim + 1, 1)[:, : y.shape[1], ...]
+
         return y
 
 
@@ -170,6 +177,7 @@ class LinearLayer(GeneralizedLinearLayer):
     def get_dense_layer(self) -> nn.Module:
         if self.groups > 1:
             raise NotImplementedError('nn.Linear has not option for groups')
+
         return nn.Linear(self.in_dim, self.out_dim, bias=self.bias)
 
     @override
@@ -204,11 +212,12 @@ class TemperatureScaledSoftmax(nn.Softmax):
     def __init__(self, dim: int | None = None, temperature: float = 1):
         super().__init__(dim)
         self.temperature = torch.tensor(temperature, dtype=torch.float)
+        return
 
     @override
-    def forward(self, input: Tensor) -> Tensor:
+    def forward(self, x: Tensor) -> Tensor:
         """Forward pass"""
-        return super().forward(input / self.temperature)
+        return super().forward(x / self.temperature)
 
 
 class TransferGrad(Function):
@@ -241,12 +250,14 @@ def debug_check(_not_used1: nn.Module, _not_used2: _grad_t, tensor_out: _grad_t)
         tensor = tensor_out[0]
     else:
         tensor = tensor_out
+
     if torch.any(torch.isnan(tensor)):
         breakpoint()
         pdb.set_trace()
-    if torch.any(torch.isinf(tensor)):
+    elif torch.any(torch.isinf(tensor)):
         breakpoint()
         pdb.set_trace()
+
     return None
 
 
@@ -274,3 +285,4 @@ def reset_child_params(module: nn.Module) -> None:
             layer.reset_parameters()
 
         reset_child_params(layer)
+        return

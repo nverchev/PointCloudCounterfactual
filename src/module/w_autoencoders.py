@@ -242,8 +242,8 @@ class CounterfactualWAutoEncoder(BaseWAutoEncoder):
 
     def decode(self, data: Outputs, logits: torch.Tensor | None = None) -> Outputs:
         """Decode with counterfactual generation."""
-        probs = self._get_probabilities(data, logits)
-        data.p_mu2, data.p_log_var2 = self.z2_inference(probs).chunk(2, 2)
+        data.probs = self._get_probabilities(data, logits)
+        data.p_mu2, data.p_log_var2 = self.z2_inference(data.probs).chunk(2, 2)
         data.z2 = self._compute_z2(data)
         data.w_recon = self.decoder(data.z1, data.z2)
         data.w_dist_2, data.idx = self.distance_calc.compute_distances(
