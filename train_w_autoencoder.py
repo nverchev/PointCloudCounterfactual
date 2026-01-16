@@ -11,7 +11,7 @@ from drytorch.utils.average import get_moving_average, get_trailing_mean
 from src.module import CounterfactualVQVAE, DGCNN
 from src.config import ConfigAll, Experiment, get_trackers, hydra_main
 from src.data import Inputs, get_datasets
-from src.data.processed import WDatasetWithLogitsFrozen
+from src.data.processed import WDatasetWithLogits
 from src.train import get_learning_schema, get_w_autoencoder_loss
 from src.train.models import ModelEpoch
 from src.utils.parallel import DistributedWorker
@@ -41,8 +41,8 @@ def train_w_autoencoder(
 
     train_dataset, test_dataset = get_datasets()  # test is validation unless final=True
 
-    train_w_dataset = WDatasetWithLogitsFrozen(train_dataset, vqvae, classifier)
-    test_w_dataset = WDatasetWithLogitsFrozen(test_dataset, vqvae, classifier)
+    train_w_dataset = WDatasetWithLogits(train_dataset, vqvae, classifier)
+    test_w_dataset = WDatasetWithLogits(test_dataset, vqvae, classifier)
     test_loader = DataLoader(dataset=test_w_dataset, batch_size=cfg_w_ae.train.batch_size_per_device, pin_memory=False)
     loss_calc = get_w_autoencoder_loss()
 
