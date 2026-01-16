@@ -178,9 +178,13 @@ class WAutoEncoder(BaseWAutoEncoder):
 
     def encode(self, x: torch.Tensor | None) -> Outputs:
         """Encode with adversarial features."""
-        input_tensor = self._get_input(x)
-        _, latent = self.encoder(input_tensor)
         data = Outputs()
+        if x is not None:
+            data.h = x  # using the original input for encoding z2
+
+        input_tensor = self._get_input(x)
+        latent = self.encoder(input_tensor)
+
         if self.pseudo_manager is not None:
             split_index = [-self.pseudo_manager.n_pseudo_inputs]
             latent, pseudo_latent = torch.tensor_split(latent, split_index)
@@ -220,19 +224,19 @@ class CounterfactualWAutoEncoder(BaseWAutoEncoder):
 
     def encode(self, x: torch.Tensor | None) -> Outputs:
         """Encode with adversarial features."""
-        input_tensor = self._get_input(x)
-        features, latent = self.encoder(input_tensor)
-
         data = Outputs()
+        if x is not None:
+            data.h = x  # using the original input for encoding z2
+
+        input_tensor = self._get_input(x)
+        latent = self.encoder(input_tensor)
 
         if self.pseudo_manager is not None:
             split_index = [-self.pseudo_manager.n_pseudo_inputs]
             latent, pseudo_latent = torch.tensor_split(latent, split_index)
-            features, _ = torch.tensor_split(features, split_index, dim=0)
             data.pseudo_mu1, data.pseudo_log_var1 = pseudo_latent.chunk(2, 2)
 
         data.mu1, data.log_var1 = latent.chunk(2, 2)
-        data.h = features
         data.z1 = self.sampler.sample(data.mu1, data.log_var1)
         return data
 
@@ -240,7 +244,7 @@ class CounterfactualWAutoEncoder(BaseWAutoEncoder):
         """Decode with counterfactual generation."""
         probs = self._get_probabilities(data, logits)
         data.p_mu2, data.p_log_var2 = self.z2_inference(probs).chunk(2, 2)
-        data.z2 = self._compute_z2(data, probs)
+        data.z2 = self._compute_z2(data)
         data.w_recon = self.decoder(data.z1, data.z2)
         data.w_dist_2, data.idx = self.distance_calc.compute_distances(
             data.w_recon, self.codebook, self.n_codes, self.embedding_dim
@@ -260,14 +264,14 @@ class CounterfactualWAutoEncoder(BaseWAutoEncoder):
 
         raise AttributeError('Either logits, approximated logits, or probs must be set.')
 
-    def _compute_z2(self, data: Outputs, probs: torch.Tensor) -> torch.Tensor:
+    def _compute_z2(self, data: Outputs) -> torch.Tensor:
         """Compute z2 latent variable."""
         if not hasattr(data, 'h'):
             # No features available, sample from prior
             return self.sampler.sample(data.p_mu2, data.p_log_var2)
 
         # Use posterior with features
-        data.d_mu2, data.d_log_var2 = self.posterior(probs, data.h).chunk(2, 2)
+        data.d_mu2, data.d_log_var2 = self.posterior(data.probs, data.h).chunk(2, 2)
         mu_combined = data.d_mu2 + data.p_mu2
         log_var_combined = data.d_log_var2 + data.p_log_var2
         return self.sampler.sample(mu_combined, log_var_combined)

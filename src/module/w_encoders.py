@@ -124,8 +124,9 @@ class WEncoderTransformers(BaseWEncoder):
 
         self.transformer = nn.ModuleList(transformer_layers)
         self.to_latent = LinearLayer(self.proj_dim, 2 * self.z1_dim, batch_norm=False, act_cls=nn.Identity)
+        return
 
-    def forward(self, x: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor]:
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
         """Forward pass through transformer encoder."""
         batch_size = x.shape[0]
         x = self.input_proj(x.view(batch_size, self.n_codes, self.embedding_dim))
@@ -134,4 +135,4 @@ class WEncoderTransformers(BaseWEncoder):
             h = layer(h)
 
         z = self.to_latent(h)
-        return x, z
+        return z
