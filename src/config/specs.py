@@ -578,7 +578,7 @@ class UserSettings:
         checkpoint_every (PositiveInt): The number of epochs between saving checkpoints
         n_generated_output_points (int): The number of points to generate during inference
         load_checkpoint (int): The checkpoint to load if available. Default is the last one (-1)
-        counterfactual_value (PositiveFloat): The counterfactual strength value
+        counterfactual_value (PositiveFloat): Value associated with counterfactual change (0 no change, 1 full change)
         hydra (HydraSettings): Subset of the current hydra settings
         path (PathSpecs): Specifications for paths that override .env settings
     """

@@ -2,7 +2,7 @@
 
 import abc
 
-from typing import Any, Generic, TypeVar
+from typing import Generic, TypeVar
 
 import torch
 import torch.nn as nn
@@ -12,13 +12,14 @@ from src.config.options import ModelHead
 from src.data.structures import Inputs, Outputs
 from src.module.decoders import get_decoder
 from src.module.encoders import get_encoder
+from src.module.quantize import VectorQuantizer
 from src.module.w_autoencoders import BaseWAutoEncoder, WAutoEncoder, CounterfactualWAutoEncoder
 from src.module.layers import TransferGrad, reset_child_params
-from src.utils.neighbour_ops import pykeops_square_distance
-from src.utils.control import UsuallyFalse
+
+WA = TypeVar('WA', bound=BaseWAutoEncoder, covariant=True)
 
 
-class AutoEncoder(nn.Module, abc.ABC):
+class AbstractAutoEncoder(nn.Module, abc.ABC):
     """Abstract autoencoder for point clouds."""
 
     def __init__(self):
@@ -43,7 +44,7 @@ class AutoEncoder(nn.Module, abc.ABC):
         return
 
 
-class Oracle(AutoEncoder):
+class Oracle(AbstractAutoEncoder):
     """Oracle autoencoder that returns an input subset."""
 
     def forward(self, inputs: Inputs) -> Outputs:
@@ -53,7 +54,7 @@ class Oracle(AutoEncoder):
         return data
 
 
-class AE(AutoEncoder):
+class BaseAutoencoder(AbstractAutoEncoder):
     """Standard autoencoder for point clouds."""
 
     def __init__(self):
@@ -78,48 +79,8 @@ class AE(AutoEncoder):
         return data
 
 
-class VectorQuantizer:
-    """Handles vector quantization operations."""
-
-    def __init__(self, codebook: torch.Tensor, n_codes: int, embedding_dim: int):
-        self.codebook = codebook
-        self.n_codes: int = n_codes
-        self.embedding_dim: int = embedding_dim
-
-    def quantize(self, x: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor]:
-        """Quantize input using codebook."""
-        batch, _ = x.size()
-        x_flat = x.view(batch * self.n_codes, 1, self.embedding_dim)
-        book_repeated = self.codebook.repeat(batch, 1, 1)
-
-        dist = pykeops_square_distance(x_flat, book_repeated)
-        idx = dist.argmin(axis=2).view(-1, 1, 1)
-
-        embeddings = self._get_embeddings(idx, book_repeated)
-        one_hot = self._create_one_hot(idx, batch, x.device)
-
-        return embeddings, one_hot
-
-    def _get_embeddings(self, idx: torch.Tensor, book: torch.Tensor) -> torch.Tensor:
-        """Get embeddings from indices."""
-        idx_expanded = idx.expand(-1, -1, self.embedding_dim)
-        embeddings = book.gather(1, idx_expanded)
-        return embeddings.view(-1, self.n_codes * self.embedding_dim)
-
-    def _create_one_hot(self, idx: torch.Tensor, batch: int, device: torch.device) -> torch.Tensor:
-        """Create one-hot encoding of indices."""
-        one_hot = torch.zeros(batch, self.n_codes, self.codebook.shape[1], device=device)
-        return one_hot.scatter_(2, idx.view(batch, self.n_codes, 1), 1)
-
-
-WA = TypeVar('WA', bound=BaseWAutoEncoder, covariant=True)
-
-
-class AbstractVQVAE(AE, abc.ABC, Generic[WA]):
+class BaseVQVAE(BaseAutoencoder, abc.ABC, Generic[WA]):
     """Abstract VQVAE with vector quantization."""
-
-    _null_tensor = torch.empty(0)
-    _zero_tensor = torch.tensor(0.0)
 
     def __init__(self):
         super().__init__()
@@ -127,49 +88,57 @@ class AbstractVQVAE(AE, abc.ABC, Generic[WA]):
         self.n_codes: int = cfg_ae_arc.n_codes
         self.book_size: int = cfg_ae_arc.book_size
         self.embedding_dim: int = cfg_ae_arc.embedding_dim
-        self.double_encoding = UsuallyFalse()
         self.codebook = nn.Parameter(torch.randn(self.n_codes, self.book_size, self.embedding_dim))
-
-        self.w_autoencoder = self._create_w_autoencoder()
+        self.w_autoencoder: WA = self._init_w_autoencoder()
         for param in self.w_autoencoder.parameters():
             param.requires_grad = False  # separate training for W autoencoder
 
-        self.quantizer = VectorQuantizer(self.codebook, self.n_codes, self.embedding_dim)
+        self.quantizer = VectorQuantizer()
         self.transfer = TransferGrad()
 
     def encode(self, inputs: Inputs) -> Outputs:
         """Encode with optional double encoding."""
         data = Outputs()
         data.w_q = self.encoder(inputs.cloud, inputs.indices)
+        return data
 
-        if self.double_encoding:
-            encoded_data = self.w_autoencoder.encode(data.w_q.detach())
-            data.update(encoded_data)
-
+    def double_encode(self, inputs: Inputs) -> Outputs:
+        """Encode in the continuous space."""
+        data = self.encode(inputs)
+        encoded_data = self.w_autoencoder.encode(data.w_q.detach())
+        data.update(encoded_data)
         return data
 
     def decode(self, data: Outputs, inputs: Inputs) -> Outputs:
         """Decode with vector quantization."""
-        if self.double_encoding:
-            self.w_autoencoder.update_codebook(self.codebook)
-            self.w_autoencoder.decode(data)
-            data.w_e = data.w = self._decode_from_indices(data)
-        else:
-            data.w_e, data.one_hot_idx = self.quantizer.quantize(data.w_q)
-            data.w = self.transfer.apply(data.w_e, data.w_q)
-
+        data.w_e, data.idx, _ = self.quantizer.quantize(data.w_q, self.codebook)
+        data.one_hot_idx = self.quantizer.create_one_hot(data.idx)
+        data.w = self.transfer.apply(data.w_e, data.w_q)
         return super().decode(data, inputs)
 
-    def _decode_from_indices(self, data: Outputs) -> torch.Tensor:
-        """Decode embeddings from indices."""
-        idx = data.idx
-        batch = idx.shape[0]
-        book = self.codebook.repeat(batch, 1, 1)
-        idx_flat = idx.view(batch * idx.shape[1], 1, 1)
-        idx_expanded = idx_flat.expand(-1, -1, self.embedding_dim)
-        embeddings = book.gather(1, idx_expanded)
+    def double_decode(self, data: Outputs, inputs: Inputs) -> Outputs:
+        """Decode from the continuous space."""
+        self.w_autoencoder.update_codebook(self.codebook)
+        self.w_autoencoder.decode(data)
+        data.w_e = data.w = self.quantizer.decode_from_indices(data.idx, self.codebook)
+        return super().decode(data, inputs)
 
-        return embeddings.view(-1, self.n_codes * self.embedding_dim)
+    @abc.abstractmethod
+    def _init_w_autoencoder(self) -> WA:
+        """Create the appropriate W autoencoder."""
+        pass
+
+
+class VQVAE(BaseVQVAE[WAutoEncoder]):
+    """Standard VQVAE implementation."""
+
+    _null_tensor = torch.empty(0)
+    _zero_tensor = torch.tensor(0.0)
+
+    def double_reconstruct(self, inputs: Inputs) -> Outputs:
+        """Reconstruct from the continuous space."""
+        data = self.double_encode(inputs)
+        return self.double_decode(data, inputs)
 
     @torch.inference_mode()
     def generate(
@@ -177,38 +146,47 @@ class AbstractVQVAE(AE, abc.ABC, Generic[WA]):
         batch_size: int = 1,
         initial_sampling: torch.Tensor = _null_tensor,
         z1_bias: torch.Tensor = _zero_tensor,
-        **kwargs: Any,
     ) -> Outputs:
         """Generate samples from the model."""
         z1_bias = z1_bias.to(self.codebook.device)
         initial_sampling = initial_sampling.to(self.codebook.device)
-        data = self.w_autoencoder.sample_latent(z1_bias, batch_size=batch_size, **kwargs)
+        data = self.w_autoencoder.sample_latent(z1_bias, batch_size=batch_size)
         inputs = Inputs(self._null_tensor, initial_sampling)
-        with self.double_encoding:
-            output = self.decode(data, inputs)
-
+        output = self.double_decode(data, inputs)
         return output
 
-    @abc.abstractmethod
-    def _create_w_autoencoder(self) -> WA:
-        """Create the appropriate W autoencoder."""
-        pass
-
-
-class VQVAE(AbstractVQVAE[WAutoEncoder]):
-    """Standard VQVAE implementation."""
-
-    def _create_w_autoencoder(self) -> WAutoEncoder:
+    def _init_w_autoencoder(self) -> WAutoEncoder:
         return WAutoEncoder()
 
 
-class CounterfactualVQVAE(AbstractVQVAE[CounterfactualWAutoEncoder]):
+class CounterfactualVQVAE(BaseVQVAE[CounterfactualWAutoEncoder]):
     """Counterfactual VQVAE implementation."""
 
     _null_tensor = torch.empty(0)
     _zero_tensor = torch.tensor(0.0)
 
-    def _create_w_autoencoder(self) -> CounterfactualWAutoEncoder:
+    def double_reconstruct_with_logits(self, inputs: Inputs, logits: torch.Tensor) -> Outputs:
+        """Reconstruct from the continuous space."""
+        data = self.double_encode(inputs)
+        data.probs = self.w_autoencoder.relaxed_softmax(logits)
+        return self.double_decode(data, inputs)
+
+    def generate_counterfactual(
+        self,
+        inputs: Inputs,
+        sample_logits: torch.Tensor,
+        target_dim: int,
+        target_value: float = 1.0,
+    ) -> Outputs:
+        """Generate counterfactual samples."""
+        data = self.double_encode(inputs)
+        self.w_autoencoder.update_codebook(self.codebook)
+        data.probs = self.w_autoencoder.relaxed_softmax(sample_logits)
+        data = self.w_autoencoder.counterfactual_decode(data, target_dim, target_value)
+        data.w_e = data.w = self.quantizer.decode_from_indices(data.idx, self.codebook)
+        return super(BaseVQVAE, self).decode(data, inputs)
+
+    def _init_w_autoencoder(self) -> CounterfactualWAutoEncoder:
         return CounterfactualWAutoEncoder()
 
     @torch.inference_mode()
@@ -218,15 +196,23 @@ class CounterfactualVQVAE(AbstractVQVAE[CounterfactualWAutoEncoder]):
         initial_sampling: torch.Tensor = _null_tensor,
         z1_bias: torch.Tensor = _zero_tensor,
         probs: torch.Tensor | None = None,
-        **kwargs: Any,
     ) -> Outputs:
-        """Generate counterfactual samples."""
-        return super().generate(batch_size=batch_size, initial_sampling=initial_sampling, z1_bias=z1_bias, probs=probs)
+        """Generate samples from the model."""
+        z1_bias = z1_bias.to(self.codebook.device)
+        initial_sampling = initial_sampling.to(self.codebook.device)
+        data = self.w_autoencoder.sample_latent(z1_bias, batch_size=batch_size, probs=probs)
+        inputs = Inputs(self._null_tensor, initial_sampling)
+        output = self.double_decode(data, inputs)
+        return output
 
 
-def get_autoencoder() -> AutoEncoder:
+def get_autoencoder() -> AbstractAutoEncoder:
     """Factory function to create the appropriate autoencoder."""
-    model_registry = {ModelHead.AE: AE, ModelHead.VQVAE: VQVAE, ModelHead.CounterfactualVQVAE: CounterfactualVQVAE}
+    model_registry = {
+        ModelHead.AE: BaseAutoencoder,
+        ModelHead.VQVAE: VQVAE,
+        ModelHead.CounterfactualVQVAE: CounterfactualVQVAE,
+    }
 
     model_head = Experiment.get_config().autoencoder.architecture.head
 

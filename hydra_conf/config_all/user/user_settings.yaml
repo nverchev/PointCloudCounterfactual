@@ -18,7 +18,7 @@ trackers:
   csv: true  # saves metrics to a csv file
 
 # Options for counterfactual generation (will affect the results)
-counterfactual_value: 1  # value associated with the counterfactual evaluation (the larger, the bigger the change)
+counterfactual_value: 1  # value associated with the counterfactual change (0 no change, 1 full change)
 n_generated_output_points: ${autoencoder.architecture.training_output_points}  # number of output points generated
 
 # Options for generating samples (for visualization only)
