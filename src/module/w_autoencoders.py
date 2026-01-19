@@ -253,13 +253,6 @@ class CounterfactualWAutoEncoder(BaseWAutoEncoder):
         log_var_combined = data.d_log_var2 + data.p_log_var2
         return self.sampler.sample(mu_combined, log_var_combined)
 
-    def _get_probs(self, logits: torch.Tensor) -> torch.Tensor:
-        """Create equal probability distribution for each class."""
-        if logits.numel() == 0:
-            raise ValueError('No logits provided.')
-
-        return self.relaxed_softmax(logits)
-
     @staticmethod
     def get_target(probs: torch.Tensor, target_dim: int) -> torch.Tensor:
         """Get one-hot encoding for target."""

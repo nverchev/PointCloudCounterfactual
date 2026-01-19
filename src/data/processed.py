@@ -78,11 +78,9 @@ class WDatasetEncoder(ProcessedDataset[VQ], Dataset[tuple[WInputs, WTargets]]):
     def __getitems__(self, index_list: list[int]) -> list[tuple[WInputs, WTargets]]:
         self.autoencoder = self.autoencoder.train(not torch.is_inference_mode_enabled())
         batch_data: list[tuple[WInputs, WTargets]] = []
-
         for batch_inputs, _ in self._get_data(index_list):
             batch_ae_data = self._encode(batch_inputs)
             batch_w_q, batch_w_e, batch_one_hot_idx = batch_ae_data.w_q, batch_ae_data.w_e, batch_ae_data.one_hot_idx
-
             for w_q, w_e, one_hot_idx in zip(batch_w_q, batch_w_e, batch_one_hot_idx, strict=True):
                 batch_data.append((WInputs(w_q), WTargets(w_e=w_e, one_hot_idx=one_hot_idx)))
 
@@ -116,14 +114,12 @@ class WDatasetWithLogits(WDatasetEncoder[CounterfactualVQVAE], ClassifierMixin):
     def __getitems__(self, index_list: list[int]) -> list[tuple[WInputs, WTargets]]:
         self.autoencoder = self.autoencoder.train(not torch.is_inference_mode_enabled())
         batch_data: list[tuple[WInputs, WTargets]] = []
-
         for batch_inputs, _ in self._get_data(index_list):
             batch_ae_data = self._encode(batch_inputs)
             batch_logits = self._run_classifier(self.classifier, batch_inputs)
             batch_w_q, batch_w_e, batch_one_hot_idx = batch_ae_data.w_q, batch_ae_data.w_e, batch_ae_data.one_hot_idx
-
-            for w_q, _, logit, one_hot_idx in zip(batch_w_q, batch_w_e, batch_logits, batch_one_hot_idx, strict=True):
-                batch_data.append((WInputs(w_q, logit), WTargets(w_e=w_q, one_hot_idx=one_hot_idx, logits=logit)))
+            for w_q, w_e, logit, one_hot_idx in zip(batch_w_q, batch_w_e, batch_logits, batch_one_hot_idx, strict=True):
+                batch_data.append((WInputs(w_q, logit), WTargets(w_e=w_e, one_hot_idx=one_hot_idx, logits=logit)))
 
         return batch_data
 
