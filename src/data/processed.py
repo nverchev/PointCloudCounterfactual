@@ -5,7 +5,7 @@ import itertools
 
 from abc import abstractmethod
 from collections.abc import Generator, Sized
-from typing import Any, Generic, Literal, TypeVar, override
+from typing import Any, Generic, TypeVar, override
 
 import torch
 
@@ -13,15 +13,16 @@ from torch.utils.data import Dataset
 
 from drytorch import Model
 
-from src.module.autoencoders import AbstractVQVAE, CounterfactualVQVAE
-from src.module.w_autoencoders import BaseWAutoEncoder, CounterfactualWAutoEncoder
+from src.config import Experiment
+from src.module.autoencoders import BaseVQVAE, CounterfactualVQVAE, VQVAE
+from src.module.w_autoencoders import BaseWAutoEncoder
 from src.data.structures import Inputs, Outputs, Targets, WInputs, WTargets
 from src.data.protocols import AbstractSingleton
 
-VQ = TypeVar('VQ', bound=AbstractVQVAE[BaseWAutoEncoder])
+VQ = TypeVar('VQ', bound=BaseVQVAE[BaseWAutoEncoder])
 
 
-class DatasetEncoder(Generic[VQ], abc.ABC, metaclass=AbstractSingleton):
+class ProcessedDataset(Generic[VQ], abc.ABC, metaclass=AbstractSingleton):
     """Base dataset for VQVAE models with common functionality."""
 
     max_batch: int = 64
@@ -70,28 +71,27 @@ class ClassifierMixin:
         return classifier(batch_inputs)
 
 
-class WDatasetEncoder(DatasetEncoder[VQ], Dataset[tuple[WInputs, WTargets]]):
+class WDatasetEncoder(ProcessedDataset[VQ], Dataset[tuple[WInputs, WTargets]]):
     """Dataset for training inner autoencoder with discrete codes."""
 
     @override
     def __getitems__(self, index_list: list[int]) -> list[tuple[WInputs, WTargets]]:
         self.autoencoder = self.autoencoder.train(not torch.is_inference_mode_enabled())
         batch_data: list[tuple[WInputs, WTargets]] = []
-
         for batch_inputs, _ in self._get_data(index_list):
-            batch_ae_data = self._run_autoencoder(batch_inputs)
+            batch_ae_data = self._encode(batch_inputs)
             batch_w_q, batch_w_e, batch_one_hot_idx = batch_ae_data.w_q, batch_ae_data.w_e, batch_ae_data.one_hot_idx
-
             for w_q, w_e, one_hot_idx in zip(batch_w_q, batch_w_e, batch_one_hot_idx, strict=True):
                 batch_data.append((WInputs(w_q), WTargets(w_e=w_e, one_hot_idx=one_hot_idx)))
 
         return batch_data
 
     @torch.inference_mode()
-    def _run_autoencoder(self, inputs: Inputs) -> Outputs:
-        """Run autoencoder encoding and quantization."""
+    def _encode(self, inputs: Inputs) -> Outputs:
+        """Encode and quantization using autoencoder."""
         data = self.autoencoder.encode(inputs)
-        data.w_e, data.one_hot_idx = self.autoencoder.quantizer.quantize(data.w_q)
+        data.w_e, data.idx, _ = self.autoencoder.quantizer.quantize(data.w_q, self.autoencoder.codebook)
+        data.one_hot_idx = self.autoencoder.quantizer.create_one_hot(data.idx)
         return data
 
 
@@ -114,14 +114,12 @@ class WDatasetWithLogits(WDatasetEncoder[CounterfactualVQVAE], ClassifierMixin):
     def __getitems__(self, index_list: list[int]) -> list[tuple[WInputs, WTargets]]:
         self.autoencoder = self.autoencoder.train(not torch.is_inference_mode_enabled())
         batch_data: list[tuple[WInputs, WTargets]] = []
-
         for batch_inputs, _ in self._get_data(index_list):
-            batch_ae_data = self._run_autoencoder(batch_inputs)
+            batch_ae_data = self._encode(batch_inputs)
             batch_logits = self._run_classifier(self.classifier, batch_inputs)
             batch_w_q, batch_w_e, batch_one_hot_idx = batch_ae_data.w_q, batch_ae_data.w_e, batch_ae_data.one_hot_idx
-
-            for w_q, _, logit, one_hot_idx in zip(batch_w_q, batch_w_e, batch_logits, batch_one_hot_idx, strict=True):
-                batch_data.append((WInputs(w_q, logit), WTargets(w_e=w_q, one_hot_idx=one_hot_idx, logits=logit)))
+            for w_q, w_e, logit, one_hot_idx in zip(batch_w_q, batch_w_e, batch_logits, batch_one_hot_idx, strict=True):
+                batch_data.append((WInputs(w_q, logit), WTargets(w_e=w_e, one_hot_idx=one_hot_idx, logits=logit)))
 
         return batch_data
 
@@ -149,7 +147,7 @@ class WDatasetWithLogitsFrozen(WDatasetWithLogits):
         return [self.w_dataset[i] for i in index_list]
 
 
-class ReconstructedDatasetEncoder(DatasetEncoder[VQ], Dataset[tuple[Inputs, Targets]]):
+class DoubleReconstructedDatasetEncoder(ProcessedDataset[VQVAE], Dataset[tuple[Inputs, Targets]]):
     """Dataset with reconstructed inputs after double encoding."""
 
     @override
@@ -158,7 +156,7 @@ class ReconstructedDatasetEncoder(DatasetEncoder[VQ], Dataset[tuple[Inputs, Targ
         batch_data: list[tuple[Inputs, Targets]] = []
 
         for batch_inputs, batch_labels in self._get_data(index_list):
-            batch_ae_data = self._run_autoencoder(batch_inputs)
+            batch_ae_data = self._reconstruct(batch_inputs)
             recons = batch_ae_data.recon
 
             for recon, label in zip(recons, batch_labels, strict=True):
@@ -167,13 +165,14 @@ class ReconstructedDatasetEncoder(DatasetEncoder[VQ], Dataset[tuple[Inputs, Targ
         return batch_data
 
     @torch.inference_mode()
-    def _run_autoencoder(self, inputs: Inputs) -> Outputs:
+    def _reconstruct(self, inputs: Inputs) -> Outputs:
         """Run autoencoder with double encoding."""
-        with self.autoencoder.double_encoding:
-            return self.autoencoder(inputs)
+        return self.autoencoder.double_reconstruct(inputs)
 
 
-class ReconstructedDatasetWithLogits(ReconstructedDatasetEncoder[CounterfactualVQVAE], ClassifierMixin):
+class DoubleReconstructedDatasetWithLogits(
+    ProcessedDataset[CounterfactualVQVAE], ClassifierMixin, Dataset[tuple[Inputs, Targets]]
+):
     """Reconstructed dataset with classifier logits."""
 
     classifier: Model[Inputs, torch.Tensor]
@@ -195,7 +194,7 @@ class ReconstructedDatasetWithLogits(ReconstructedDatasetEncoder[CounterfactualV
 
         for batch_inputs, batch_labels in self._get_data(index_list):
             batch_logits = self._run_classifier(self.classifier, batch_inputs)
-            batch_ae_data = self._run_autoencoder(batch_inputs, batch_logits)
+            batch_ae_data = self._reconstruct_with_logits(batch_inputs, batch_logits)
             recons = batch_ae_data.recon
 
             for recon, label in zip(recons, batch_labels, strict=True):
@@ -204,22 +203,13 @@ class ReconstructedDatasetWithLogits(ReconstructedDatasetEncoder[CounterfactualV
         return batch_data
 
     @torch.inference_mode()
-    @override
-    def _run_autoencoder(self, inputs: Inputs, batched_logits: None | torch.Tensor = None) -> Outputs:
-        """Run autoencoder with logits conditioning."""
-        if batched_logits is None:
-            batched_logits = self._run_classifier(self.classifier, inputs)
-
-        with self.autoencoder.double_encoding:
-            data = self.autoencoder.encode(inputs)
-            if isinstance(self.autoencoder.w_autoencoder, CounterfactualWAutoEncoder):
-                data.probs = self.autoencoder.w_autoencoder.relaxed_softmax(batched_logits)
-
-            return self.autoencoder.decode(data, inputs)
+    def _reconstruct_with_logits(self, inputs: Inputs, batched_logits: torch.Tensor) -> Outputs:
+        """Run autoencoder with double encoding."""
+        return self.autoencoder.double_reconstruct_with_logits(inputs, batched_logits)
 
 
 class CounterfactualDatasetEncoder(
-    DatasetEncoder[CounterfactualVQVAE], ClassifierMixin, Dataset[tuple[Inputs, Targets]]
+    ProcessedDataset[CounterfactualVQVAE], ClassifierMixin, Dataset[tuple[Inputs, Targets]]
 ):
     """Dataset for counterfactual reconstruction with target conditioning."""
 
@@ -228,13 +218,13 @@ class CounterfactualDatasetEncoder(
         dataset: Dataset[tuple[Inputs, Targets]],
         autoencoder: CounterfactualVQVAE,
         classifier: Model[Inputs, torch.Tensor],
-        target_label: int | Literal['original'] = 'original',
+        target_dim: int,
         target_value: float = 1.0,
-        n_classes: int = 2,
     ) -> None:
         super().__init__(dataset=dataset, autoencoder=autoencoder)
-        self.num_classes: int = n_classes
-        self.target_label: int | Literal['original'] = target_label  # don't convert to tensor yet
+        cfg = Experiment.get_config()
+        self.n_classes: int = cfg.data.dataset.n_classes
+        self.target_dim: int = target_dim  # don't convert to tensor yet
         self.target_value: float = target_value
         self.classifier: Model[Inputs, torch.Tensor] = classifier
         return
@@ -245,46 +235,29 @@ class CounterfactualDatasetEncoder(
         batch_data: list[tuple[Inputs, Targets]] = []
 
         for batch_inputs, batch_labels in self._get_data(index_list):
-            batch_ae_data = self._run_autoencoder(batch_inputs, None, self.target_label, self.target_value)
+            batch_logits = self._run_classifier(self.classifier, batch_inputs)
+            batch_ae_data = self.counterfactual_data(batch_inputs, batch_logits, self.target_dim, self.target_value)
             recons = batch_ae_data.recon
 
             # For targets, use original labels when target_label is 'original'
-            target_for_labels = batch_labels if self.target_label == 'original' else torch.tensor(self.target_label)
+            target_for_labels = batch_labels if self.target_dim == 'original' else torch.tensor(self.target_dim)
 
             for recon, original_label in zip(recons, batch_labels, strict=True):
-                final_label = original_label if self.target_label == 'original' else target_for_labels
+                final_label = original_label if self.target_dim == 'original' else target_for_labels
                 batch_data.append((Inputs(cloud=recon), Targets(ref_cloud=recon, label=final_label)))
 
         return batch_data
 
     @torch.inference_mode()
-    def _run_autoencoder(
+    def counterfactual_data(
         self,
         inputs: Inputs,
-        batched_logits: None | torch.Tensor = None,
-        target_dim: int | Literal['original'] = 'original',
-        value: float = 1.0,
+        batched_logits: torch.Tensor,
+        target_dim: int,
+        target_value: float = 1.0,
     ) -> Outputs:
         """Run autoencoder with counterfactual conditioning."""
-        if batched_logits is None:
-            batched_logits = self._run_classifier(self.classifier, inputs)
-
-        with self.autoencoder.double_encoding:
-            data = self.autoencoder.encode(inputs)
-            probs = self.autoencoder.w_autoencoder.relaxed_softmax(batched_logits)
-
-            # Initialize target tensor
-            target = torch.zeros_like(probs)
-
-            if target_dim == 'original':
-                # Use original probabilities (no modification)
-                data.probs = probs
-            else:
-                # Apply counterfactual conditioning
-                target[:, target_dim] = 1
-                data.probs = (1 - value) * probs + value * target
-
-            return self.autoencoder.decode(data, inputs)
+        return self.autoencoder.generate_counterfactual(inputs, batched_logits, target_dim, target_value)
 
 
 class BoundaryDataset(CounterfactualDatasetEncoder):
@@ -295,14 +268,12 @@ class BoundaryDataset(CounterfactualDatasetEncoder):
         dataset: Dataset[tuple[Inputs, Targets]],
         autoencoder: CounterfactualVQVAE,
         classifier: Model[Inputs, torch.Tensor],
-        target_label: int = 0,
-        n_classes: int = 2,
+        target_dim: int = 0,
     ) -> None:
         super().__init__(
             dataset=dataset,
             autoencoder=autoencoder,
             classifier=classifier,
-            target_label=target_label,
-            target_value=1 / n_classes,  # Neutral probability
-            n_classes=n_classes,
+            target_dim=target_dim,
+            target_value=0,  # Neutral probability
         )

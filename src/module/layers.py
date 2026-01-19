@@ -77,6 +77,7 @@ class GeneralizedLinearLayer(nn.Module, metaclass=abc.ABCMeta):
         act_cls: An optional callable for the output activation of the linear layer
         batch_norm: A boolean value indicating whether to include batch normalization in the layer
         groups: The number of groups for the linear layer. Default is 1.
+        soft_init: A boolean value indicating whether to use a soft initialization for the weights of the dense layer
 
     Attributes:
         in_dim (int): The number of input features
@@ -99,6 +100,7 @@ class GeneralizedLinearLayer(nn.Module, metaclass=abc.ABCMeta):
         bn_momentum: float | None = None,
         groups: int = 1,
         residual: bool = False,
+        soft_init: bool = False,
     ) -> None:
         super().__init__()
         self.in_dim: int = in_dim
@@ -116,7 +118,8 @@ class GeneralizedLinearLayer(nn.Module, metaclass=abc.ABCMeta):
             if isinstance(self.act, HasInplace):
                 self.act.inplace = True
 
-        self.init = self.get_init(self.act)
+        self.soft_init: bool = soft_init
+        self.init = self.get_init(self.act, soft_init)
         self.init(cast(torch.Tensor, self.dense.weight))
         if DEBUG_MODE:
             self.register_forward_hook(debug_check)
@@ -125,20 +128,14 @@ class GeneralizedLinearLayer(nn.Module, metaclass=abc.ABCMeta):
         return
 
     @staticmethod
-    def get_init(act: nn.Module | None) -> Callable[[torch.Tensor], torch.Tensor]:
-        """This static method returns an initialization determined based on the type of activation.
+    def get_init(act: nn.Module | None, soft_init: bool) -> Callable[[torch.Tensor], torch.Tensor]:
+        """This static method returns an initialization determined based on the type of activation."""
 
-        Parameters:
-        act (Optional[nn.Module]): The optional activation function applied to the output of the linear layer.
+        if soft_init:
+            return functools.partial(nn.init.xavier_normal_, gain=0.01)
 
-        Returns:
-        Callable[[torch.Tensor], torch.Tensor]: A partially initialized initialization for the dense layer's weights.
-        """
         if act is None:
             return functools.partial(nn.init.xavier_normal_, gain=1)
-
-        if isinstance(act, nn.Identity):  # this is for the final output layer
-            return functools.partial(nn.init.xavier_normal_, gain=0.01)
 
         if isinstance(act, nn.ReLU):
             return functools.partial(nn.init.kaiming_uniform_, nonlinearity='relu')

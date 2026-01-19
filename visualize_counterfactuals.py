@@ -33,17 +33,15 @@ def create_and_render_counterfactuals() -> None:
     cfg = Experiment.get_config()
     cfg_ae = cfg.autoencoder
     cfg_user = cfg.user
+    counterfactual_value = cfg_user.counterfactual_value
     interactive = cfg_user.plot.interactive
     save_dir_base = cfg.user.path.version_dir / 'images' / cfg.name
 
-    counterfactual_value = cfg_user.counterfactual_value
     dgcnn_module = DGCNN().eval()
     classifier = Model(dgcnn_module, name=cfg.classifier.architecture.name, device=cfg.user.device)
     classifier.load_state()
-
     test_dataset = get_dataset(Partitions.test if cfg.final else Partitions.val)
     num_classes = cfg.data.dataset.n_classes
-
     vqvae_module = CounterfactualVQVAE().eval()
     model = Model(vqvae_module, name=cfg_ae.architecture.name, device=cfg_user.device)
     model.load_state()
@@ -54,6 +52,9 @@ def create_and_render_counterfactuals() -> None:
             raise ValueError(f'Index {i} is too large for the selected dataset of length {len(test_dataset)}')
 
         save_dir = save_dir_base / f'sample_{i}'
+        for old_file in save_dir.iterdir():
+            old_file.unlink()
+
         sample_i = test_dataset[i][0]
         cloud = sample_i.cloud.to(model.device).unsqueeze(0)
         indices = sample_i.indices.to(model.device).unsqueeze(0)
@@ -63,29 +64,28 @@ def create_and_render_counterfactuals() -> None:
 
         input_pc = cloud.squeeze().cpu().numpy()
         logits, str_original = calculate_and_print_probs(classifier, sample_i.cloud, 'Original')
+
         data = vqvae_module(sample_i)
         recon = data.recon.detach().squeeze().cpu().numpy()
         _, str_recon = calculate_and_print_probs(classifier, data.recon, 'Reconstruction')
-        relaxed_probs = torch.softmax(logits / cfg.autoencoder.architecture.encoder.w_encoder.cf_temperature, dim=1)
-        with vqvae_module.double_encoding:
-            data = vqvae_module.encode(sample_i)
-            data.probs = relaxed_probs
-            data = vqvae_module.decode(data, sample_i)
 
+        data = vqvae_module.double_reconstruct_with_logits(sample_i, logits)
         double_recon = data.recon.detach().squeeze().cpu().numpy()
         _, str_double_recon = calculate_and_print_probs(classifier, data.recon, 'Double Reconstruction')
+
         counterfactuals = list[npt.NDArray[Any]]()
         str_counterfactual = list[str]()
         for j in range(num_classes):
-            with vqvae_module.double_encoding:
-                target = torch.zeros_like(relaxed_probs)
-                target[:, j] = 1
-                data.probs = (1 - counterfactual_value) * relaxed_probs + counterfactual_value * target
-                data = vqvae_module.decode(data, sample_i)
-                _, str_out = calculate_and_print_probs(classifier, data.recon, f'Counterfactual to {j}')
-                str_counterfactual.append(str_out)
-                counterfactual = data.recon.detach().squeeze().cpu().numpy()
-                counterfactuals.append(counterfactual)
+            data = vqvae_module.generate_counterfactual(
+                sample_i,
+                sample_logits=logits,
+                target_dim=j,
+                target_value=counterfactual_value,
+            )
+            _, str_out = calculate_and_print_probs(classifier, data.recon, f'Counterfactual to {j}')
+            str_counterfactual.append(str_out)
+            counterfactual = data.recon.detach().squeeze().cpu().numpy()
+            counterfactuals.append(counterfactual)
 
         print()
         render_cloud((input_pc,), title=str_original, interactive=interactive, save_dir=save_dir)

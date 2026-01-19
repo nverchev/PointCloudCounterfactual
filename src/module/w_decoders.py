@@ -92,7 +92,7 @@ class PosteriorDecoder(nn.Module):
             transformer_layers.append(encoder_layer)
 
         self.transformer = nn.ModuleList(transformer_layers)
-        self.to_latent = LinearLayer(self.proj_dim, 2 * self.z2_dim, batch_norm=False)
+        self.to_latent = LinearLayer(self.proj_dim, 2 * self.z2_dim, batch_norm=False, soft_init=True)
         return
 
     def forward(self, probs: torch.Tensor, x: torch.Tensor) -> torch.Tensor:
@@ -189,8 +189,8 @@ class WDecoderTransformers(BaseWDecoder):
         batch_size = z1.shape[0]
         z1_proj = self.z1_proj(z1).view(batch_size, self.n_codes, self.proj_dim)
         z2_proj = self.z2_proj(z2).view(batch_size, self.n_codes, self.proj_dim)
-        x = z1_proj + self.query_tokens.expand(batch_size, -1, -1)
-        y = z2_proj + self.key_tokens.expand(batch_size, -1, -1)
+        x = z2_proj + self.key_tokens.expand(batch_size, -1, -1)
+        y = z1_proj + self.query_tokens.expand(batch_size, -1, -1)
         for layer in self.transformer:
             x = layer(x, y)
 

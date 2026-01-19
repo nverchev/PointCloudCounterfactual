@@ -58,7 +58,8 @@ def get_emd_loss() -> LossBase[Outputs, Targets]:
 
 def get_chamfer_loss() -> LossBase[Outputs, Targets]:
     """Calculate Chamfer distance between two point clouds using PyTorch backend."""
-    chamfer_backend = pykeops_chamfer if torch.cuda.is_available() else torch_chamfer
+    cfg = Experiment.get_config()
+    chamfer_backend = pykeops_chamfer if torch.cuda.is_available() and not cfg.user.cpu else torch_chamfer
 
     def _chamfer(data: Outputs, targets: Targets) -> torch.Tensor:
         return chamfer_backend(data.recon, targets.ref_cloud)

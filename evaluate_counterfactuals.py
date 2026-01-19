@@ -13,7 +13,7 @@ from drytorch.lib.objectives import Metric, compute_metrics
 
 from src.module import CounterfactualVQVAE, DGCNN
 from src.config import ConfigAll, Experiment, hydra_main
-from src.data.processed import CounterfactualDatasetEncoder, ReconstructedDatasetWithLogits
+from src.data.processed import CounterfactualDatasetEncoder, DoubleReconstructedDatasetWithLogits
 from src.data import Inputs, Targets, Partitions, get_dataset
 from src.train.metrics_and_losses import get_classification_loss
 
@@ -46,7 +46,7 @@ def evaluate_reconstructed_performance(
     batch_size: int,
 ) -> None:
     """Evaluate classifier performance on reconstructed test data."""
-    reconstructed_dataset = ReconstructedDatasetWithLogits(
+    reconstructed_dataset = DoubleReconstructedDatasetWithLogits(
         dataset=test_dataset,
         autoencoder=vqvae,
         classifier=classifier,
@@ -72,7 +72,7 @@ def evaluate_counterfactual_performance(
 
     for j in range(n_classes):
         counterfactual_dataset = CounterfactualDatasetEncoder(
-            test_dataset, vqvae, classifier, n_classes=n_classes, target_label=j, target_value=target_value
+            test_dataset, vqvae, classifier, target_dim=j, target_value=target_value
         )
         counterfactual_loader = DataLoader(dataset=counterfactual_dataset, batch_size=batch_size, pin_memory=False)
 
@@ -99,7 +99,7 @@ def evaluate_misclassified_samples(
     """Evaluate reconstruction performance on misclassified samples."""
     misclassified_bool = predictions != labels
     misclassified_dataset = Subset(test_dataset, indices=list(map(int, misclassified_bool.nonzero())))
-    misclassified_reconstruction = ReconstructedDatasetWithLogits(
+    misclassified_reconstruction = DoubleReconstructedDatasetWithLogits(
         dataset=misclassified_dataset, autoencoder=vqvae, classifier=classifier
     )
     misclassified_reconstruction_loader = DataLoader(
@@ -143,8 +143,7 @@ def evaluate_class_specific_counterfactuals(
                 i_instead_of_j_dataset,
                 vqvae,
                 classifier=classifier,
-                n_classes=num_classes,
-                target_label=j,
+                target_dim=j,
                 target_value=target_value,
             )
             counterfactual_loader = DataLoader(dataset=counterfactual_dataset, batch_size=batch_size, pin_memory=False)

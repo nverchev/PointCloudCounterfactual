@@ -11,7 +11,7 @@ from torch.utils import data
 from drytorch.core import protocols as p
 from drytorch.lib.load import take_from_dataset
 from drytorch.lib.runners import ModelRunner
-from src.module.autoencoders import AbstractVQVAE, WAutoEncoder
+from src.module.autoencoders import BaseVQVAE, WAutoEncoder
 from src.config.experiment import Experiment
 from src.data.structures import Inputs, Outputs, Targets
 
@@ -24,7 +24,7 @@ class DiscreteSpaceOptimizer:
     entries are reassigned based on the usage patterns of active entries.
     """
 
-    module: AbstractVQVAE[WAutoEncoder]
+    module: BaseVQVAE[WAutoEncoder]
 
     def __init__(self, model_runner: ModelRunner[Inputs, Targets, Outputs]) -> None:
         """Initialize the optimizer.
@@ -34,11 +34,11 @@ class DiscreteSpaceOptimizer:
         """
         self.model_runner = model_runner
         if isinstance(model_runner.model.module, torch.nn.parallel.DistributedDataParallel):
-            self.module = cast(AbstractVQVAE[WAutoEncoder], model_runner.model.module.module)
+            self.module = cast(BaseVQVAE[WAutoEncoder], model_runner.model.module.module)
         else:
-            self.module = cast(AbstractVQVAE[WAutoEncoder], model_runner.model.module)
+            self.module = cast(BaseVQVAE[WAutoEncoder], model_runner.model.module)
 
-        if not isinstance(self.module, AbstractVQVAE):
+        if not isinstance(self.module, BaseVQVAE):
             raise ValueError('Model not supported for VQ optimization.')
 
         cfg_ae = Experiment.get_config().autoencoder
