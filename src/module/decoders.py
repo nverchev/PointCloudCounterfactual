@@ -67,9 +67,7 @@ class PCGen(BasePointDecoder):
             for in_dim, out_dim in dim_pairs:
                 modules.append(PointsConvLayer(in_dim, out_dim, act_cls=self.act_cls, residual=True))
             self.group_conv.append(nn.Sequential(*modules))
-            self.group_final.append(
-                PointsConvLayer(self.h_dims_conv[-1], OUT_CHAN, batch_norm=False, act_cls=torch.nn.Identity)
-            )
+            self.group_final.append(PointsConvLayer(self.h_dims_conv[-1], OUT_CHAN, batch_norm=False, soft_init=True))
         if self.n_components > 1:
             self.att = PointsConvLayer(self.h_dims_conv[-1] * self.n_components, self.n_components, batch_norm=False)
 

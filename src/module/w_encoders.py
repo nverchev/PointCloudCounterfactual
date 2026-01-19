@@ -87,7 +87,7 @@ class WEncoderConvolution(BaseWEncoder):
             modules.append(LinearLayer(in_dim, out_dim, act_cls=self.act_cls))
             modules.append(nn.Dropout(do))
 
-        modules.append(LinearLayer(self.h_dims_lin[-1], 2 * self.z1_dim, batch_norm=False))  # change to encode
+        modules.append(LinearLayer(self.h_dims_lin[-1], 2 * self.z1_dim, batch_norm=False, soft_init=True))
         self.encode = nn.Sequential(*modules)
 
     def forward(self, x) -> tuple[torch.Tensor, torch.Tensor]:
@@ -124,7 +124,7 @@ class WEncoderTransformers(BaseWEncoder):
             transformer_layers.append(encoder_layer)
 
         self.transformer = nn.ModuleList(transformer_layers)
-        self.to_latent = LinearLayer(self.proj_dim, 2 * self.z1_dim, batch_norm=False)
+        self.to_latent = LinearLayer(self.proj_dim, 2 * self.z1_dim, batch_norm=False, soft_init=True)
         return
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
