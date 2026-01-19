@@ -201,7 +201,6 @@ class CounterfactualWAutoEncoder(BaseWAutoEncoder):
         cfg_wae = cfg_ae_arc.encoder.w_encoder
 
         # Counterfactual-specific components
-        self.softmax = nn.Softmax(dim=1)
         self.relaxed_softmax = TemperatureScaledSoftmax(dim=1, temperature=cfg_wae.cf_temperature)
         self.z2_inference = PriorDecoder()
         self.posterior = PosteriorDecoder()
