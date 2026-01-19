@@ -1,6 +1,6 @@
 [project]
 name = "pointcloudcounterfactual"
-version = "1.7"
+version = "1.8"
 description = 'Code to replicate the article "Towards Point Cloud Counterfactual Explanations" DOI: 10.23919/EUSIPCO63237.2025.11226754'
 readme = "README.md"
 requires-python = ">=3.13"
