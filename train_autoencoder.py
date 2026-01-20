@@ -3,7 +3,7 @@
 from typing import TYPE_CHECKING, Any
 
 from drytorch import DataLoader, Diagnostic, Model, Test, Trainer
-from drytorch.core.exceptions import TrackerNotActiveError
+from drytorch.core.exceptions import TrackerNotUsedError
 from drytorch.lib.hooks import EarlyStoppingCallback, Hook, StaticHook, call_every, saving_hook
 from drytorch.utils.average import get_moving_average, get_trailing_mean
 
@@ -61,7 +61,7 @@ def train_autoencoder(trial: Trial | None = None) -> None:
         trainer.post_epoch_hooks.register(
             Hook(TensorBoardLogReconstruction(train_dataset)).bind(call_every(restart_interval))
         )
-    except TrackerNotActiveError:  # tracker is not subscribed
+    except TrackerNotUsedError:  # tracker is not subscribed
         pass
     except (ImportError, ModuleNotFoundError):  # library is not installed
         pass

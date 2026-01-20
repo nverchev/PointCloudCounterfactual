@@ -6,7 +6,7 @@ import torch.distributed as dist
 from torchmetrics import ConfusionMatrix
 
 from drytorch import DataLoader, Model, Test, Trainer
-from drytorch.core.exceptions import TrackerNotActiveError
+from drytorch.core.exceptions import TrackerNotUsedError
 from drytorch.lib.hooks import EarlyStoppingCallback, call_every, saving_hook
 from drytorch.utils.average import get_trailing_mean
 
@@ -71,7 +71,7 @@ def train_classifier() -> None:
         from drytorch.trackers.tensorboard import TensorBoard
 
         tensorboard_tracker = TensorBoard.get_current()
-    except TrackerNotActiveError:
+    except TrackerNotUsedError:
         pass
     except (ModuleNotFoundError, ImportError):
         print(f'Confusion Matrix for classes {class_names}')
