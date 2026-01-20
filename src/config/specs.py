@@ -89,6 +89,7 @@ class WEncoderConfig:
         cf_temperature (int): Temperature for the probabilities (closer to zero means closer to samplings)
         gumbel (bool): Whether to use Gumbel Softmax to add noise to the codes
         act_name (str): The name of the PyTorch activation function (e.g., 'ReLU', 'LeakyReLU')
+        act_cls (ActClass): The activation class
     """
 
     architecture: WEncoders
@@ -100,17 +101,14 @@ class WEncoderConfig:
     cf_temperature: int
     gumbel: bool = True
     act_name: str = ''
+    act_cls: ActClass = DEFAULT_ACT
 
-    @property
-    def act_cls(self) -> ActClass:
-        """The activation class."""
-        return get_activation_cls(self.act_name) if self.act_name else DEFAULT_ACT
-
-    @model_validator(mode='after')
-    def _check_activation(self) -> Self:
+    def __post_init__(self) -> None:
         """Resolve activation class from name."""
-        _ = get_activation_cls(self.act_name) if self.act_name else DEFAULT_ACT
-        return self
+        if self.act_name:
+            self.act_cls = get_activation_cls(self.act_name)
+
+        return
 
     @model_validator(mode='after')
     def _check_length_dropout(self) -> Self:
@@ -131,6 +129,7 @@ class EncoderConfig:
         hidden_dims (tuple[StrictlyPositiveInt]): Hidden dimensions for the encoder
         w_encoder (WEncoderConfig): Configuration for the word encoder
         act_name (str): The name of the PyTorch activation function
+        act_cls (ActClass): The activation class
     """
 
     architecture: Encoders
@@ -138,17 +137,14 @@ class EncoderConfig:
     hidden_dims: tuple[StrictlyPositiveInt, ...]
     w_encoder: WEncoderConfig
     act_name: str = ''
+    act_cls: ActClass = DEFAULT_ACT
 
-    @property
-    def act_cls(self) -> ActClass:
-        """The activation class."""
-        return get_activation_cls(self.act_name) if self.act_name else DEFAULT_ACT
-
-    @model_validator(mode='after')
-    def _check_activation(self) -> Self:
+    def __post_init__(self) -> None:
         """Resolve activation class from name."""
-        _ = get_activation_cls(self.act_name) if self.act_name else DEFAULT_ACT
-        return self
+        if self.act_name:
+            self.act_cls = get_activation_cls(self.act_name)
+
+        return
 
 
 @dataclass
@@ -162,6 +158,7 @@ class WDecoderConfig:
         hidden_dims (tuple[StrictlyPositiveInt]): Hidden dimensions for the decoder
         dropout (tuple[PositiveFloat]): Dropout probabilities
         act_name (str): The name of the PyTorch activation function
+        act_cls (ActClass): The activation class
     """
 
     architecture: WDecoders
@@ -170,17 +167,14 @@ class WDecoderConfig:
     hidden_dims: tuple[StrictlyPositiveInt, ...]
     dropout: tuple[PositiveFloat, ...]
     act_name: str = ''
+    act_cls: ActClass = DEFAULT_ACT
 
-    @property
-    def act_cls(self) -> ActClass:
-        """The activation class."""
-        return get_activation_cls(self.act_name) if self.act_name else DEFAULT_ACT
-
-    @model_validator(mode='after')
-    def _check_activation(self) -> Self:
+    def __post_init__(self) -> None:
         """Resolve activation class from name."""
-        _ = get_activation_cls(self.act_name) if self.act_name else DEFAULT_ACT
-        return self
+        if self.act_name:
+            self.act_cls = get_activation_cls(self.act_name)
+
+        return
 
     @model_validator(mode='after')
     def _check_length_dropout(self) -> Self:
@@ -200,23 +194,21 @@ class PosteriorDecoderConfig:
         n_heads (StrictlyPositiveInt): Number of attention heads for self-attention
         dropout (tuple[PositiveFloat]): Dropout probabilities
         act_name (str): The name of the PyTorch activation function
+        act_cls (ActClass): The activation class
     """
 
     hidden_dims: tuple[StrictlyPositiveInt, ...]
     n_heads: StrictlyPositiveInt
     dropout: tuple[PositiveFloat, ...]
     act_name: str = ''
+    act_cls: ActClass = DEFAULT_ACT
 
-    @property
-    def act_cls(self) -> ActClass:
-        """The activation class."""
-        return get_activation_cls(self.act_name) if self.act_name else DEFAULT_ACT
-
-    @model_validator(mode='after')
-    def _check_activation(self) -> Self:
+    def __post_init__(self) -> None:
         """Resolve activation class from name."""
-        _ = get_activation_cls(self.act_name) if self.act_name else DEFAULT_ACT
-        return self
+        if self.act_name:
+            self.act_cls = get_activation_cls(self.act_name)
+
+        return
 
     @model_validator(mode='after')
     def _check_length_dropout(self) -> Self:
@@ -242,6 +234,7 @@ class DecoderConfig:
         tau (PositiveFloat): Coefficient for Gumbel Softmax activation
         filtering (bool): Whether to apply filtering to the output
         act_name (str): The name of the PyTorch activation function
+        act_cls (ActClass): The activation class
     """
 
     architecture: Decoders
@@ -254,17 +247,14 @@ class DecoderConfig:
     tau: PositiveFloat
     filtering: bool
     act_name: str = ''
+    act_cls: ActClass = DEFAULT_ACT
 
-    @property
-    def act_cls(self) -> ActClass:
-        """The activation class."""
-        return get_activation_cls(self.act_name) if self.act_name else DEFAULT_ACT
-
-    @model_validator(mode='after')
-    def _check_activation(self) -> Self:
+    def __post_init__(self) -> None:
         """Resolve activation class from name."""
-        get_activation_cls(self.act_name) if self.act_name else DEFAULT_ACT
-        return self
+        if self.act_name:
+            self.act_cls = get_activation_cls(self.act_name)
+
+        return
 
 
 @dataclass
@@ -326,6 +316,7 @@ class ClassifierConfig:
         out_classes (StrictlyPositiveInt): The number of output classes for the classifier
         name (str): The name of the model
         act_name (str): The name of the PyTorch activation function
+        act_cls (ActClass): The activation class
     """
 
     k: StrictlyPositiveInt
@@ -336,17 +327,14 @@ class ClassifierConfig:
     out_classes: StrictlyPositiveInt
     name: str = ''
     act_name: str = ''
+    act_cls: ActClass = DEFAULT_ACT
 
-    @property
-    def act_cls(self) -> ActClass:
-        """The activation class."""
-        return get_activation_cls(self.act_name) if self.act_name else DEFAULT_ACT
-
-    @model_validator(mode='after')
-    def _check_activation(self) -> Self:
+    def __post_init__(self) -> None:
         """Resolve activation class from name."""
-        get_activation_cls(self.act_name) if self.act_name else DEFAULT_ACT
-        return self
+        if self.act_name:
+            self.act_cls = get_activation_cls(self.act_name)
+
+        return
 
     @model_validator(mode='after')
     def _check_length_dropout(self) -> Self:
@@ -387,6 +375,7 @@ class LearningConfig:
         clip_criterion (ClipCriterion): The criterion for gradient clipping (only used for some gradient operations)
         opt_settings (dict): A dictionary containing default settings for the optimizer
         scheduler (SchedulerConfig): The scheduler configuration for learning rate decay
+        optimizer_cls (type[torch.optim.Optimizer]): The optimizer class
     """
 
     optimizer_name: str
@@ -395,16 +384,12 @@ class LearningConfig:
     clip_criterion: ClipCriterion
     scheduler: SchedulerConfig
     opt_settings: dict[str, Any] = dataclasses.field(default_factory=dict)
+    optimizer_cls: type[torch.optim.Optimizer] = dataclasses.field(init=False)
 
-    @property
-    def optimizer_cls(self) -> type[torch.optim.Optimizer]:
-        return get_optim_cls(self.optimizer_name)
-
-    @model_validator(mode='after')
-    def _check_optimizer(self) -> Self:
+    def __post_init__(self) -> None:
         """Resolve optimizer class from name."""
-        _ = get_optim_cls(self.optimizer_name)
-        return self
+        self.optimizer_cls = get_optim_cls(self.optimizer_name)
+        return
 
 
 @dataclass
