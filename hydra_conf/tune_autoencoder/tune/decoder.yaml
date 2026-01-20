@@ -1,5 +1,5 @@
 study_name:
-  decoder_architecture
+  decoder
 
 
 n_trials: 300
@@ -12,7 +12,7 @@ params:
     settings:
       choices: [8, 16, 32]
 
-  autoencoder.model.architecture.hidden_dims_map:
+  autoencoder.architecture.hidden_dims_map:
     suggest: suggest_list
     settings:
       min_length: 1
@@ -24,7 +24,7 @@ params:
         log: true
 
 
-  autoencoder.model.architecture.hidden_dims_conv:
+  autoencoder.architecture.hidden_dims_conv:
     suggest: suggest_list
     settings:
       min_length: 1
@@ -34,4 +34,3 @@ params:
         low: 64
         high: 1024
         log: true
-

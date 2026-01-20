@@ -1,5 +1,5 @@
 study_name:
-  encoder_architecture
+  w_encoder
 
 n_trials: 300
 

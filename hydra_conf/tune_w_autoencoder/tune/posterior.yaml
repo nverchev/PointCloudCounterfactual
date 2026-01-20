@@ -1,5 +1,5 @@
 study_name:
-  decoder_architecture
+  posterior
 
 n_trials: 300
 
