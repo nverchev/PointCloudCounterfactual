@@ -1,9 +1,0 @@
-defaults:
-  - architecture: default_architecture
-  - objective: default_objective
-  - train: default_train
-  - _self_
-
-name: autoencoder
-diagnose_every: 10
-

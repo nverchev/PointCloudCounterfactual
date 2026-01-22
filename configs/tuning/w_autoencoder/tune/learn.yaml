@@ -1,0 +1,28 @@
+study_name: learn
+
+n_trials: 300
+
+params:
+  w_autoencoder.train.learn.learning_rate:
+    suggest: suggest_float
+    settings:
+      low: 1e-04
+      high: 1e-02
+
+  w_autoencoder.train.learn.grad_op:
+    suggest: suggest_categorical
+    settings:
+      choices: ['GradNormClipper', 'HistClipper', 'ParamHistClipper']
+
+  w_autoencoder.train.learn.scheduler.warmup_steps:
+    suggest: suggest_int
+    settings:
+      low: 0
+      high: 20
+
+  w_autoencoder.train.learn.opt_settings.weight_decay:
+    suggest: suggest_float
+    settings:
+      low: 1e-06
+      high: 1e-02
+      log: true

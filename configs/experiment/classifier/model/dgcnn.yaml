@@ -1,0 +1,8 @@
+name: DGCNN
+class_name: DGCNN
+n_neighbors: 20
+conv_dims: [ 64, 64, 128, 256]
+act_name: ''
+dropout_rates: [0.5, 0.5]
+feature_dim: 512
+mlp_dims: [512, 256]

@@ -11,10 +11,10 @@ class VectorQuantizer:
 
     def __init__(self):
         cfg = Experiment.get_config()
-        cfg_ae_arc = cfg.autoencoder.architecture
-        self.n_codes: int = cfg_ae_arc.n_codes
-        self.embedding_dim: int = cfg_ae_arc.embedding_dim
-        self.book_size: int = cfg_ae_arc.book_size
+        cfg_ae_model = cfg.autoencoder.model
+        self.n_codes: int = cfg_ae_model.n_codes
+        self.embedding_dim: int = cfg_ae_model.embedding_dim
+        self.book_size: int = cfg_ae_model.book_size
         return
 
     def quantize(self, x: torch.Tensor, codebook: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:

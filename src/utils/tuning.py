@@ -54,11 +54,12 @@ def visualize_study(study: optuna.Study, renderer: str) -> None:
     return
 
 
-def get_study_name(base_name: str, overrides: list[str]) -> str:
+def get_study_name(tuning_scheme: str, overrides: list[str]) -> str:
     """Get the study name from the configuration."""
     version = f'v{VERSION}'
-    with (ConfigPath.CONFIG_ALL.get_path() / 'defaults').with_suffix('.yaml').open() as f:
+    with (ConfigPath.CONFIGS.get_path() / 'defaults').with_suffix('.yaml').open() as f:
         loaded_cfg = yaml.safe_load(f)
         variation = loaded_cfg['variation']
 
-    return '_'.join([base_name, version, variation, *overrides])
+    overrides_repr = (override.rsplit('.', maxsplit=1)[-1].rsplit('/', maxsplit=1)[-1] for override in overrides)
+    return '_'.join([version, variation, *overrides_repr, tuning_scheme])

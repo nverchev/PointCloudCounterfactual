@@ -63,11 +63,7 @@ class Outputs:
         d_log_var2: the difference in log variance between the prior and posterior distributions for z2.
         p_mu2: the mean of the prior distribution for z2.
         p_log_var2:  the log variance of the prior distribution for z2.
-        h: hidden features for the hierarchical inner autoencoder.
         probs: optional condition value for the z2.
-        y1: output of the discriminator for the conditional inner autoencoder after detaching inputs.
-        y2: output of the evaluated discriminator for the conditional inner autoencoder discriminative loss.
-
     """
 
     model_epoch: int
@@ -91,10 +87,7 @@ class Outputs:
     p_log_var2: torch.Tensor
     d_mu2: torch.Tensor
     d_log_var2: torch.Tensor
-    h: torch.Tensor
     probs: torch.Tensor
-    y1: torch.Tensor
-    y2: torch.Tensor
 
     def update(self, other: Self) -> None:
         """Update the state with another instance's one."""

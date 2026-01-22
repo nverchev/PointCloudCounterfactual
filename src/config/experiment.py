@@ -10,16 +10,16 @@ import drytorch
 from drytorch.core import track
 from drytorch.trackers import logging
 
-from src.config.specs import ConfigAll
+from src.config.specs import AllConfig
 
 
-class Experiment(drytorch.Experiment[ConfigAll]):
+class Experiment(drytorch.Experiment[AllConfig]):
     """Contains the specifications for the current experiment."""
 
     pass
 
 
-def get_trackers(cfg: ConfigAll) -> list[track.Tracker]:
+def get_trackers(cfg: AllConfig) -> list[track.Tracker]:
     """Get trackers from according to the user configuration."""
     cfg_trackers = cfg.user.trackers
     cfg_hydra = cfg.user.hydra
@@ -64,7 +64,7 @@ def get_trackers(cfg: ConfigAll) -> list[track.Tracker]:
     return tracker_list
 
 
-def update_exp_name(cfg: ConfigAll, overrides: list[str]) -> None:
+def update_exp_name(cfg: AllConfig, overrides: list[str]) -> None:
     """Adds the overrides to the name for the experiment."""
     overrides = [
         override

@@ -3,9 +3,7 @@
 import dataclasses
 import pathlib
 
-from contextlib import contextmanager
 from typing import Any, Annotated, Self
-from collections.abc import Iterator
 
 import torch
 
@@ -14,18 +12,20 @@ from pydantic.dataclasses import dataclass
 from omegaconf import DictConfig
 
 from src.config.environment import EnvSettings, VERSION
-from src.config.torch import ActClass, get_activation_cls, get_optim_cls, set_seed, DEFAULT_ACT
+from src.config.torch import get_activation_cls, get_optim_cls, set_seed, DEFAULT_ACT
 from src.config.options import (
     Datasets,
     Encoders,
     Decoders,
     WEncoders,
     WDecoders,
-    ModelHead,
+    AutoEncoders,
     GradOp,
     ClipCriterion,
     Schedulers,
     ReconLosses,
+    WConditionalEncoders,
+    Classifiers,
 )
 
 PositiveInt = Annotated[int, Field(ge=0)]
@@ -35,7 +35,7 @@ PositiveFloat = Annotated[float, Field(ge=0)]
 
 @dataclass
 class DatasetConfig:
-    """Configuration for the dataset.
+    """Specification for the dataset.
 
     Attributes:
         name (Datasets): The name of the dataset
@@ -50,304 +50,209 @@ class DatasetConfig:
 
 @dataclass
 class DataConfig:
-    """Configuration for pre-processing the data.
+    """Specification for pre-processing the data.
 
     Attributes:
         dataset (DatasetConfig): The dataset configuration
         n_input_points (StrictlyPositiveInt): The (maximum) number of input points
         n_target_points (StrictlyPositiveInt): The (maximum) number of target points
-        translation (bool): Whether to apply random translation to training inputs and reference
-        rotation (bool): Whether to apply random rotation to training inputs and reference
+        translate (bool): Whether to apply random translation to training inputs and targets
+        rotate (bool): Whether to apply random rotation to training inputs and reference
         jitter_sigma (PositiveFloat): The variance for random perturbation of training inputs
         jitter_clip (PositiveFloat): The threshold value for random perturbation of training inputs
         resample (bool): Whether to use two different samplings for input and reference
-        k (StrictlyPositiveInt): The number of neighbors of a point (counting the point itself)
+        n_neighbors (StrictlyPositiveInt): The number of neighbors of a point (counting the point itself)
     """
 
     dataset: DatasetConfig
     n_input_points: StrictlyPositiveInt
     n_target_points: StrictlyPositiveInt
-    translation: bool
-    rotation: bool
+    translate: bool
+    rotate: bool
     jitter_sigma: PositiveFloat
     jitter_clip: PositiveFloat
     resample: bool
-    k: StrictlyPositiveInt
+    n_neighbors: StrictlyPositiveInt
 
 
-@dataclass
-class WEncoderConfig:
-    """Configuration for the W-Autoencoder's encoder.
+@dataclass(kw_only=True)
+class ArchitectureConfig:
+    """Base specification for an architecture comprising an optional convolutional and MLP/Transformer part.
 
     Attributes:
-        architecture (WEncoders): The name of the architecture
-        hidden_dims_conv (tuple[StrictlyPositiveInt]): Hidden dimensions for the convolutional part
-        hidden_dims_lin(tuple[StrictlyPositiveInt]): Hidden dimensions for the linear part
+        conv_dims (tuple[StrictlyPositiveInt]): Hidden dimensions for the convolutional part
+        mlp_dims(tuple[StrictlyPositiveInt]): Hidden dimensions for the MLP/transformer part
         n_heads (StrictlyPositiveInt): Number of attention heads for self-attention
         proj_dim (StrictlyPositiveInt): Number of dimensions in expanded embedding
-        dropout (tuple[PositiveFloat]): Dropout probabilities for the linear layers
-        cf_temperature (int): Temperature for the probabilities (closer to zero means closer to samplings)
-        gumbel (bool): Whether to use Gumbel Softmax to add noise to the codes
+        dropout_rates (tuple[PositiveFloat]): Dropout probabilities for the MLP/transformer part
         act_name (str): The name of the PyTorch activation function (e.g., 'ReLU', 'LeakyReLU')
         act_cls (ActClass): The activation class
     """
 
-    architecture: WEncoders
-    hidden_dims_conv: tuple[StrictlyPositiveInt, ...]
-    hidden_dims_lin: tuple[StrictlyPositiveInt, ...]
-    n_heads: StrictlyPositiveInt
-    proj_dim: StrictlyPositiveInt
-    dropout: tuple[PositiveFloat, ...]
-    cf_temperature: int
-    gumbel: bool = True
+    conv_dims: tuple[StrictlyPositiveInt, ...] = dataclasses.field(default_factory=tuple)
+    mlp_dims: tuple[StrictlyPositiveInt, ...] = dataclasses.field(default_factory=tuple)
+    n_heads: StrictlyPositiveInt = 1
+    proj_dim: StrictlyPositiveInt = 1
+    dropout_rates: tuple[PositiveFloat, ...] = dataclasses.field(default_factory=tuple)
     act_name: str = ''
-    act_cls: ActClass = DEFAULT_ACT
 
     def __post_init__(self) -> None:
         """Resolve activation class from name."""
-        if self.act_name:
-            self.act_cls = get_activation_cls(self.act_name)
-
+        self.act_cls = get_activation_cls(self.act_name) if self.act_name else DEFAULT_ACT
         return
 
     @model_validator(mode='after')
     def _check_length_dropout(self) -> Self:
-        if len(self.hidden_dims_lin) > len(self.dropout):
+        if len(self.mlp_dims) > len(self.dropout_rates):
             msg = 'Number of hidden dimensions {} and dropouts {} not compatible.'
-            raise ValueError(msg.format(len(self.hidden_dims_lin), len(self.dropout)))
+            raise ValueError(msg.format(len(self.mlp_dims), len(self.dropout_rates)))
 
         return self
 
 
 @dataclass
-class EncoderConfig:
-    """Configuration for the encoder.
+class EncoderConfig(ArchitectureConfig):
+    """Specification for the encoder.
 
     Attributes:
-        architecture (Encoders): The name of the architecture
-        k (StrictlyPositiveInt): The number of neighbors for a point (counting the point itself)
-        hidden_dims (tuple[StrictlyPositiveInt]): Hidden dimensions for the encoder
-        w_encoder (WEncoderConfig): Configuration for the word encoder
-        act_name (str): The name of the PyTorch activation function
-        act_cls (ActClass): The activation class
+        class_name (Encoders): The name of the encoder class
+        n_neighbors (StrictlyPositiveInt): The number of neighbors for edge convolution (counting the point itself)
     """
 
-    architecture: Encoders
-    k: StrictlyPositiveInt
-    hidden_dims: tuple[StrictlyPositiveInt, ...]
-    w_encoder: WEncoderConfig
-    act_name: str = ''
-    act_cls: ActClass = DEFAULT_ACT
-
-    def __post_init__(self) -> None:
-        """Resolve activation class from name."""
-        if self.act_name:
-            self.act_cls = get_activation_cls(self.act_name)
-
-        return
+    class_name: Encoders
+    n_neighbors: StrictlyPositiveInt
 
 
 @dataclass
-class WDecoderConfig:
-    """Configuration for the W-Autoencoder's decoder.
+class DecoderConfig(ArchitectureConfig):
+    """Specification for the decoder.
 
     Attributes:
-        architecture (WDecoders): The name of the architecture
-        n_heads (StrictlyPositiveInt): Number of attention heads for self-attention
-        proj_dim (StrictlyPositiveInt): Number of dimensions in expanded embedding
-        hidden_dims (tuple[StrictlyPositiveInt]): Hidden dimensions for the decoder
-        dropout (tuple[PositiveFloat]): Dropout probabilities
-        act_name (str): The name of the PyTorch activation function
-        act_cls (ActClass): The activation class
-    """
-
-    architecture: WDecoders
-    n_heads: StrictlyPositiveInt
-    proj_dim: StrictlyPositiveInt
-    hidden_dims: tuple[StrictlyPositiveInt, ...]
-    dropout: tuple[PositiveFloat, ...]
-    act_name: str = ''
-    act_cls: ActClass = DEFAULT_ACT
-
-    def __post_init__(self) -> None:
-        """Resolve activation class from name."""
-        if self.act_name:
-            self.act_cls = get_activation_cls(self.act_name)
-
-        return
-
-    @model_validator(mode='after')
-    def _check_length_dropout(self) -> Self:
-        if len(self.hidden_dims) > len(self.dropout):
-            msg = 'Number of hidden dimensions {} and dropouts {} not compatible.'
-            raise ValueError(msg.format(len(self.hidden_dims), len(self.dropout)))
-
-        return self
-
-
-@dataclass
-class PosteriorDecoderConfig:
-    """Configuration for the decoder of the latent space prior.
-
-    Attributes:
-        hidden_dims (tuple[StrictlyPositiveInt]): Hidden dimensions
-        n_heads (StrictlyPositiveInt): Number of attention heads for self-attention
-        dropout (tuple[PositiveFloat]): Dropout probabilities
-        act_name (str): The name of the PyTorch activation function
-        act_cls (ActClass): The activation class
-    """
-
-    hidden_dims: tuple[StrictlyPositiveInt, ...]
-    n_heads: StrictlyPositiveInt
-    dropout: tuple[PositiveFloat, ...]
-    act_name: str = ''
-    act_cls: ActClass = DEFAULT_ACT
-
-    def __post_init__(self) -> None:
-        """Resolve activation class from name."""
-        if self.act_name:
-            self.act_cls = get_activation_cls(self.act_name)
-
-        return
-
-    @model_validator(mode='after')
-    def _check_length_dropout(self) -> Self:
-        if len(self.hidden_dims) > len(self.dropout):
-            msg = 'Number of hidden dimensions {} and dropouts {} not compatible.'
-            raise ValueError(msg.format(len(self.hidden_dims), len(self.dropout)))
-
-        return self
-
-
-@dataclass
-class DecoderConfig:
-    """Configuration for the decoder.
-
-    Attributes:
-        architecture (Decoders): The name of the architecture
+        class_name (Decoders): The name of the decoder class
         sample_dim (StrictlyPositiveInt): Dimensions of the sampling sphere
         n_components (StrictlyPositiveInt): Number of components for PCGen
-        hidden_dims_map (tuple[StrictlyPositiveInt]): Hidden dimensions for mapping the initial sampling
-        hidden_dims_conv (tuple[StrictlyPositiveInt]): Hidden channels for each component
-        w_decoder (WDecoderConfig): Configuration for the word decoder
-        posterior_decoder (PosteriorDecoderConfig): Configuration for the posterior distribution of z2
+        map_dims (tuple[StrictlyPositiveInt]): Hidden dimensions for mapping the initial sampling
         tau (PositiveFloat): Coefficient for Gumbel Softmax activation
-        filtering (bool): Whether to apply filtering to the output
-        act_name (str): The name of the PyTorch activation function
-        act_cls (ActClass): The activation class
+        filter (bool): Whether to apply filtering to the output
     """
 
-    architecture: Decoders
+    class_name: Decoders
     sample_dim: StrictlyPositiveInt
     n_components: StrictlyPositiveInt
-    hidden_dims_map: tuple[StrictlyPositiveInt, ...]
-    hidden_dims_conv: tuple[StrictlyPositiveInt, ...]
-    w_decoder: WDecoderConfig
-    posterior_decoder: PosteriorDecoderConfig
+    map_dims: tuple[StrictlyPositiveInt, ...]
     tau: PositiveFloat
-    filtering: bool
-    act_name: str = ''
-    act_cls: ActClass = DEFAULT_ACT
-
-    def __post_init__(self) -> None:
-        """Resolve activation class from name."""
-        if self.act_name:
-            self.act_cls = get_activation_cls(self.act_name)
-
-        return
+    filter: bool
 
 
 @dataclass
-class AEConfig:
-    """Configuration for the autoencoder.
+class WEncoderConfig(ArchitectureConfig):
+    """Specification for the W-Autoencoder's encoder.
 
     Attributes:
-        head (ModelHead): The type of model head (e.g., AE, VQVAE, CounterfactualVQVAE)
+        class_name (WEncoders): The name of the w-encoder class
+    """
+
+    class_name: WEncoders
+
+
+@dataclass
+class WDecoderConfig(ArchitectureConfig):
+    """Specification for the W-Autoencoder's decoder.
+
+    Attributes:
+        class_name (WDecoders): The name of the w-decoder class
+    """
+
+    class_name: WDecoders
+
+
+@dataclass
+class WConditionalEncoder(ArchitectureConfig):
+    """Specification for the encoding of z2 given the classifier probabilities.
+
+    Attributes:
+        class_name (WConditionalEncoders): The name of the encoder class
+    """
+
+    class_name: WConditionalEncoders
+
+
+@dataclass
+class AutoEncoderConfig:
+    """Specification for the autoencoder.
+
+    Attributes:
+        name (str): The name of the autoencoder model
+        class_name (AutoEncoders): The name of the autoencoder class
         encoder (EncoderConfig): The encoder configuration
         decoder (DecoderConfig): The decoder configuration
         book_size (StrictlyPositiveInt): The size of the dictionary for VQ-VAE
         embedding_dim (StrictlyPositiveInt): The length of the code embedding
         w_dim (StrictlyPositiveInt): The codeword length
-        z1_dim (StrictlyPositiveInt): The continuous latent space dimension
-        z2_dim (StrictlyPositiveInt): The continuous latent space dimension for counterfactual manipulation
-        vq_ema_update (bool): Whether to use EMA update on quantized codes
         vq_noise (PositiveFloat): Quantity of noise to add when redistributing the codes
-        name (str): The name of the model
-        training_output_points (StrictlyPositiveInt): The number of points generated during training (0: same as input)
-        n_pseudo_inputs (PositiveInt): The number of pseudo-inputs for the VAMP loss
     """
 
-    head: ModelHead
+    name: str
+    class_name: AutoEncoders
     encoder: EncoderConfig
     decoder: DecoderConfig
     book_size: StrictlyPositiveInt
     embedding_dim: StrictlyPositiveInt
     w_dim: StrictlyPositiveInt
-    z1_dim: StrictlyPositiveInt
-    z2_dim: StrictlyPositiveInt
-    vq_ema_update: bool
     vq_noise: PositiveFloat
-    name: str
-    training_output_points: StrictlyPositiveInt
-
-    n_pseudo_inputs: PositiveInt
 
     @property
     def n_codes(self) -> int:
         """The number of codes."""
         return self.w_dim // self.embedding_dim
 
-    @property
-    def hidden_features(self) -> int:
-        """The number of codes."""
-        return self.encoder.w_encoder.hidden_dims_conv[-1]
+
+@dataclass
+class WAutoEncoderConfig:
+    """Specification for the autoencoder.
+
+    Attributes:
+        name: name foe the w-autoencoder model
+        w_decoder (WDecoderConfig): Configuration for the word decoder
+        w_encoder (WEncoderConfig): Configuration for the word encoder
+        conditional_w_encoder (WConditionalEncoder): Configuration for the conditional w-encoder
+        z1_dim (StrictlyPositiveInt): The continuous latent space dimension
+        z2_dim (StrictlyPositiveInt): The continuous latent space dimension for counterfactual manipulation
+        n_pseudo_inputs (PositiveInt): The number of pseudo-inputs for the VAMP loss (0 for no pseudo inputs)
+        cf_temperature (float): Temperature for the probabilities (closer to zero means closer to samplings)
+    """
+
+    name: str
+    w_decoder: WDecoderConfig
+    w_encoder: WEncoderConfig
+    conditional_w_encoder: WConditionalEncoder
+    z1_dim: StrictlyPositiveInt
+    z2_dim: StrictlyPositiveInt
+    cf_temperature: float
+    n_pseudo_inputs: PositiveInt
 
 
 @dataclass
-class ClassifierConfig:
-    """Configuration for the classifier.
+@dataclass
+class ClassifierConfig(ArchitectureConfig):
+    """Specification for the classifier.
 
     Attributes:
-        k (StrictlyPositiveInt): The number of neighbors for a point (counting the point itself)
-        hidden_dims (tuple[StrictlyPositiveInt]): Hidden dimensions for the convolutional part
-        emb_dim (StrictlyPositiveInt): The dimension of the final convolution output
-        mlp_dims (tuple[StrictlyPositiveInt]): Dimensions for the MLP layers
-        dropout (tuple[PositiveFloat]): Dropout probabilities for the MLP layers
-        out_classes (StrictlyPositiveInt): The number of output classes for the classifier
-        name (str): The name of the model
-        act_name (str): The name of the PyTorch activation function
-        act_cls (ActClass): The activation class
+        name (str): The name of the classifier model
+        class_name (Classifiers): The name of the classifier class
+        n_neighbors (StrictlyPositiveInt): The number of neighbors for edge convolution (counting the point itself)
+        feature_dim (StrictlyPositiveInt): The dimension of the extracted features from the convolutional part
     """
 
-    k: StrictlyPositiveInt
-    hidden_dims: tuple[StrictlyPositiveInt, ...]
-    emb_dim: StrictlyPositiveInt
-    mlp_dims: tuple[StrictlyPositiveInt, ...]
-    dropout: tuple[PositiveFloat, ...]
-    out_classes: StrictlyPositiveInt
-    name: str = ''
-    act_name: str = ''
-    act_cls: ActClass = DEFAULT_ACT
-
-    def __post_init__(self) -> None:
-        """Resolve activation class from name."""
-        if self.act_name:
-            self.act_cls = get_activation_cls(self.act_name)
-
-        return
-
-    @model_validator(mode='after')
-    def _check_length_dropout(self) -> Self:
-        if len(self.mlp_dims) > len(self.dropout):
-            msg = 'Number of hidden dimensions {} and dropouts {} not compatible.'
-            raise ValueError(msg.format(len(self.hidden_dims), len(self.dropout)))
-
-        return self
+    name: str
+    class_name: Classifiers
+    n_neighbors: StrictlyPositiveInt
+    feature_dim: StrictlyPositiveInt
 
 
 @dataclass
 class SchedulerConfig:
-    """Configuration for the learning rate scheduler.
+    """Specification for the learning rate scheduler.
 
     Attributes:
         function (Schedulers): The name of the scheduler function
@@ -366,7 +271,7 @@ class SchedulerConfig:
 
 @dataclass
 class LearningConfig:
-    """Configuration for the learning scheme.
+    """Specification for the learning scheme.
 
     Attributes:
         optimizer_name (str): The name of the PyTorch optimizer (e.g., 'Adam', 'SGD')
@@ -384,7 +289,6 @@ class LearningConfig:
     clip_criterion: ClipCriterion
     scheduler: SchedulerConfig
     opt_settings: dict[str, Any] = dataclasses.field(default_factory=dict)
-    optimizer_cls: type[torch.optim.Optimizer] = dataclasses.field(init=False)
 
     def __post_init__(self) -> None:
         """Resolve optimizer class from name."""
@@ -394,7 +298,7 @@ class LearningConfig:
 
 @dataclass
 class EarlyStoppingConfig:
-    """Configuration for early stopping during training.
+    """Specification for early stopping during training.
 
     Attributes:
         active (bool): Whether to use the early stopping strategy
@@ -409,7 +313,7 @@ class EarlyStoppingConfig:
 
 @dataclass
 class TrainingConfig:
-    """Configuration for the training process.
+    """Specification for the training process.
 
     Attributes:
         batch_size (StrictlyPositiveInt): The batch size for training of all the processes combined
@@ -443,7 +347,7 @@ class TrainingConfig:
 
 @dataclass
 class ObjectiveAEConfig:
-    """Configuration for the Autoencoder's loss and metrics.
+    """Specification for the Autoencoder's loss and metrics.
 
     Attributes:
         n_inference_output_points (StrictlyPositiveInt): The number of inference points for evaluation
@@ -458,19 +362,15 @@ class ObjectiveAEConfig:
 
 @dataclass
 class ObjectiveWAEConfig:
-    """Configuration for the W-Autoencoder's loss and metrics.
+    """Specification for the W-Autoencoder's loss and metrics.
 
     Attributes:
-        vamp (bool): Whether to use the Variational Mixture of Posteriors (VAMP) loss
         c_kld1 (PositiveFloat): The Kullback-Leibler Divergence coefficient for the first latent variable
         c_kld2 (PositiveFloat): The Kullback-Leibler Divergence coefficient for the second latent variable
-        c_counterfactual (PositiveFloat): The coefficient for the Counterfactual loss
     """
 
-    vamp: bool
     c_kld1: PositiveFloat
     c_kld2: PositiveFloat
-    c_counterfactual: PositiveFloat
 
 
 @dataclass
@@ -595,85 +495,94 @@ class UserSettings:
 
 
 @dataclass
-class ConfigTrain:
-    """Specifications for the current experiment.
+class ExperimentConfig:
+    """Specification for the current experiment.
 
     Attributes:
+        name (str): The name of the experiment part
         train (TrainingConfig): Training options
-        name (str): The name of the child experiment
+        model (Any): The model architecture configuration
+        objective (Any): The objective configuration
     """
 
-    train: TrainingConfig
     name: str
+    train: TrainingConfig
+    model: Any
+    objective: Any
 
 
 @dataclass
-class ConfigTrainClassifier(ConfigTrain):
-    """Configuration for training the classifier.
+class ClassifierExperimentConfig(ExperimentConfig):
+    """Specification for the classifier experimental part.
 
     Attributes:
+        name (str): The name of the experiment part
         train (TrainingConfig): Training options
-        name (str): The name of the child experiment
-        architecture (ClassifierConfig): The classifier architecture configuration.
+        model (ClassifierConfig): The classifier architecture configuration.
     """
 
-    architecture: ClassifierConfig
+    model: ClassifierConfig
+    objective = None
 
 
 @dataclass
-class ConfigTrainAE(ConfigTrain):
-    """Configuration for training the autoencoder.
+class AutoEncoderExperimentConfig(ExperimentConfig):
+    """Specification for the autoencoder experimental part.
 
     Attributes:
+        name (str): The name of the experiment part
         train (TrainingConfig): Training options
-        name (str): The name of the child experiment
-        architecture (AEConfig): The autoencoder architecture configuration
+        model (AutoEncoderConfig): The autoencoder architecture configuration
         objective (ObjectiveAEConfig): The autoencoder objective (loss and metrics) configuration
         diagnose_every (StrictlyPositiveInt): The number of points between diagnostics (rearranging the discrete space)
+        training_output_points (StrictlyPositiveInt): The number of points generated during training (0: same as input)
+
     """
 
-    architecture: AEConfig
+    model: AutoEncoderConfig
     objective: ObjectiveAEConfig
     diagnose_every: StrictlyPositiveInt
+    training_output_points: StrictlyPositiveInt
 
 
 @dataclass
-class ConfigTrainWAE(ConfigTrain):
-    """Configuration for training the W-autoencoder.
+class WAutoEncoderExperimentConfig(ExperimentConfig):
+    """Specification for the w-autoencoder experimental part.
 
     Attributes:
+        name (str): The name of the experiment part
         train (TrainingConfig): Training options
-        name (str): The name of the child experiment
         objective (ObjectiveWAEConfig): The W-autoencoder objective (loss and metrics) configuration
+        model (WAutoEncoderConfig): The W-autoencoder architecture configuration
     """
 
+    model: WAutoEncoderConfig
     objective: ObjectiveWAEConfig
 
 
 @dataclass
-class ConfigAll:
-    """Root configuration for all experiment settings.
+class AllConfig:
+    """Root specification for all experiment settings.
 
     Attributes:
         variation (str): The name for the experiment
         final (bool): If True, it uses the validation dataset for training and the test dataset for testing
-        classifier (ConfigTrainClassifier): The configuration for training the classifier
-        autoencoder (ConfigTrainAE): The configuration for training the autoencoder
-        w_autoencoder (ConfigTrainWAE): The configuration for training the W-autoencoder
+        classifier (ClassifierExperimentConfig): The configuration for training the classifier
+        autoencoder (AutoEncoderExperimentConfig): The configuration for training the autoencoder
+        w_autoencoder (WAutoEncoderExperimentConfig): The configuration for training the W-autoencoder
         user (UserSettings): User-specific settings
         data (DataConfig): Data pre-processing configuration
     """
 
     variation: str
     final: bool
-    classifier: ConfigTrainClassifier
-    autoencoder: ConfigTrainAE
-    w_autoencoder: ConfigTrainWAE
+    classifier: ClassifierExperimentConfig
+    autoencoder: AutoEncoderExperimentConfig
+    w_autoencoder: WAutoEncoderExperimentConfig
     user: UserSettings
     data: DataConfig
     tags: list[str] = dataclasses.field(default_factory=list)
     version = f'v{VERSION}'
-    _lens: ConfigTrain | None = None
 
     @property
     def name(self) -> str:
@@ -685,23 +594,3 @@ class ConfigAll:
     def project(self) -> str:
         """Project name for wandb logging."""
         return 'PointCloudCounterfactual' + str(self.version)
-
-    @property
-    def lens(self) -> ConfigTrain:
-        """The section of the configuration that is currently focused on."""
-        if self._lens is None:
-            raise ValueError('lens not set.')
-
-        return self._lens
-
-    @contextmanager
-    def focus(self, section: ConfigTrain) -> Iterator[Self]:
-        """Context manager that focuses on a specific config section."""
-        if self._lens is not None:
-            raise ValueError('lens already set.')
-
-        self._lens = section
-        try:
-            yield self
-        finally:
-            self._lens = None

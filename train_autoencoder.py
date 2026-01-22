@@ -9,7 +9,7 @@ from drytorch.utils.average import get_moving_average, get_trailing_mean
 
 from src.data import get_datasets
 from src.module import VQVAE, get_autoencoder
-from src.config import ConfigAll, Experiment, get_trackers, hydra_main
+from src.config import AllConfig, Experiment, get_trackers, hydra_main
 from src.train import get_autoencoder_loss, get_learning_schema
 from src.train.hooks import DiscreteSpaceOptimizer
 from src.train.metrics_and_losses import get_emd_loss, get_recon_loss
@@ -29,7 +29,7 @@ def train_autoencoder(trial: Trial | None = None) -> None:
     cfg_user = cfg.user
     cfg_early = cfg_ae.train.early_stopping
     ae = get_autoencoder()
-    model = Model(ae, name=cfg_ae.architecture.name, device=cfg_user.device)
+    model = Model(ae, name=cfg_ae.model.name, device=cfg_user.device)
     train_dataset, test_dataset = get_datasets()  # test is validation unless final=True
     train_loader = DataLoader(
         dataset=train_dataset, batch_size=cfg_ae.train.batch_size_per_device, n_workers=cfg_user.n_workers
@@ -37,9 +37,7 @@ def train_autoencoder(trial: Trial | None = None) -> None:
     test_loader = DataLoader(
         dataset=test_dataset, batch_size=cfg_ae.train.batch_size_per_device, n_workers=cfg_user.n_workers
     )
-    with cfg.focus(cfg.autoencoder):
-        learning_schema = get_learning_schema()
-
+    learning_schema = get_learning_schema(cfg.autoencoder)
     loss = get_autoencoder_loss()
     trainer = Trainer(model, loader=train_loader, loss=loss, learning_schema=learning_schema)
     diagnostic = Diagnostic(model, loader=train_loader, objective=loss)
@@ -88,7 +86,7 @@ def train_autoencoder(trial: Trial | None = None) -> None:
     return
 
 
-def setup_and_train(cfg: ConfigAll) -> None:
+def setup_and_train(cfg: AllConfig) -> None:
     """Set up experiment and start training cycle."""
     trackers = get_trackers(cfg)
     exp = Experiment(cfg, name=cfg.name, par_dir=cfg.user.path.version_dir, tags=cfg.tags)
@@ -102,7 +100,7 @@ def setup_and_train(cfg: ConfigAll) -> None:
 
 
 @hydra_main
-def main(cfg: ConfigAll) -> None:
+def main(cfg: AllConfig) -> None:
     """Main entry point for module that creates subprocesses in parallel mode."""
     n_processes = cfg.user.n_subprocesses
     if n_processes:

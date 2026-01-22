@@ -1,4 +1,4 @@
-"""Configuration for the environment."""
+"""Configuration relative to the environment."""
 
 import enum
 import pathlib
@@ -21,16 +21,16 @@ class EnvSettings(BaseSettings):
 
 
 class ConfigPath(enum.StrEnum):
-    """Configuration paths relative to the project root."""
+    """Paths to configurations."""
 
-    CONFIG_ALL = 'config_all'
-    TUNE_AUTOENCODER = 'tune_autoencoder'
-    TUNE_W_AUTOENCODER = 'tune_w_autoencoder'
+    CONFIGS = 'experiment'
+    TUNING_AUTOENCODER = 'tuning/autoencoder'
+    TUNING_W_AUTOENCODER = 'tuning/w_autoencoder'
 
     @classmethod
     def get_folder(cls) -> str:
         """Return folder_name."""
-        return 'hydra_conf'
+        return 'configs'
 
     def get_path(self) -> pathlib.Path:
         """Return folder path."""

@@ -10,8 +10,8 @@ from drytorch.core.exceptions import TrackerNotUsedError
 from drytorch.lib.hooks import EarlyStoppingCallback, call_every, saving_hook
 from drytorch.utils.average import get_trailing_mean
 
-from src.module import DGCNN
-from src.config import ConfigAll, Experiment, get_trackers, hydra_main
+from src.module import get_classifier
+from src.config import AllConfig, Experiment, get_trackers, hydra_main
 from src.data import get_datasets
 from src.train import get_classification_loss, get_learning_schema
 from src.utils.parallel import DistributedWorker
@@ -23,16 +23,13 @@ def train_classifier() -> None:
     cfg = Experiment.get_config()
     cfg_class = cfg.classifier
     cfg_user = cfg.user
-
-    module = DGCNN()
-    model = Model(module, name=cfg_class.architecture.name, device=cfg_user.device)
+    module = get_classifier()
+    model = Model(module, name=cfg_class.model.name, device=cfg_user.device)
     train_dataset, test_dataset = get_datasets()  # test is validation unless final=True
     train_loader = DataLoader(dataset=train_dataset, batch_size=cfg_class.train.batch_size_per_device)
     test_loader = DataLoader(dataset=test_dataset, batch_size=cfg_class.train.batch_size_per_device)
     loss_calc = get_classification_loss()
-    with cfg.focus(cfg.classifier):
-        learning_schema = get_learning_schema()
-
+    learning_schema = get_learning_schema(cfg.classifier)
     trainer = Trainer(model, loader=train_loader, loss=loss_calc, learning_schema=learning_schema)
     final_test = Test(model, loader=test_loader, metric=loss_calc)
     if cfg_user.load_checkpoint:
@@ -65,8 +62,8 @@ def train_classifier() -> None:
     cf_matrix = ConfusionMatrix(task='multiclass', num_classes=cfg.data.dataset.n_classes)
     cf_matrix_tensor = cf_matrix(predictions, labels)  # This will be a torch.Tensor
     cf_matrix_numpy = cf_matrix_tensor.cpu().numpy()
-    class_names = cfg.data.dataset.settings['select_classes']
-    fig_cm = plot_confusion_matrix_heatmap(cf_matrix_numpy, class_names, title='Model Confusion Matrix')
+    names = cfg.data.dataset.settings['select_classes']
+    fig_cm = plot_confusion_matrix_heatmap(cf_matrix_numpy, names, title='Model Confusion Matrix')
     try:
         from drytorch.trackers.tensorboard import TensorBoard
 
@@ -74,7 +71,7 @@ def train_classifier() -> None:
     except TrackerNotUsedError:
         pass
     except (ModuleNotFoundError, ImportError):
-        print(f'Confusion Matrix for classes {class_names}')
+        print(f'Confusion Matrix for classes {names}')
         print(cf_matrix_numpy)
         print(f'Misclassified indices: {misclassified_indices_str}')
     else:
@@ -92,7 +89,7 @@ def train_classifier() -> None:
     return
 
 
-def setup_and_train(cfg: ConfigAll) -> None:
+def setup_and_train(cfg: AllConfig) -> None:
     """Set up the experiment and launch the classifier training."""
     trackers = get_trackers(cfg)
     exp = Experiment(cfg, name=cfg.name, par_dir=cfg.user.path.version_dir, tags=cfg.tags)
@@ -107,7 +104,7 @@ def setup_and_train(cfg: ConfigAll) -> None:
 
 
 @hydra_main
-def main(cfg: ConfigAll) -> None:
+def main(cfg: AllConfig) -> None:
     """Main entry point for module that creates subprocesses in parallel mode."""
     n_processes = cfg.user.n_subprocesses
     if n_processes:

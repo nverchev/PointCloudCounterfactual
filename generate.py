@@ -5,7 +5,7 @@ import torch
 from drytorch import Model
 
 from src.module import CounterfactualVQVAE
-from src.config import ConfigAll, Experiment, hydra_main
+from src.config import AllConfig, Experiment, hydra_main
 from src.utils.visualization import render_cloud
 
 
@@ -14,19 +14,17 @@ def generate_random_samples() -> None:
     """Generate random samples from the autoencoder."""
     cfg = Experiment.get_config()
     cfg_ae = cfg.autoencoder
+    cfg_wae = cfg.w_autoencoder
     cfg_user = cfg.user
     cfg_generate = cfg_user.generate
     save_dir = cfg.user.path.version_dir / 'images' / cfg.name / 'generated'
-
     module = CounterfactualVQVAE().eval()
-    model = Model(module, name=cfg_ae.architecture.name, device=cfg_user.device)
+    model = Model(module, name=cfg_ae.model.name, device=cfg_user.device)
     model.load_state()
     if module.w_autoencoder.pseudo_manager is not None:
-        module.w_autoencoder.pseudo_manager.update_pseudo_latent(module.w_autoencoder.encode)
+        module.w_autoencoder.pseudo_manager.update_pseudo_latent(module.w_autoencoder.encode_z1)
 
-    z1_bias = torch.zeros(
-        cfg_generate.batch_size, cfg_ae.architecture.n_codes, cfg_ae.architecture.z1_dim, device=cfg_user.device
-    )
+    z1_bias = torch.zeros(cfg_generate.batch_size, cfg_ae.model.n_codes, cfg_wae.model.z1_dim, device=cfg_user.device)
     clouds = module.generate(batch_size=cfg_generate.batch_size, z1_bias=z1_bias).recon
     cloud: torch.Tensor
     for i, cloud in enumerate(clouds):
@@ -37,7 +35,7 @@ def generate_random_samples() -> None:
 
 
 @hydra_main
-def main(cfg: ConfigAll) -> None:
+def main(cfg: AllConfig) -> None:
     """Generate random samples from the autoencoder."""
     exp = Experiment(cfg, name=cfg.name, par_dir=cfg.user.path.version_dir, tags=cfg.tags)
     with exp.create_run(resume=True):

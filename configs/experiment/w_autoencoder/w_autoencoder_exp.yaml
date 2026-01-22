@@ -1,0 +1,8 @@
+defaults:
+  - objective: vae_objective
+  - train: default_train
+  - model: wae
+  - _self_
+
+
+name: w_autoencoder

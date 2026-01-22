@@ -8,8 +8,8 @@ import torch
 
 from drytorch import Model
 
-from src.module import CounterfactualVQVAE, DGCNN
-from src.config import ConfigAll, Experiment, hydra_main
+from src.module import CounterfactualVQVAE, get_classifier
+from src.config import AllConfig, Experiment, hydra_main
 from src.data import Inputs, Partitions, get_dataset
 from src.utils.visualization import render_cloud
 
@@ -37,13 +37,13 @@ def create_and_render_counterfactuals() -> None:
     interactive = cfg_user.plot.interactive
     save_dir_base = cfg.user.path.version_dir / 'images' / cfg.name
 
-    dgcnn_module = DGCNN().eval()
-    classifier = Model(dgcnn_module, name=cfg.classifier.architecture.name, device=cfg.user.device)
+    dgcnn_module = get_classifier().eval()
+    classifier = Model(dgcnn_module, name=cfg.classifier.model.name, device=cfg.user.device)
     classifier.load_state()
     test_dataset = get_dataset(Partitions.test if cfg.final else Partitions.val)
     num_classes = cfg.data.dataset.n_classes
     vqvae_module = CounterfactualVQVAE().eval()
-    model = Model(vqvae_module, name=cfg_ae.architecture.name, device=cfg_user.device)
+    model = Model(vqvae_module, name=cfg_ae.model.name, device=cfg_user.device)
     model.load_state()
 
     for i in cfg_user.plot.sample_indices:
@@ -52,6 +52,7 @@ def create_and_render_counterfactuals() -> None:
             raise ValueError(f'Index {i} is too large for the selected dataset of length {len(test_dataset)}')
 
         save_dir = save_dir_base / f'sample_{i}'
+        save_dir.mkdir(parents=True, exist_ok=True)
         for old_file in save_dir.iterdir():
             old_file.unlink()
 
@@ -100,7 +101,7 @@ def create_and_render_counterfactuals() -> None:
 
 
 @hydra_main
-def main(cfg: ConfigAll) -> None:
+def main(cfg: AllConfig) -> None:
     """Set up the experiment and launch the counterfactual visualization."""
     exp = Experiment(cfg, name=cfg.name, par_dir=cfg.user.path.version_dir, tags=cfg.tags)
     with exp.create_run(resume=True):

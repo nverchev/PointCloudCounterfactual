@@ -11,8 +11,8 @@ from drytorch import DataLoader, Model, Test
 from drytorch.core import protocols as p
 from drytorch.lib.objectives import Metric, compute_metrics
 
-from src.module import CounterfactualVQVAE, DGCNN
-from src.config import ConfigAll, Experiment, hydra_main
+from src.module import CounterfactualVQVAE, get_classifier
+from src.config import AllConfig, Experiment, hydra_main
 from src.data.processed import CounterfactualDatasetEncoder, DoubleReconstructedDatasetWithLogits
 from src.data import Inputs, Targets, Partitions, get_dataset
 from src.train.metrics_and_losses import get_classification_loss
@@ -202,15 +202,15 @@ def evaluate_counterfactuals(classifier: Model[Inputs, Tensor], vqvae: Counterfa
 
 
 @hydra_main
-def main(cfg: ConfigAll) -> None:
+def main(cfg: AllConfig) -> None:
     """Set up the experiment and launch the counterfactual evaluation."""
     exp = Experiment(cfg, name=cfg.name, par_dir=cfg.user.path.version_dir, tags=cfg.tags)
     with exp.create_run(resume=True):
-        dgcnn_module = DGCNN()
-        classifier = Model(dgcnn_module, name=cfg.classifier.architecture.name, device=cfg.user.device)
+        dgcnn_module = get_classifier()
+        classifier = Model(dgcnn_module, name=cfg.classifier.model.name, device=cfg.user.device)
         classifier.load_state()
         vqvae = CounterfactualVQVAE()
-        autoencoder = Model(vqvae, name=cfg.autoencoder.architecture.name, device=cfg.user.device)
+        autoencoder = Model(vqvae, name=cfg.autoencoder.model.name, device=cfg.user.device)
         autoencoder.load_state()
         evaluate_counterfactuals(classifier, vqvae)
 

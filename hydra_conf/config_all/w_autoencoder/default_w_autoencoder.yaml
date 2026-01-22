@@ -1,7 +1,0 @@
-defaults:
-  - objective: default_objective
-  - train: default_train
-  - _self_
-
-
-name: w_autoencoder

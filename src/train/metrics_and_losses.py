@@ -13,7 +13,7 @@ from torcheval.metrics.functional import multiclass_accuracy, multiclass_f1_scor
 
 from drytorch.lib.objectives import Loss, LossBase, Metric
 from src.config.experiment import Experiment
-from src.config.options import ModelHead, ReconLosses
+from src.config.options import AutoEncoders, ReconLosses
 from src.data.structures import Outputs, Targets, WTargets
 from src.utils.neighbour_ops import pykeops_square_distance, torch_square_distance
 
@@ -125,6 +125,8 @@ def get_kld2_loss() -> LossBase[Outputs, WTargets]:
 
 def get_kld_vamp_loss() -> LossBase[Outputs, WTargets]:
     """Get KL divergence loss for the variational autoencoder from aggregated posterior."""
+    cfg = Experiment.get_config()
+    n_pseudo_inputs = cfg.w_autoencoder.model.n_pseudo_inputs
 
     def _kld2_vamp(data: Outputs, _: WTargets) -> torch.Tensor:
         """Calculate KL divergence loss for VAMP prior."""
@@ -133,31 +135,40 @@ def get_kld_vamp_loss() -> LossBase[Outputs, WTargets]:
         log_var_kld = data.log_var1
         pseudo_mu = data.pseudo_mu1
         pseudo_log_var = data.pseudo_log_var1
-
-        k = pseudo_mu.shape[0]
-        b = mu_kld.shape[0]
-        z = z_kld.unsqueeze(1).expand(-1, k, -1)  # create a copy for each pseudo input
-        posterior_ll = gaussian_ll(z_kld, mu_kld, log_var_kld).sum(1)  # sum dimensions
-        pseudo_mu = pseudo_mu.unsqueeze(0).expand(b, -1, -1)  # expand to match the batch size
-        pseudo_log_var = pseudo_log_var.unsqueeze(0).expand(b, -1, -1)  # expand to match the batch size
-        prior_ll = torch.logsumexp(gaussian_ll(z, pseudo_mu, pseudo_log_var).sum(2), dim=1)
-        total = posterior_ll - prior_ll + np.log(k)
+        batch = mu_kld.shape[0]
+        z = z_kld.unsqueeze(1).expand(-1, n_pseudo_inputs, -1, -1)  # create a copy for each pseudo input
+        posterior_ll = gaussian_ll(z_kld, mu_kld, log_var_kld).sum((1, 2))  # sum dimensions
+        pseudo_mu = pseudo_mu.unsqueeze(0).expand(batch, -1, -1, -1)  # expand to match the batch size
+        pseudo_log_var = pseudo_log_var.unsqueeze(0).expand(batch, -1, -1, -1)  # expand to match the batch size
+        prior_ll = torch.logsumexp(gaussian_ll(z, pseudo_mu, pseudo_log_var).sum((2, 3)), dim=1)
+        total = posterior_ll - prior_ll + np.log(n_pseudo_inputs)
         return total
 
     return Loss(_kld2_vamp, name='KLD2_VAMP')
 
 
-def get_adversarial_loss() -> LossBase[Outputs, WTargets]:
-    """Get adversarial loss for training."""
-    kld = nn.KLDivLoss(reduction='none', log_target=True)
+def get_annealing() -> Loss[Outputs, WTargets]:
+    """(Reverse) Annealing component for loss.
 
-    def _corr(data: Outputs, targets: WTargets) -> torch.Tensor:
-        return kld(F.log_softmax(data.y1, dim=1), F.log_softmax(targets.logits, dim=1)).sum(1)
+    It does the opposite of traditional annealing, but it is the accepted term for gradually increasing the KLD loss.
+    """
+    total_epochs = Experiment.get_config().w_autoencoder.train.n_epochs
 
-    def _max_entropy(data: Outputs, _: WTargets) -> torch.Tensor:
-        return -torch.sum(F.softmax(data.y2, dim=1) * F.log_softmax(data.y2, dim=1), dim=1)
+    def _annealing(outputs: Outputs, _: WTargets) -> torch.Tensor:
+        time_fraction = torch.tensor(outputs.model_epoch / total_epochs, device=outputs.w_recon.device)
+        time_fraction = torch.clamp(time_fraction, 0.0, 1.0)
+        return 0.5 * (1.0 - torch.cos(time_fraction * math.pi))
 
-    return Loss(_corr, name='Correlation') + Loss(_max_entropy, name='Max entropy')
+    return Loss(_annealing, name='Annealing')
+
+
+def get_kld_loss() -> LossBase[Outputs, WTargets]:
+    """Get KL divergence loss for the first latent variable in the variational autoencoder."""
+    cfg_wae = Experiment.get_config().w_autoencoder
+    vamp = cfg_wae.model.n_pseudo_inputs > 0
+    c_kld1 = cfg_wae.objective.c_kld1
+    c_kld2 = cfg_wae.objective.c_kld2
+    return get_annealing() * (c_kld1 * (get_kld_vamp_loss() if vamp else get_kld1_loss()) + c_kld2 * get_kld2_loss())
 
 
 def get_nll_loss() -> LossBase[Outputs, WTargets]:
@@ -234,21 +245,6 @@ def get_f1() -> Metric[torch.Tensor, Targets]:
     return Metric(_f1, name='F1_Score', higher_is_better=True)
 
 
-def get_annealing() -> Loss[Outputs, WTargets]:
-    """(Reverse) Annealing component for loss.
-
-    It does the opposite of traditional annealing, but it is the accepted term for gradually increasing the KLD loss.
-    """
-    total_epochs = Experiment.get_config().w_autoencoder.train.n_epochs
-
-    def _annealing(outputs: Outputs, _: WTargets) -> torch.Tensor:
-        time_fraction = torch.tensor(outputs.model_epoch / total_epochs, device=outputs.w_recon.device)
-        time_fraction = torch.clamp(time_fraction, 0.0, 1.0)
-        return 0.5 * (1.0 - torch.cos(time_fraction * math.pi))
-
-    return Loss(_annealing, name='Annealing')
-
-
 def get_classification_loss() -> LossBase[torch.Tensor, Targets]:
     """Get combined classification loss and metrics."""
     return get_cross_entropy_loss() | get_accuracy() | get_macro_accuracy()
@@ -256,10 +252,7 @@ def get_classification_loss() -> LossBase[torch.Tensor, Targets]:
 
 def get_w_autoencoder_loss() -> LossBase[Outputs, WTargets]:
     """Get encoder loss combining NLL, KLD and adversarial losses."""
-    c_kld1 = Experiment.get_config().w_autoencoder.objective.c_kld1
-    c_kld2 = Experiment.get_config().w_autoencoder.objective.c_kld2
-    loss = get_mse_loss() + get_annealing() * (c_kld1 * get_kld1_loss() + c_kld2 * get_kld2_loss()) | get_w_accuracy()
-    return loss
+    return get_mse_loss() + get_kld_loss() | get_w_accuracy()
 
 
 def get_autoencoder_loss() -> LossBase[Outputs, Targets]:
@@ -267,7 +260,7 @@ def get_autoencoder_loss() -> LossBase[Outputs, Targets]:
     cfg_ae = Experiment.get_config().autoencoder
     c_embed = cfg_ae.objective.c_embedding
     loss = get_recon_loss()
-    if cfg_ae.architecture.head is not ModelHead.AE:
+    if cfg_ae.model.class_name is not AutoEncoders.AE:
         return loss + c_embed * get_embed_loss()
 
     return loss
