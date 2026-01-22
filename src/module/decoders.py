@@ -2,6 +2,8 @@
 
 import abc
 import itertools
+from typing import cast
+from collections.abc import Iterable
 
 import torch
 import torch.nn as nn
@@ -11,7 +13,7 @@ from src.config import ActClass, NormClass
 from src.config.experiment import Experiment
 from src.config.options import Decoders
 from src.data import OUT_CHAN
-from src.module.layers import PointsConvLayer
+from src.module.layers import PointsConvLayer, LinearLayer
 from src.utils.neighbour_ops import graph_filtering
 
 
@@ -24,6 +26,11 @@ class BasePointDecoder(nn.Module, metaclass=abc.ABCMeta):
         cfg_decoder = cfg_ae_model.decoder
         self.map_dims: tuple[int, ...] = cfg_decoder.map_dims
         self.conv_dims: tuple[int, ...] = cfg_decoder.conv_dims
+        self.mlp_dims: tuple[int, ...] = cfg_decoder.mlp_dims
+        self.dropout_rates: tuple[float, ...] = cfg_decoder.dropout_rates
+        self.n_codes: int = cfg_ae_model.n_codes
+        self.embedding_dim: int = cfg_ae_model.embedding_dim
+        self.n_heads: int = cfg_decoder.n_heads
         self.w_dim: int = cfg_ae_model.w_dim
         self.act_cls: ActClass = cfg_decoder.act_cls
         self.norm_cls: NormClass = cfg_decoder.norm_cls
@@ -52,7 +59,10 @@ class PCGen(BasePointDecoder):
         modules.append(PointsConvLayer(self.map_dims[-1], self.w_dim, act_cls=nn.Hardtanh))
         self.map_sample = nn.Sequential(*modules)
         self.group_conv = nn.ModuleList()
+        self.group_transformer = nn.ModuleList()
         self.group_final = nn.ModuleList()
+        self.memory_positional_encoding = nn.Parameter(torch.randn(1, self.n_codes, self.conv_dims[-1]))
+        self.proj_w = LinearLayer(self.embedding_dim, self.conv_dims[-1], act_cls=self.act_cls)
         for _ in range(self.n_components):
             modules = []
             dim_pairs = itertools.pairwise([self.w_dim, *self.conv_dims])
@@ -62,7 +72,22 @@ class PCGen(BasePointDecoder):
                 )
 
             self.group_conv.append(nn.Sequential(*modules))
-            self.group_final.append(PointsConvLayer(self.conv_dims[-1], OUT_CHAN, use_soft_init=True))
+            self.transformer = nn.ModuleList()
+            transformer_layers: list[nn.Module] = []
+            for hidden_dim, rate in zip(self.mlp_dims, self.dropout_rates, strict=False):
+                layer = nn.TransformerDecoderLayer(
+                    d_model=self.conv_dims[-1],
+                    nhead=self.n_heads,
+                    dropout=rate,
+                    dim_feedforward=hidden_dim,
+                    activation=self.act_cls(),
+                    batch_first=True,
+                    norm_first=True,
+                )
+                transformer_layers.append(layer)
+
+            self.group_transformer.append(nn.ModuleList(transformer_layers))
+            self.group_final.append(PointsConvLayer(self.conv_dims[-1], OUT_CHAN, soft_init=True))
 
         if self.n_components > 1:
             self.att = PointsConvLayer(self.conv_dims[-1] * self.n_components, self.n_components)
@@ -78,7 +103,9 @@ class PCGen(BasePointDecoder):
 
         return torch.randn(batch, self.sample_dim, n_output_points, device=device)
 
-    def _process_component_groups(self, x: torch.Tensor) -> tuple[torch.Tensor, list[torch.Tensor]]:
+    def _process_component_groups(
+        self, x: torch.Tensor, memory: torch.Tensor
+    ) -> tuple[torch.Tensor, list[torch.Tensor]]:
         """Process all component groups and return outputs and attention features."""
         xs_list = []
         group_atts = []
@@ -86,6 +113,12 @@ class PCGen(BasePointDecoder):
         for group in range(self.n_components):
             x_group = self.group_conv[group](x)
             group_atts.append(x_group)
+            transformer = cast(Iterable[nn.TransformerDecoderLayer], self.group_transformer[group])
+            x_group = x_group.transpose(2, 1)
+            for layer in transformer:
+                x_group = layer(x_group, memory=memory)
+
+            x_group = x_group.transpose(2, 1)
             x_group = self.group_final[group](x_group)
             xs_list.append(x_group)
 
@@ -121,7 +154,8 @@ class PCGen(BasePointDecoder):
         x = self._join_operation(x, w)
 
         # Process component groups
-        xs, group_atts = self._process_component_groups(x)
+        memory = self.proj_w(w.view(batch, self.n_codes, self.embedding_dim)) + self.memory_positional_encoding
+        xs, group_atts = self._process_component_groups(x, memory)
 
         # Mix components with attention
         x = self._apply_attention_mixing(xs, group_atts)
