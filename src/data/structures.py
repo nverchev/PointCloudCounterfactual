@@ -59,6 +59,8 @@ class Outputs:
         d_mu2: the difference in mean between the prior and posterior distributions for z2 | probs.
         d_log_var2: the difference in log variance between the prior and posterior distributions for z2 | probs.
         probs: classifier or counterfactual probabilities for z2 | probs.
+        logits: the classifier logits.
+        adv_logits: output of the discriminator from z1 after detaching inputs.
         v_pred: predicted velocity for flow matching.
         v_target: target velocity for flow matching.
     """
@@ -77,6 +79,8 @@ class Outputs:
     d_mu2: torch.Tensor
     d_log_var2: torch.Tensor
     probs: torch.Tensor
+    logits: torch.Tensor
+    adv_logits: torch.Tensor
     v_pred: torch.Tensor
     v_target: torch.Tensor
 

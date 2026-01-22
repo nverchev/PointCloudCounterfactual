@@ -694,6 +694,18 @@ class SinusoidalPositionalEmbedding(nn.Module):
         return embedding
 
 
+class GradReverse(torch.autograd.Function):
+    @staticmethod
+    def forward(ctx, x: torch.Tensor, lambda_: float) -> torch.Tensor:
+        ctx.lambda_ = lambda_
+        return x.view_as(x)
+
+    @staticmethod
+    def backward(ctx, *grad_outputs: torch.Tensor) -> tuple:
+        grad_output = grad_outputs[0]
+        return -ctx.lambda_ * grad_output, None
+
+
 def debug_check(_not_used1: nn.Module, _not_used2: _grad_t, tensor_out: _grad_t) -> None:
     """This function is used for debugging purposes during the training process.
 
@@ -713,23 +725,6 @@ def debug_check(_not_used1: nn.Module, _not_used2: _grad_t, tensor_out: _grad_t)
         pdb.set_trace()
 
     return None
-
-
-def frozen_forward(network: nn.Module, x: torch.Tensor) -> Any:
-    """Temporarily disable gradients for all parameters."""
-    was_requires_grad: list[bool] = []
-    for p in network.parameters():
-        was_requires_grad.append(p.requires_grad)
-        p.requires_grad_(False)
-
-    # Run the network
-    output = network(x)
-
-    # Restore original requires_grad flags
-    for p, req in zip(network.parameters(), was_requires_grad, strict=True):
-        p.requires_grad_(req)
-
-    return output
 
 
 def _reset_parameters_or_warn(module: nn.Module) -> None:

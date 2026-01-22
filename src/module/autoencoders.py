@@ -11,6 +11,7 @@ import torch.nn as nn
 from src.config import Experiment
 from src.config.options import AutoEncoders
 from src.data.structures import Inputs, Outputs
+from src.module.adversarial import InformationEraser
 from src.module.decoders import get_decoder
 from src.module.latent_decoders import get_latent_decoder
 from src.module.encoders import get_encoder
@@ -271,11 +272,20 @@ class CounterfactualVAE(BaseVAE):
         cfg_ae_model = Experiment.get_config().autoencoder.model
         temperature = cfg_ae_model.cf_temperature if cfg_ae_model.cf_temperature is not None else 1.0
         self.relaxed_softmax = TemperatureScaledSoftmax(dim=1, temperature=temperature)
+        self.class_eraser = InformationEraser()
         return
+
+    @override
+    def encode_z1(self, out: Outputs | None = None) -> Outputs:
+        """Forward pass."""
+        out = super().encode_z1(out)
+        out.adv_logits = self.class_eraser(out.mu1)
+        return out
 
     @override
     def get_probabilities(self, inputs: Inputs, out: Outputs) -> Outputs:
         if inputs.logits.numel() > 0:
+            out.logits = inputs.logits
             out.probs = self.get_probabilities_from_logits(inputs.logits)
             return out
 

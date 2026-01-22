@@ -145,6 +145,17 @@ def get_kld_loss() -> LossBase[Outputs, Targets]:
     return get_annealing() * (c_kld1 * (get_kld_vamp_loss() if vamp else get_kld1_loss()) + c_kld2 * get_kld2_loss())
 
 
+def get_adversarial_loss() -> LossBase[Outputs, Targets]:
+    """Get adversarial loss to erase classifier info."""
+    kld = torch.nn.KLDivLoss(reduction='none', log_target=True)
+    log_softmax = torch.nn.LogSoftmax(dim=1)
+
+    def _adv_kld(out: Outputs, _: Targets) -> torch.Tensor:
+        return kld(log_softmax(out.adv_logits), log_softmax(out.logits)).sum(1)
+
+    return Loss(_adv_kld, name='Adv')
+
+
 def get_cross_entropy_loss() -> LossBase[torch.Tensor, Targets]:
     """Get cross-entropy loss."""
     torch_loss = torch.nn.CrossEntropyLoss(reduction='none')
