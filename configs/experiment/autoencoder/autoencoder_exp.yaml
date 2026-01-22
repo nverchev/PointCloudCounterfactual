@@ -6,4 +6,4 @@ defaults:
 
 name: autoencoder
 diagnose_every: 10
-training_output_points: ${data.n_input_points}
+n_training_output_points: ${data.n_input_points}

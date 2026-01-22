@@ -19,7 +19,7 @@ trackers:
 
 # Options for counterfactual generation (will affect the results)
 counterfactual_value: 1  # value associated with the counterfactual change (0 no change, 1 full change)
-n_generated_output_points: ${autoencoder.training_output_points}  # number of output points generated
+n_inference_output_points: ${autoencoder.n_training_output_points}  # number of output points generated
 
 # Options for generating samples (for visualization only)
 generate:

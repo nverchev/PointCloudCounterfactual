@@ -32,7 +32,7 @@ class BasePointDecoder(nn.Module, metaclass=abc.ABCMeta):
         self.tau: float = cfg_decoder.tau
 
     @abc.abstractmethod
-    def forward(self, w: torch.Tensor, n_generated_points: int, initial_sampling: torch.Tensor | None) -> torch.Tensor:
+    def forward(self, w: torch.Tensor, n_output_points: int, initial_sampling: torch.Tensor) -> torch.Tensor:
         """Forward pass."""
 
 
@@ -67,16 +67,13 @@ class PCGen(BasePointDecoder):
         return
 
     def _initialize_sampling(
-        self, batch: int, n_generated_points: int, device: torch.device, initial_sampling: torch.Tensor | None
+        self, batch: int, n_output_points: int, device: torch.device, initial_sampling: torch.Tensor
     ) -> torch.Tensor:
         """Initialize and normalize the sampling points."""
-        if initial_sampling is None:
-            x = torch.randn(batch, self.sample_dim, n_generated_points, device=device)
-        else:
-            x = initial_sampling
+        if initial_sampling.numel():
+            return initial_sampling.to(device)
 
-        x = x / torch.linalg.vector_norm(x, dim=1, keepdim=True)
-        return x
+        return torch.randn(batch, self.sample_dim, n_output_points, device=device)
 
     def _process_component_groups(self, x: torch.Tensor) -> tuple[torch.Tensor, list[torch.Tensor]]:
         """Process all component groups and return outputs and attention features."""
@@ -93,7 +90,7 @@ class PCGen(BasePointDecoder):
         return xs, group_atts
 
     def _apply_attention_mixing(self, xs: torch.Tensor, group_atts: list[torch.Tensor]) -> torch.Tensor:
-        """Apply attention-based mixing across components or select single component."""
+        """Apply attention-based mixing across components if there are more than one, otherwise return the component."""
         if self.n_components > 1:
             x_att = self.att(torch.cat(group_atts, dim=1).contiguous())
             if self.training:
@@ -108,13 +105,13 @@ class PCGen(BasePointDecoder):
 
         return x
 
-    def forward(self, w: torch.Tensor, n_generated_points: int, initial_sampling: torch.Tensor | None) -> torch.Tensor:
+    def forward(self, w: torch.Tensor, n_output_points: int, initial_sampling: torch.Tensor) -> torch.Tensor:
         """Forward pass."""
         batch = w.size()[0]
         device = w.device
 
         # Initialize sampling points
-        x = self._initialize_sampling(batch, n_generated_points, device, initial_sampling)
+        x = self._initialize_sampling(batch, n_output_points, device, initial_sampling)
 
         # Map and join with latent code
         x = self.map_sample(x)

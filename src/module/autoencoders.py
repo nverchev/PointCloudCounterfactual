@@ -25,14 +25,14 @@ class AbstractAutoEncoder(nn.Module, abc.ABC):
     def __init__(self):
         super().__init__()
         cfg_ae = Experiment.get_config().autoencoder
-        self.m_training: int = cfg_ae.training_output_points
-        self.m_test: int = cfg_ae.objective.n_inference_output_points
+        self.n_training_points_training: int = cfg_ae.n_training_output_points
+        self.n_inference_output_points: int = cfg_ae.objective.n_inference_output_points
         return
 
     @property
-    def m(self) -> int:
+    def n_output_points(self) -> int:
         """Number of generated points."""
-        return self.m_test if torch.is_inference_mode_enabled() else self.m_training
+        return self.n_inference_output_points if torch.is_inference_mode_enabled() else self.n_training_points_training
 
     @abc.abstractmethod
     def forward(self, inputs: Inputs) -> Outputs:
@@ -50,7 +50,7 @@ class Oracle(AbstractAutoEncoder):
     def forward(self, inputs: Inputs) -> Outputs:
         """Forward pass."""
         data = Outputs()
-        data.recon = inputs.cloud[:, : self.m, :]
+        data.recon = inputs.cloud[:, : self.n_output_points, :]
         return data
 
 
@@ -75,7 +75,7 @@ class BaseAutoencoder(AbstractAutoEncoder):
 
     def decode(self, data: Outputs, inputs: Inputs) -> Outputs:
         """Decode latent representation to point cloud."""
-        x = self.decoder(data.w, self.m, inputs.initial_sampling)
+        x = self.decoder(data.w, self.n_output_points, inputs.initial_sampling)
         data.recon = x.transpose(2, 1).contiguous()
         return data
 

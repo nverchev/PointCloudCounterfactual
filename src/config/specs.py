@@ -461,7 +461,7 @@ class UserSettings:
         plot (PlottingOptions): Options for plotting and visualization
         seed (Optional[int]): The seed for PyTorch/NumPy randomness. If None, no seed is set
         checkpoint_every (PositiveInt): The number of epochs between saving checkpoints
-        n_generated_output_points (int): The number of points to generate during inference
+        n_inference_output_points (int): The number of output points during inference for each point cloud
         load_checkpoint (int): The checkpoint to load if available. Default is the last one (-1)
         counterfactual_value (PositiveFloat): Value associated with counterfactual change (0 no change, 1 full change)
         hydra (HydraSettings): Subset of the current hydra settings
@@ -476,7 +476,7 @@ class UserSettings:
     plot: PlottingOptions
     seed: int | None
     checkpoint_every: PositiveInt
-    n_generated_output_points: int
+    n_inference_output_points: int
     load_checkpoint: int = -1
     counterfactual_value: PositiveFloat = 1.0
     hydra = HydraSettings()
@@ -535,14 +535,14 @@ class AutoEncoderExperimentConfig(ExperimentConfig):
         model (AutoEncoderConfig): The autoencoder architecture configuration
         objective (ObjectiveAEConfig): The autoencoder objective (loss and metrics) configuration
         diagnose_every (StrictlyPositiveInt): The number of points between diagnostics (rearranging the discrete space)
-        training_output_points (StrictlyPositiveInt): The number of points generated during training (0: same as input)
+        n_training_output_points (StrictlyPositiveInt): The number of output points during training (0: same as input)
 
     """
 
     model: AutoEncoderConfig
     objective: ObjectiveAEConfig
     diagnose_every: StrictlyPositiveInt
-    training_output_points: StrictlyPositiveInt
+    n_training_output_points: StrictlyPositiveInt
 
 
 @dataclass
