@@ -7,5 +7,5 @@ defaults:
   - data: default_data
   - _self_
 
-variation: development
+variation: pcgen_global_feature
 final: false

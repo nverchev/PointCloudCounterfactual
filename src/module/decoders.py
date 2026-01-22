@@ -2,6 +2,8 @@
 
 import abc
 import itertools
+from typing import cast
+from collections.abc import Iterable
 
 import torch
 import torch.nn as nn
@@ -56,9 +58,10 @@ class PCGen(BasePointDecoder):
             modules = []
             dim_pairs = itertools.pairwise([self.w_dim, *self.conv_dims])
             for in_dim, out_dim in dim_pairs:
-                modules.append(PointsConvLayer(in_dim, out_dim, act_cls=self.act_cls, residual=True))
+                assert out_dim % 2 == 0
+                modules.append(PointsConvLayer(in_dim, out_dim // 2, act_cls=self.act_cls, residual=True))
 
-            self.group_conv.append(nn.Sequential(*modules))
+            self.group_conv.append(nn.ModuleList(modules))
             self.group_final.append(PointsConvLayer(self.conv_dims[-1], OUT_CHAN, batch_norm=False, soft_init=True))
 
         if self.n_components > 1:
@@ -81,7 +84,14 @@ class PCGen(BasePointDecoder):
         group_atts = []
 
         for group in range(self.n_components):
-            x_group = self.group_conv[group](x)
+            x_group = x
+            module_list = cast(Iterable[nn.Module], self.group_conv[group])
+            for layer in module_list:
+                x_group = layer(x_group)
+                x_group = torch.cat(
+                    (x_group, x_group.max(dim=2, keepdim=True)[0].expand(-1, -1, x_group.size(2))), dim=1
+                )
+
             group_atts.append(x_group)
             x_group = self.group_final[group](x_group)
             xs_list.append(x_group)
