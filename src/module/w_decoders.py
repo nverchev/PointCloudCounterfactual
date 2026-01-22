@@ -72,7 +72,7 @@ class TransformerWDecoder(BaseWDecoder):
         self.positional_embedding = nn.Parameter(torch.randn(1, self.n_codes, self.proj_dim))
         self.memory_positional_embedding = nn.Parameter(torch.randn(1, self.n_codes, self.proj_dim))
         transformer_layers: list[nn.Module] = []
-        for hidden_dim, rate in zip(self.conv_dims, self.dropout_rates, strict=False):
+        for hidden_dim, rate in zip(self.mlp_dims, self.dropout_rates, strict=False):
             layer = nn.TransformerDecoderLayer(
                 d_model=self.proj_dim,
                 nhead=self.n_heads,
