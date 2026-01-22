@@ -4,46 +4,57 @@ import enum
 
 
 class Datasets(enum.StrEnum):
-    """Dataset names."""
+    """Dataset classes."""
 
     ModelNet = enum.auto()
     ShapenetFlow = enum.auto()
 
 
 class Encoders(enum.StrEnum):
-    """Encoder names."""
+    """Encoder classes."""
 
     LDGCNN = enum.auto()
     DGCNN = enum.auto()
 
 
 class Decoders(enum.StrEnum):
-    """Encoder names."""
+    """Encoder classes."""
 
     PCGen = enum.auto()
 
 
 class WEncoders(enum.StrEnum):
-    """Encoder names for the W-autoencoder."""
+    """Encoder classes for the W-autoencoder."""
 
-    Convolution = enum.auto()
-    Transformers = enum.auto()
+    Convolutional = enum.auto()
+    Transformer = enum.auto()
 
 
 class WDecoders(enum.StrEnum):
-    """Decoder names for the W-autoencoder."""
+    """Decoder classes for the W-autoencoder."""
 
-    Convolution = enum.auto()
     Linear = enum.auto()
-    TransformerCross = enum.auto()
+    Transformer = enum.auto()
 
 
-class ModelHead(enum.StrEnum):
-    """Model type."""
+class WConditionalEncoders(enum.StrEnum):
+    """Posterior classes."""
+
+    Transformer = enum.auto()
+
+
+class AutoEncoders(enum.StrEnum):
+    """Autoencoder classes."""
 
     AE = enum.auto()
     VQVAE = enum.auto()
     CounterfactualVQVAE = enum.auto()
+
+
+class Classifiers(enum.StrEnum):
+    """Classifier classes."""
+
+    DGCNN = enum.auto()
 
 
 class GradOp(enum.StrEnum):

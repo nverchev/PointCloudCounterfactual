@@ -1,4 +1,0 @@
-name: ModelNet
-n_classes: 4
-settings:
-  select_classes: ['bottle', 'bowl', 'cup', 'vase']

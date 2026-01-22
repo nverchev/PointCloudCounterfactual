@@ -16,7 +16,7 @@ from drytorch.contrib.optuna import get_final_value, suggest_overrides
 from drytorch.core.exceptions import ConvergenceError
 from drytorch.core.register import register_model, unregister_model
 
-from src.module import CounterfactualVQVAE, DGCNN
+from src.module import CounterfactualVQVAE, get_classifier
 from src.config import ConfigPath, Experiment, get_config_all, set_tuning_logging
 from src.utils.tuning import impute_failed_trial, impute_pruned_trial, get_study_name
 
@@ -29,14 +29,14 @@ def set_objective(tune_cfg: DictConfig) -> Callable[[optuna.Trial], float]:
     main_exp = Experiment(main_cfg, name=main_cfg.name, par_dir=main_cfg.user.path.version_dir, tags=main_cfg.tags)
 
     with main_exp.create_run(resume=True):
-        classifier_module = DGCNN()
-        classifier = Model(classifier_module, name=main_cfg.classifier.architecture.name, device=main_cfg.user.device)
+        classifier_module = get_classifier()
+        classifier = Model(classifier_module, name=main_cfg.classifier.model.name, device=main_cfg.user.device)
         classifier.load_state()
         unregister_model(classifier)  # unregister from the previous experiment (classifier is not modified)
 
         # load saved model with original settings
         vqvae_module = CounterfactualVQVAE()
-        autoencoder = Model(vqvae_module, name=main_cfg.autoencoder.architecture.name, device=main_cfg.user.device)
+        autoencoder = Model(vqvae_module, name=main_cfg.autoencoder.model.name, device=main_cfg.user.device)
         autoencoder.load_state()
         state_dict = {key: value for key, value in vqvae_module.state_dict().items() if 'w_autoencoder' not in key}
 
@@ -50,12 +50,12 @@ def set_objective(tune_cfg: DictConfig) -> Callable[[optuna.Trial], float]:
             new_vqvae_module = CounterfactualVQVAE()
             # best to define a new model here otherwise the weights of the w_autoencoder will be modified
             new_autoencoder = Model(
-                new_vqvae_module, name=trial_cfg.autoencoder.architecture.name, device=trial_cfg.user.device
+                new_vqvae_module, name=trial_cfg.autoencoder.model.name, device=trial_cfg.user.device
             )
             new_autoencoder.module.load_state_dict(state_dict, strict=False)
             register_model(classifier)  # register to current experiment
             try:
-                train_w_autoencoder(new_vqvae_module, classifier, name=new_autoencoder.name, trial=trial)
+                train_w_autoencoder(new_vqvae_module, classifier, trial=trial)
             except optuna.TrialPruned:
                 return impute_pruned_trial(trial)
 
@@ -72,7 +72,7 @@ def set_objective(tune_cfg: DictConfig) -> Callable[[optuna.Trial], float]:
     return _objective
 
 
-@hydra.main(version_base=None, config_path=ConfigPath.TUNE_W_AUTOENCODER.absolute(), config_name='defaults')
+@hydra.main(version_base=None, config_path=ConfigPath.TUNING_W_AUTOENCODER.absolute(), config_name='defaults')
 def tune(tune_cfg: DictConfig):
     """Set up the study and launch the optimization."""
     set_tuning_logging()
@@ -84,7 +84,7 @@ def tune(tune_cfg: DictConfig):
         n_min_trials=tune_cfg.tune.n_min_trials,
     )
     sampler = optuna.samplers.GPSampler(warn_independent_sampling=False)
-    study_name = get_study_name(tune_cfg.tune.study_name, tune_cfg.overrides[1:])
+    study_name = get_study_name(tune_cfg.tune.study_name, tune_cfg.overrides)
     study = optuna.create_study(
         study_name=study_name, storage=tune_cfg.storage, sampler=sampler, pruner=pruner, load_if_exists=True
     )

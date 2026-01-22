@@ -1,4 +1,0 @@
-name: ModelNet
-n_classes: 2
-settings:
-  select_classes: ['desk', 'table']

@@ -46,7 +46,7 @@ def set_objective(tune_cfg: DictConfig) -> Callable[[optuna.Trial], float]:
     return objective
 
 
-@hydra.main(version_base=None, config_path=ConfigPath.TUNE_AUTOENCODER.absolute(), config_name='defaults')
+@hydra.main(version_base=None, config_path=ConfigPath.TUNING_AUTOENCODER.absolute(), config_name='defaults')
 def main(tune_cfg: DictConfig):
     """Set up the study and launch the optimization."""
     set_tuning_logging()
@@ -58,7 +58,7 @@ def main(tune_cfg: DictConfig):
         n_min_trials=tune_cfg.tune.n_min_trials,
     )
     sampler = optuna.samplers.GPSampler(warn_independent_sampling=False)
-    study_name = get_study_name(tune_cfg.tune.study_name, tune_cfg.overrides[1:])
+    study_name = get_study_name(tune_cfg.tune.study_name, tune_cfg.overrides)
     study = optuna.create_study(
         study_name=study_name, storage=tune_cfg.storage, sampler=sampler, pruner=pruner, load_if_exists=True
     )

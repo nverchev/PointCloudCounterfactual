@@ -9,7 +9,7 @@ from src.config import ConfigPath
 from src.utils.tuning import get_study_name, visualize_study
 
 
-@hydra.main(version_base=None, config_path=ConfigPath.TUNE_AUTOENCODER.absolute(), config_name='defaults')
+@hydra.main(version_base=None, config_path=ConfigPath.TUNING_AUTOENCODER.absolute(), config_name='defaults')
 def tune(tune_cfg: DictConfig):
     """Set up the study and launch the optimization."""
     study_name = get_study_name(tune_cfg.tune.study_name, tune_cfg.overrides[1:])

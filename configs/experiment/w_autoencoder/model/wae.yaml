@@ -1,0 +1,11 @@
+defaults:
+  - w_encoder: transformer_w_encoder
+  - w_decoder: transformer_w_decoder
+  - conditional_w_encoder: transformer_conditional_w_encoder
+  - _self_
+
+name: WAutoEncoder
+z1_dim: 16
+z2_dim: 16
+cf_temperature: 5.
+n_pseudo_inputs: 0

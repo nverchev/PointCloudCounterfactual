@@ -1,9 +1,0 @@
-architecture: Transformers
-proj_dim: 512
-n_heads: 8
-hidden_dims_conv: [512, 512, 512]
-hidden_dims_lin: [1024, 1024]
-dropout: [0., 0., 0., 0., 0.]
-act_name: 'GELU'
-gumbel: true
-cf_temperature: 5

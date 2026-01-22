@@ -1,6 +1,0 @@
-architecture: Convolution
-proj_dim: 8
-n_heads: 8
-hidden_dims: [64, 64, 32]
-dropout: [0., 0., 0., 0., 0.]
-act_name: ''

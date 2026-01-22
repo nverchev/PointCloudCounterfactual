@@ -1,0 +1,16 @@
+study_name:
+  embedding
+
+params:
+
+  autoencoder.model.vq_noise:
+    suggest: suggest_float
+    settings:
+      low: 0.1
+      high: 10
+
+  autoencoder.objective.c_embedding:
+    suggest: suggest_float
+    settings:
+      low: 0.1
+      high: 10

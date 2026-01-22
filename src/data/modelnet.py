@@ -92,7 +92,7 @@ class ModelNet40Dataset(SplitCreator):
                 path=self.modelnet_path,
                 wild_str=f'*{split.name}*.h5',
                 input_points=cfg.data.n_input_points,
-                k=cfg.data.k,
+                k=cfg.data.n_neighbors,
             )
             selected_indices: slice | np.ndarray[Any, np.dtype[np.bool_]]
             if cfg.data.dataset.n_classes == 40:

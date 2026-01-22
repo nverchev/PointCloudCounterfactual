@@ -89,7 +89,7 @@ class CloudJitterer:
 def augment_clouds() -> CloudAugmenter:
     """Create a callable for augmentation based on configuration."""
     cfg_data = Experiment.get_config().data
-    return CloudAugmenter(rotation=cfg_data.rotation, translation_and_scale=cfg_data.translation)
+    return CloudAugmenter(rotation=cfg_data.rotate, translation_and_scale=cfg_data.translate)
 
 
 def jitter_cloud() -> CloudJitterer:

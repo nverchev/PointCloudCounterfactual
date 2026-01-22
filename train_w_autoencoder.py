@@ -3,15 +3,14 @@
 from typing import TYPE_CHECKING, Any
 
 import torch
-
 from drytorch import DataLoader, Model, Test, Trainer
 from drytorch.lib.hooks import EarlyStoppingCallback
 from drytorch.utils.average import get_moving_average, get_trailing_mean
 
-from src.module import CounterfactualVQVAE, DGCNN
-from src.config import ConfigAll, Experiment, get_trackers, hydra_main
+from src.config import AllConfig, Experiment, get_trackers, hydra_main
 from src.data import Inputs, get_datasets
 from src.data.processed import WDatasetWithLogits
+from src.module import CounterfactualVQVAE, get_classifier
 from src.train import get_learning_schema, get_w_autoencoder_loss
 from src.train.models import ModelEpoch
 from src.utils.parallel import DistributedWorker
@@ -24,37 +23,32 @@ else:
 
 
 def train_w_autoencoder(
-    vqvae: CounterfactualVQVAE, classifier: Model[Inputs, torch.Tensor], name: str, trial: Trial | None = None
+    vqvae: CounterfactualVQVAE, classifier: Model[Inputs, torch.Tensor], trial: Trial | None = None
 ) -> None:
     """Train the w-autoencoder."""
     cfg = Experiment.get_config()
     cfg_w_ae = cfg.w_autoencoder
     cfg_user = cfg.user
     module = vqvae.w_autoencoder
-    module.update_codebook(vqvae.codebook)
-    for param in module.parameters():
-        param.requires_grad = True
-
-    w_encoder_model = ModelEpoch(module, name=f'{name:s}.WAutoEncoder')
+    w_encoder_model = ModelEpoch(module, name=cfg_w_ae.model.name)
     if not cfg_user.load_checkpoint:
         module.recursive_reset_parameters()
 
-    train_dataset, test_dataset = get_datasets()  # test is validation unless final=True
+    module.update_codebook(vqvae.codebook.detach().clone())
+    for param in module.parameters():
+        param.requires_grad = True
 
+    train_dataset, test_dataset = get_datasets()  # test is validation unless final=True
     train_w_dataset = WDatasetWithLogits(train_dataset, vqvae, classifier)
     test_w_dataset = WDatasetWithLogits(test_dataset, vqvae, classifier)
     test_loader = DataLoader(dataset=test_w_dataset, batch_size=cfg_w_ae.train.batch_size_per_device, pin_memory=False)
     loss_calc = get_w_autoencoder_loss()
-
-    with cfg.focus(cfg.w_autoencoder):
-        learning_schema = get_learning_schema()
-
+    learning_schema = get_learning_schema(cfg.w_autoencoder)
     train_loader = DataLoader(
         dataset=train_w_dataset, batch_size=cfg_w_ae.train.batch_size_per_device, pin_memory=False
     )
     trainer = Trainer(w_encoder_model, loader=train_loader, loss=loss_calc, learning_schema=learning_schema)
     test_encoding = Test(w_encoder_model, loader=test_loader, metric=loss_calc)
-
     if not cfg.final:
         trainer.add_validation(test_loader)
 
@@ -78,7 +72,7 @@ def train_w_autoencoder(
     return
 
 
-def setup_and_train(cfg: ConfigAll) -> None:
+def setup_and_train(cfg: AllConfig) -> None:
     """Set up the experiment, load the classifier and the autoencoder, and train the w-autoencoder."""
     trackers = get_trackers(cfg)
     exp = Experiment(cfg, name=cfg.name, par_dir=cfg.user.path.version_dir, tags=cfg.tags)
@@ -86,10 +80,10 @@ def setup_and_train(cfg: ConfigAll) -> None:
         exp.trackers.subscribe(tracker)
 
     with exp.create_run(resume=True):
-        classifier_module = DGCNN()
+        classifier_module = get_classifier()
         classifier = Model(
             classifier_module,
-            name=cfg.classifier.architecture.name,
+            name=cfg.classifier.model.name,
             device=cfg.user.device,
             should_compile=False,
             should_distribute=False,
@@ -98,19 +92,19 @@ def setup_and_train(cfg: ConfigAll) -> None:
         module = CounterfactualVQVAE()
         autoencoder = Model(
             module,
-            name=cfg.autoencoder.architecture.name,
+            name=cfg.autoencoder.model.name,
             device=cfg.user.device,
             should_compile=False,
             should_distribute=False,
         )
         autoencoder.checkpoint.load()
-        train_w_autoencoder(module, classifier, name=autoencoder.name)
+        train_w_autoencoder(module, classifier)
         autoencoder.save_state()
     return
 
 
 @hydra_main
-def main(cfg: ConfigAll) -> None:
+def main(cfg: AllConfig) -> None:
     """Main entry point for module that creates subprocesses in parallel mode."""
     n_processes = cfg.user.n_subprocesses
     if n_processes:

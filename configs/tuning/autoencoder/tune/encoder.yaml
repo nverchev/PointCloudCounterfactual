@@ -1,0 +1,24 @@
+study_name:
+  encoder
+
+n_trials: 200
+
+params:
+
+  autoencoder.model.encoder.conv_dims:
+    suggest: suggest_list
+    settings:
+      min_length: 1
+      max_length: 4
+      suggest: suggest_int
+      settings:
+        low: 16
+        high: 512
+        log: true
+
+  autoencoder.model.encoder.n_neighbors:
+    suggest: suggest_int
+    settings:
+      low: 10
+      high: 30
+      log: false

@@ -1,0 +1,8 @@
+class_name: PCGen
+sample_dim: 8
+n_components: 8
+map_dims: [ 64 ]
+conv_dims: [ 1024, 256, 16]
+tau: 5
+act_name: ReLU
+filter: true

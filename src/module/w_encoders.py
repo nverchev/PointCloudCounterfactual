@@ -12,12 +12,7 @@ from src.module.layers import PointsConvLayer, LinearLayer
 
 
 class BaseWEncoder(nn.Module, metaclass=abc.ABCMeta):
-    """Base class for W-space encoders in the autoencoder architecture.
-
-    W-space encoders transform point cloud embeddings into a latent space
-    representation. This base class provides common configurations and
-    interface for different W-encoder implementations.
-    """
+    """Base class for W-space encoders in the autoencoder architecture."""
 
     def __init__(self) -> None:
         super().__init__()
@@ -25,98 +20,71 @@ class BaseWEncoder(nn.Module, metaclass=abc.ABCMeta):
         cfg_ae = cfg.autoencoder
 
         # Dataset parameters
-        self.num_classes = cfg.data.dataset.n_classes
+        self.n_classes = cfg.data.dataset.n_classes
 
         # Model configuration
-        cfg_ae_arch = cfg_ae.architecture
-        cfg_w_encoder = cfg_ae_arch.encoder.w_encoder
+        cfg_ae_model = cfg_ae.model
+        cfg_wae_model = cfg.w_autoencoder.model
+        cfg_w_encoder = cfg_wae_model.w_encoder
 
         # Latent space dimensions
-        self.w_dim: int = cfg_ae_arch.w_dim  # W-space dimension
-        self.embedding_dim: int = cfg_ae_arch.embedding_dim  # Input embedding dimension
-        self.z1_dim: int = cfg_ae_arch.z1_dim  # Z-space dimension
+        self.w_dim: int = cfg_ae_model.w_dim
+        self.embedding_dim: int = cfg_ae_model.embedding_dim  # Input embedding dimension
+        self.z1_dim: int = cfg_wae_model.z1_dim  # Z-space dimension
 
         # Vector quantization parameters
-        self.n_codes: int = cfg_ae_arch.n_codes  # Number of codebook vectors
-        self.book_size: int = cfg_ae_arch.book_size  # Size of each codebook
+        self.n_codes: int = cfg_ae_model.n_codes  # Number of codebook vectors
+        self.book_size: int = cfg_ae_model.book_size  # Size of each codebook
 
         # Network architecture parameters
         self.proj_dim: int = cfg_w_encoder.proj_dim
         self.n_heads: int = cfg_w_encoder.n_heads
-        self.h_dims_conv: tuple[int, ...] = cfg_w_encoder.hidden_dims_conv  # Hidden dimensions for the linear layers
-        self.h_dims_lin: tuple[int, ...] = cfg_w_encoder.hidden_dims_lin  # Hidden dimensions for convolutional layers
-        self.dropout: tuple[float, ...] = cfg_w_encoder.dropout  # Dropout probabilities
+        self.conv_dims: tuple[int, ...] = cfg_w_encoder.conv_dims  # Hidden dimensions for the convolutional layers
+        self.mlp_dims: tuple[int, ...] = cfg_w_encoder.mlp_dims  # Hidden dimensions for mlp layers
+        self.dropout_rates: tuple[float, ...] = cfg_w_encoder.dropout_rates  # Dropout probabilities
         self.act_cls: ActClass = cfg_w_encoder.act_cls  # Activation function class
+        return
 
     @abc.abstractmethod
     def forward(self, x: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor]:
-        """Forward pass through the W-encoder.
-
-        Args:
-            x: Input embedding tensor of shape [batch_size, embedding_dim]
-
-        Returns:
-            torch.Tensor: Hidden features for hierarchical VAE
-            torch.Tensor: Latent variable
-        """
+        """Forward pass."""
 
 
-def get_w_encoder() -> BaseWEncoder:
-    """Returns the correct w_encoder."""
-    decoder_dict: dict[WEncoders, type[BaseWEncoder]] = {
-        WEncoders.Convolution: WEncoderConvolution,
-        WEncoders.Transformers: WEncoderTransformers,
-    }
-    return decoder_dict[Experiment.get_config().autoencoder.architecture.encoder.w_encoder.architecture]()
+class ConvolutionalWEncoder(BaseWEncoder):
+    """W-space encoder that uses a convolutional architecture with 1x1 kernel."""
 
-
-class WEncoderConvolution(BaseWEncoder):
     def __init__(self) -> None:
         super().__init__()
         modules: list[nn.Module] = []
-        total_h_dims = [h_dim * self.embedding_dim for h_dim in self.h_dims_conv]
-        dim_pairs = itertools.pairwise([self.embedding_dim, *total_h_dims])
+        dim_pairs = itertools.pairwise([self.embedding_dim, *self.conv_dims])
         for in_dim, out_dim in dim_pairs:
             modules.append(PointsConvLayer(in_dim, out_dim))
 
-        self.conv = nn.Sequential(*modules)
-        modules = []
-        expand_w_dim = self.w_dim * self.h_dims_conv[-1]
-        dim_pairs = itertools.pairwise([expand_w_dim, *self.h_dims_lin])
-        for (in_dim, out_dim), do in zip(dim_pairs, self.dropout, strict=False):
-            modules.append(LinearLayer(in_dim, out_dim, act_cls=self.act_cls))
-            modules.append(nn.Dropout(do))
-
-        modules.append(LinearLayer(self.h_dims_lin[-1], 2 * self.z1_dim, batch_norm=False, soft_init=True))
+        modules.append(PointsConvLayer(self.conv_dims[-1], 2 * self.z1_dim, batch_norm=False, soft_init=True))
         self.encode = nn.Sequential(*modules)
+        return
 
-    def forward(self, x) -> tuple[torch.Tensor, torch.Tensor]:
+    def forward(self, x) -> torch.Tensor:
         """Forward pass."""
-        x = x.view(-1, self.n_codes, self.embedding_dim).transpose(2, 1)
-        h = self.conv(x).view(-1, self.w_dim * self.h_dims_conv[-1])
-        x = self.encode(h)
-        return h, x
+        x = x.transpose(2, 1)
+        x = self.encode(x).transpose(2, 1)
+        return x
 
 
-class WEncoderTransformers(BaseWEncoder):
-    """W-space encoder using transformer architecture.
-
-    This encoder uses self-attention mechanisms to transform point cloud
-    embeddings into latent space representations, allowing the model to
-    capture global dependencies in the input.
-    """
+class TransformerWEncoder(BaseWEncoder):
+    """W-space encoder using transformer architecture."""
 
     def __init__(self) -> None:
         super().__init__()
         self.input_proj = LinearLayer(self.embedding_dim, self.proj_dim, batch_norm=False)
         self.positional_encoding = nn.Parameter(torch.randn(1, self.n_codes, self.proj_dim))
         transformer_layers: list[nn.Module] = []
-        for hidden_dim, do in zip(self.h_dims_lin, self.dropout, strict=False):
+        for hidden_dim, drate in zip(self.mlp_dims, self.dropout_rates, strict=False):
             encoder_layer = nn.TransformerEncoderLayer(
                 d_model=self.proj_dim,
                 nhead=self.n_heads,
                 dim_feedforward=hidden_dim,
-                dropout=do,
+                dropout=drate,
                 activation=self.act_cls(),
                 batch_first=True,
                 norm_first=True,
@@ -130,10 +98,18 @@ class WEncoderTransformers(BaseWEncoder):
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         """Forward pass through transformer encoder."""
         batch_size = x.shape[0]
-        x = self.input_proj(x.view(batch_size, self.n_codes, self.embedding_dim))
-        h = self.positional_encoding.expand(batch_size, -1, -1) + x
+        x = self.input_proj(x)
+        x = self.positional_encoding.expand(batch_size, -1, -1) + x
         for layer in self.transformer:
-            h = layer(h)
+            x = layer(x)
 
-        z = self.to_latent(h)
-        return z
+        return self.to_latent(x)
+
+
+def get_w_encoder() -> BaseWEncoder:
+    """Returns the correct w_encoder."""
+    decoder_dict: dict[WEncoders, type[BaseWEncoder]] = {
+        WEncoders.Convolutional: ConvolutionalWEncoder,
+        WEncoders.Transformer: TransformerWEncoder,
+    }
+    return decoder_dict[Experiment.get_config().w_autoencoder.model.w_encoder.class_name]()

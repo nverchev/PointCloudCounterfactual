@@ -3,9 +3,8 @@
 from drytorch import LearningSchema
 from drytorch.core import protocols as p
 from drytorch.lib import gradient_ops, schedulers
-from src.config.experiment import Experiment
-from src.config.options import GradOp, ClipCriterion, Schedulers
-from src.config.specs import SchedulerConfig, LearningConfig
+from src.config.options import ClipCriterion, GradOp, Schedulers
+from src.config.specs import ExperimentConfig, LearningConfig, SchedulerConfig
 
 
 def get_scheduler(config: SchedulerConfig) -> schedulers.AbstractScheduler:
@@ -50,9 +49,9 @@ def get_grad_op(config: LearningConfig) -> p.GradientOpProtocol:
     return gradient_ops.NoOp()
 
 
-def get_learning_schema() -> LearningSchema:
+def get_learning_schema(exp_cfg: ExperimentConfig) -> LearningSchema:
     """Returns configured the learning scheme."""
-    config = Experiment.get_config().lens.train.learn
+    config = exp_cfg.train.learn
     return LearningSchema(
         optimizer_cls=config.optimizer_cls,
         base_lr=config.learning_rate,

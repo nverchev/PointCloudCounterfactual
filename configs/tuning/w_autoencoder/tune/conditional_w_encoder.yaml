@@ -1,0 +1,49 @@
+study_name: conditional_w_encoder
+
+n_trials: 300
+
+params:
+  w_autoencoder.model.conditional_w_encoder.proj_dim:
+    suggest: suggest_categorical
+    settings:
+      choices: [ 256, 512 ]
+
+  w_autoencoder.model.conditional_w_encoder.n_heads:
+    suggest: suggest_categorical
+    settings:
+      choices: [ 4, 8, 16 ]
+
+  w_autoencoder.model.conditional_w_encoder.mlp_dims:
+    suggest: suggest_list
+    settings:
+      min_length: 1
+      max_length: 3
+      suggest: suggest_int
+      settings:
+        low: 128
+        high: 1024
+        log: true
+
+  w_autoencoder.model.conditional_w_encoder.dropout_rates.0:
+    suggest: suggest_float
+    settings:
+      low: 0.
+      high: 0.2
+
+  w_autoencoder.model.conditional_w_encoder.dropout_rates.1:
+    suggest: suggest_float
+    settings:
+      low: 0.
+      high: 0.2
+
+  w_autoencoder.model.conditional_w_encoder.dropout_rates.2:
+    suggest: suggest_float
+    settings:
+      low: 0.
+      high: 0.2
+
+  w_autoencoder.model.conditional_w_encoder.dropout_rates.3:
+    suggest: suggest_float
+    settings:
+      low: 0.
+      high: 0.2

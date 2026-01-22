@@ -42,7 +42,7 @@ class DiscreteSpaceOptimizer:
             raise ValueError('Model not supported for VQ optimization.')
 
         cfg_ae = Experiment.get_config().autoencoder
-        self.cfg_ae_arc = cfg_ae.architecture
+        self.cfg_ae_model = cfg_ae.model
         self.final_epoch = cfg_ae.train.n_epochs
 
     def __call__(self) -> None:
@@ -56,16 +56,16 @@ class DiscreteSpaceOptimizer:
         unused_entries = torch.eq(codebook_usage, 0)
 
         # Process each codebook
-        for book_idx in range(self.cfg_ae_arc.w_dim // self.cfg_ae_arc.embedding_dim):
+        for book_idx in range(self.cfg_ae_model.w_dim // self.cfg_ae_model.embedding_dim):
             # Calculate the probability distribution of used codebook entries
             usage_probs = np.array(codebook_usage[book_idx])
             usage_probs = usage_probs / usage_probs.sum()
 
             # Reassign unused entries
-            for entry_idx in range(self.cfg_ae_arc.book_size):
+            for entry_idx in range(self.cfg_ae_model.book_size):
                 if unused_entries[book_idx, entry_idx]:
                     # Sample from used entries and add noise to create new embedding
-                    sampled_idx = np.random.choice(np.arange(self.cfg_ae_arc.book_size), p=usage_probs)
+                    sampled_idx = np.random.choice(np.arange(self.cfg_ae_model.book_size), p=usage_probs)
                     template_embedding = self.module.codebook.data[book_idx, sampled_idx]
 
                     if self.model_runner.model.epoch == self.final_epoch:
@@ -73,7 +73,7 @@ class DiscreteSpaceOptimizer:
                         self.module.codebook.data[book_idx, entry_idx] = 1000
                     else:
                         # Add noise to template embedding
-                        noise = self.cfg_ae_arc.vq_noise * torch.randn_like(template_embedding)
+                        noise = self.cfg_ae_model.vq_noise * torch.randn_like(template_embedding)
                         self.module.codebook.data[book_idx, entry_idx] = template_embedding + noise
 
 
