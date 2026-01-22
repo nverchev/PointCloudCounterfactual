@@ -43,6 +43,7 @@ class DGCNN(nn.Module):
 
         mlp_modules.append(LinearLayer(self.mlp_dims[-1], self.n_classes, batch_norm=False))
         self.mlp = nn.Sequential(*mlp_modules)
+        return
 
     def forward(self, inputs: Inputs) -> torch.Tensor:
         """Forward Pass."""

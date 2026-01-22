@@ -43,6 +43,7 @@ class BaseWEncoder(nn.Module, metaclass=abc.ABCMeta):
         self.mlp_dims: tuple[int, ...] = cfg_w_encoder.mlp_dims  # Hidden dimensions for mlp layers
         self.dropout_rates: tuple[float, ...] = cfg_w_encoder.dropout_rates  # Dropout probabilities
         self.act_cls: ActClass = cfg_w_encoder.act_cls  # Activation function class
+        return
 
     @abc.abstractmethod
     def forward(self, x: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor]:
@@ -61,6 +62,7 @@ class ConvolutionalWEncoder(BaseWEncoder):
 
         modules.append(PointsConvLayer(self.conv_dims[-1], 2 * self.z1_dim, batch_norm=False, soft_init=True))
         self.encode = nn.Sequential(*modules)
+        return
 
     def forward(self, x) -> torch.Tensor:
         """Forward pass."""

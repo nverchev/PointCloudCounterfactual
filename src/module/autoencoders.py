@@ -27,6 +27,7 @@ class AbstractAutoEncoder(nn.Module, abc.ABC):
         cfg_ae = Experiment.get_config().autoencoder
         self.m_training: int = cfg_ae.training_output_points
         self.m_test: int = cfg_ae.objective.n_inference_output_points
+        return
 
     @property
     def m(self) -> int:
@@ -36,7 +37,6 @@ class AbstractAutoEncoder(nn.Module, abc.ABC):
     @abc.abstractmethod
     def forward(self, inputs: Inputs) -> Outputs:
         """Forward pass."""
-        pass
 
     def recursive_reset_parameters(self) -> None:
         """Reset all parameters."""
@@ -61,6 +61,7 @@ class BaseAutoencoder(AbstractAutoEncoder):
         super().__init__()
         self.encoder = get_encoder()
         self.decoder = get_decoder()
+        return
 
     def forward(self, inputs: Inputs) -> Outputs:
         """Forward pass."""
@@ -98,6 +99,7 @@ class BaseVQVAE(BaseAutoencoder, abc.ABC, Generic[WA]):
 
         self.quantizer = VectorQuantizer()
         self.transfer = TransferGrad()
+        return
 
     def encode(self, inputs: Inputs) -> Outputs:
         """Encode with optional double encoding."""
@@ -115,7 +117,6 @@ class BaseVQVAE(BaseAutoencoder, abc.ABC, Generic[WA]):
     @abc.abstractmethod
     def _init_w_autoencoder(self) -> WA:
         """Create the appropriate W autoencoder."""
-        pass
 
     @torch.inference_mode()
     def generate(

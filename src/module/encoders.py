@@ -40,6 +40,7 @@ class DGCNN(BasePointEncoder):
 
         self.edge_convolutions = nn.Sequential(*modules)
         self.final_conv = PointsConvLayer(sum(self.h_dim), self.w_dim, batch_norm=False)
+        return
 
     def forward(self, x: torch.Tensor, indices: torch.Tensor) -> torch.Tensor:
         """Forward pass."""
@@ -70,6 +71,7 @@ class LDGCNN(BasePointEncoder):
 
         self.points_convolutions = nn.Sequential(*modules)
         self.final_conv = PointsConvLayer(sum(self.conv_dims), self.w_dim, batch_norm=False)
+        return
 
     def forward(self, x: torch.Tensor, indices: torch.Tensor) -> torch.Tensor:
         """Forward pass."""

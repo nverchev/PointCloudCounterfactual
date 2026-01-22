@@ -34,6 +34,7 @@ class BaseWDecoder(nn.Module, metaclass=abc.ABCMeta):
         self.mlp_dims: tuple[int, ...] = cfg_w_decoder.mlp_dims
         self.dropout_rates: tuple[float, ...] = cfg_w_decoder.dropout_rates
         self.act_cls: ActClass = cfg_w_decoder.act_cls
+        return
 
     @abc.abstractmethod
     def forward(self, z1: torch.Tensor, z2: torch.Tensor) -> torch.Tensor:
@@ -53,6 +54,7 @@ class LinearWDecoder(BaseWDecoder):
 
         modules.append(PointsConvLayer(self.mlp_dims[-1], self.w_dim, groups=self.n_codes, batch_norm=False))
         self.decode = nn.Sequential(*modules)
+        return
 
     def forward(self, z1: torch.Tensor, z2: torch.Tensor):
         z = torch.cat((z1, z2), dim=2)
@@ -84,6 +86,7 @@ class TransformerWDecoder(BaseWDecoder):
 
         self.transformer = nn.ModuleList(transformer_layers)
         self.compress = LinearLayer(self.proj_dim, self.embedding_dim, batch_norm=False)
+        return
 
     def forward(self, z1: torch.Tensor, z2: torch.Tensor) -> torch.Tensor:
         batch_size = z1.shape[0]
