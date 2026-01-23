@@ -23,7 +23,7 @@ class DGCNN(nn.Module):
         super().__init__()
         cfg = Experiment.get_config()
         cfg_class_model = cfg.classifier.model
-        self.k: int = cfg_class_model.n_neighbors
+        self.n_neighbors: int = cfg_class_model.n_neighbors
         self.act_cls: ActClass = cfg_class_model.act_cls
         self.norm_cls: NormClass = cfg_class_model.norm_cls
         self.conv_dims: tuple[int, ...] = cfg_class_model.conv_dims
@@ -56,7 +56,7 @@ class DGCNN(nn.Module):
         xs = []
         x = x.transpose(2, 1)
         for conv in self.edge_convolutions:
-            indices, x = get_graph_features(x, k=self.k, indices=indices)  # [batch, features, num_points, k]
+            indices, x = get_graph_features(x, n_neighbors=self.n_neighbors, indices=indices)
             indices = torch.empty(0)  # finds new neighbors dynamically every iteration
             x = conv(x)
             x = x.max(dim=3, keepdim=False)[0]  # [batch, features, num_points]
