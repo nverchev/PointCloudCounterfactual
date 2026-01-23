@@ -8,7 +8,7 @@ from drytorch.lib.hooks import EarlyStoppingCallback, Hook, StaticHook, call_eve
 from drytorch.utils.average import get_moving_average, get_trailing_mean
 
 from src.data import get_datasets
-from src.module import VQVAE, get_autoencoder
+from src.module import BaseVQVAE, get_autoencoder
 from src.config import AllConfig, Experiment, get_trackers, hydra_main
 from src.train import get_autoencoder_loss, get_learning_schema
 from src.train.hooks import DiscreteSpaceOptimizer
@@ -45,7 +45,7 @@ def train_autoencoder(trial: Trial | None = None) -> None:
     if cfg_user.load_checkpoint:
         trainer.load_checkpoint(cfg_user.load_checkpoint)
 
-    if isinstance(ae, VQVAE):
+    if isinstance(ae, BaseVQVAE):
         rearrange_hook = StaticHook(DiscreteSpaceOptimizer(diagnostic)).bind(call_every(cfg_ae.diagnose_every))
         trainer.post_epoch_hooks.register(rearrange_hook)
 
