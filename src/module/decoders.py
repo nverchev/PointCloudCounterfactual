@@ -14,7 +14,7 @@ from src.config.experiment import Experiment
 from src.config.options import Decoders
 from src.data import OUT_CHAN
 from src.module.layers import PointsConvLayer, LinearLayer
-from src.utils.neighbour_ops import graph_filtering
+from src.utils.neighbour_ops import graph_filtering, knn
 
 
 class BasePointDecoder(nn.Module, metaclass=abc.ABCMeta):
@@ -104,7 +104,7 @@ class PCGen(BasePointDecoder):
         return torch.randn(batch, self.sample_dim, n_output_points, device=device)
 
     def _process_component_groups(
-        self, x: torch.Tensor, memory: torch.Tensor
+        self, x: torch.Tensor, memory: torch.Tensor, mask: torch.Tensor
     ) -> tuple[torch.Tensor, list[torch.Tensor]]:
         """Process all component groups and return outputs and attention features."""
         xs_list = []
@@ -116,7 +116,7 @@ class PCGen(BasePointDecoder):
             transformer = cast(Iterable[nn.TransformerDecoderLayer], self.group_transformer[group])
             x_group = x_group.transpose(2, 1)
             for layer in transformer:
-                x_group = layer(x_group, memory=memory)
+                x_group = layer(x_group, memory=memory, tgt_mask=mask)
 
             x_group = x_group.transpose(2, 1)
             x_group = self.group_final[group](x_group)
@@ -149,13 +149,17 @@ class PCGen(BasePointDecoder):
         # Initialize sampling points
         x = self._initialize_sampling(batch, n_output_points, device, initial_sampling)
 
+        indices = knn(x, 25)
+        mask = self.create_batch_aware_mask(indices, device)
+
         # Map and join with latent code
         x = self.map_sample(x)
         x = self._join_operation(x, w)
 
         # Process component groups
         memory = self.proj_w(w.view(batch, self.n_codes, self.embedding_dim)) + self.memory_positional_encoding
-        xs, group_atts = self._process_component_groups(x, memory)
+
+        xs, group_atts = self._process_component_groups(x, memory, mask)
 
         # Mix components with attention
         x = self._apply_attention_mixing(xs, group_atts)
@@ -169,6 +173,33 @@ class PCGen(BasePointDecoder):
     @staticmethod
     def _join_operation(x: torch.Tensor, w: torch.Tensor) -> torch.Tensor:
         return w.unsqueeze(2) * x
+
+    def create_batch_aware_mask(self, neighbor_idx, device):
+        """
+        Create batch-aware mask by repeating for each head.
+        This allows different masks per batch item.
+
+        Args:
+            neighbor_idx: [B, N, K]
+            device: torch device
+
+        Returns:
+            mask: [B*num_heads, N, N] - attention mask
+        """
+        B, N, K = neighbor_idx.shape
+
+        # Create mask [B, N, N]
+        mask = torch.ones(B, N, N, dtype=torch.bool, device=device)
+
+        # Set neighbors to False (can attend)
+        batch_idx = torch.arange(B, device=device).view(B, 1, 1).expand(B, N, K)
+        query_idx = torch.arange(N, device=device).view(1, N, 1).expand(B, N, K)
+        mask[batch_idx, query_idx, neighbor_idx] = False
+
+        # Repeat for each attention head: [B, N, N] -> [B*num_heads, N, N]
+        mask = mask.unsqueeze(1).expand(B, self.n_heads, N, N)
+        mask = mask.reshape(B * self.n_heads, N, N)
+        return mask
 
 
 def get_decoder() -> BasePointDecoder:
