@@ -6,7 +6,7 @@ import itertools
 import torch
 from torch import nn as nn
 
-from src.config import Experiment, ActClass
+from src.config import Experiment, ActClass, NormClass
 from src.config.options import WDecoders
 from src.module.layers import LinearLayer, PointsConvLayer
 
@@ -34,6 +34,7 @@ class BaseWDecoder(nn.Module, metaclass=abc.ABCMeta):
         self.mlp_dims: tuple[int, ...] = cfg_w_decoder.mlp_dims
         self.dropout_rates: tuple[float, ...] = cfg_w_decoder.dropout_rates
         self.act_cls: ActClass = cfg_w_decoder.act_cls
+        self.norm_cls: NormClass = cfg_w_decoder.norm_cls
         return
 
     @abc.abstractmethod
@@ -49,10 +50,14 @@ class LinearWDecoder(BaseWDecoder):
         modules: list[nn.Module] = []
         dim_pairs = itertools.pairwise([(self.z1_dim + self.z2_dim) * self.n_codes, *self.mlp_dims])
         for (in_dim, out_dim), rate in zip(dim_pairs, self.dropout_rates, strict=False):
-            modules.append(PointsConvLayer(in_dim, out_dim, groups=self.n_codes, act_cls=self.act_cls))
+            modules.append(
+                PointsConvLayer(
+                    in_dim, out_dim, n_groups_dense=self.n_codes, act_cls=self.act_cls, norm_cls=self.norm_cls
+                )
+            )
             modules.append(nn.Dropout(rate))
 
-        modules.append(PointsConvLayer(self.mlp_dims[-1], self.w_dim, groups=self.n_codes, grouped_norm=False))
+        modules.append(PointsConvLayer(self.mlp_dims[-1], self.w_dim, n_groups_dense=self.n_codes))
         self.decode = nn.Sequential(*modules)
         return
 
@@ -67,8 +72,8 @@ class TransformerWDecoder(BaseWDecoder):
 
     def __init__(self) -> None:
         super().__init__()
-        self.z1_proj = LinearLayer(self.z2_dim, self.proj_dim, grouped_norm=False)
-        self.z2_proj = LinearLayer(self.z2_dim, self.proj_dim, grouped_norm=False)
+        self.z1_proj = LinearLayer(self.z2_dim, self.proj_dim, act_cls=self.act_cls)
+        self.z2_proj = LinearLayer(self.z2_dim, self.proj_dim, act_cls=self.act_cls)
         self.positional_embedding = nn.Parameter(torch.randn(1, self.n_codes, self.proj_dim))
         self.memory_positional_embedding = nn.Parameter(torch.randn(1, self.n_codes, self.proj_dim))
         transformer_layers: list[nn.Module] = []
@@ -85,7 +90,7 @@ class TransformerWDecoder(BaseWDecoder):
             transformer_layers.append(layer)
 
         self.transformer = nn.ModuleList(transformer_layers)
-        self.compress = LinearLayer(self.proj_dim, self.embedding_dim, grouped_norm=False)
+        self.compress = LinearLayer(self.proj_dim, self.embedding_dim)
         return
 
     def forward(self, z1: torch.Tensor, z2: torch.Tensor) -> torch.Tensor:

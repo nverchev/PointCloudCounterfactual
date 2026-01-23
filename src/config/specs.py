@@ -12,7 +12,7 @@ from pydantic.dataclasses import dataclass
 from omegaconf import DictConfig
 
 from src.config.environment import EnvSettings, VERSION
-from src.config.torch import get_activation_cls, get_optim_cls, set_seed, DEFAULT_ACT
+from src.config.torch import get_activation_cls, get_norm_cls, get_optim_cls, set_seed, DEFAULT_ACT, DEFAULT_NORM
 from src.config.options import (
     Datasets,
     Encoders,
@@ -86,7 +86,8 @@ class ArchitectureConfig:
         proj_dim (StrictlyPositiveInt): Number of dimensions in expanded embedding
         dropout_rates (tuple[PositiveFloat]): Dropout probabilities for the MLP/transformer part
         act_name (str): The name of the PyTorch activation function (e.g., 'ReLU', 'LeakyReLU')
-        act_cls (ActClass): The activation class
+        act_cls (ActClass): The activation class to be applied to the layer's output
+        norm_cls (NormClass): The normalization class to be applied to the layer's output (before the activation)
     """
 
     conv_dims: tuple[StrictlyPositiveInt, ...] = dataclasses.field(default_factory=tuple)
@@ -95,10 +96,12 @@ class ArchitectureConfig:
     proj_dim: StrictlyPositiveInt = 1
     dropout_rates: tuple[PositiveFloat, ...] = dataclasses.field(default_factory=tuple)
     act_name: str = ''
+    norm_name: str = ''
 
     def __post_init__(self) -> None:
         """Resolve activation class from name."""
         self.act_cls = get_activation_cls(self.act_name) if self.act_name else DEFAULT_ACT
+        self.norm_cls = get_norm_cls(self.norm_name) if self.norm_name else DEFAULT_NORM
         return
 
     @model_validator(mode='after')

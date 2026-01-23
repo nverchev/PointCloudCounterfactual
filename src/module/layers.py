@@ -2,7 +2,6 @@
 
 import abc
 import functools
-import math
 import pdb
 import sys
 
@@ -15,11 +14,11 @@ import torch.nn as nn
 from torch import Tensor
 from torch.autograd import Function
 
-
 DEBUG_MODE = sys.gettrace()
 
 type _grad_t = tuple[torch.Tensor, ...] | torch.Tensor
 type ActClass = Callable[[], nn.Module]
+type NormClass = Callable[[int], nn.Module]
 
 
 @runtime_checkable
@@ -68,26 +67,25 @@ class MaxChannel(nn.Module):
         return torch.max(x, axis)[0]
 
 
-# Input (Batch, Features)
-class GeneralizedLinearLayer(nn.Module, metaclass=abc.ABCMeta):
-    """A class that wraps a generalized linear (dense) layer class.
+class BaseLayer(nn.Module, metaclass=abc.ABCMeta):
+    """A class that includes a layer followed by an optional activation and grouped normalization.
 
     Args:
         in_dim: The number of input features
         out_dim: The number of output features
-        act_cls: An optional callable for the output activation of the linear layer
-        grouped_norm: A boolean value indicating whether to include batch normalization in the layer
-        groups: The number of groups for the linear layer. Default is 1.
-        soft_init: A boolean value indicating whether to use a soft initialization for the weights of the dense layer
+        act_cls: An optional callable for the output activation of the output
+        norm_cls: An optional callable for normalization on the output (before the activation)
+        n_groups_dense: The number of groups for the dense layer. Default is 1.
+        use_soft_init: Whether to initialize the weights of the dense layer very close to zero.
 
     Attributes:
         in_dim (int): The number of input features
         out_dim (int): The number of output features
-        groups (int): The number of groups for the linear layer
-        bias (bool): A boolean value indicating whether the bias term is in the layer (and not in batch normalization)
-        dense (nn.Module): The wrapped layer of the neural network
-        norm (nn.Module): The grouped normalization layer of the neural network, if included
-        act (Optional[nn.Module]): The activation function applied to the output of the linear layer or None
+        n_groups_dense (int): The number of groups for the dense layer
+        use_bias (bool): A boolean value indicating whether the bias term is in the layer (and no normalization)
+        layer (nn.Module): The wrapped layer of the neural network
+        norm (nn.Module): A boolean value indicating whether to add grouped normalization on the output
+        act (Optional[nn.Module]): The activation function applied to the output
         init (Callable[[torch.Tensor], torch.Tensor]): The initialization function for the weights of the dense layer
 
     """
@@ -97,39 +95,63 @@ class GeneralizedLinearLayer(nn.Module, metaclass=abc.ABCMeta):
         in_dim: int,
         out_dim: int,
         act_cls: ActClass | None = None,
-        grouped_norm: bool = True,
-        bn_momentum: float | None = None,
-        groups: int = 1,
-        residual: bool = False,
-        soft_init: bool = False,
+        norm_cls: NormClass | None = None,
+        n_groups_dense: int = 1,
+        use_residual: bool = False,
+        use_soft_init: bool = False,
     ) -> None:
         super().__init__()
         self.in_dim: int = in_dim
         self.out_dim: int = out_dim
-        self.groups: int = groups
-        self.bias: bool = False if grouped_norm else True
-        self.dense = self.get_dense_layer()
-        self.norm: nn.Module | None = self.get_norm_layer() if grouped_norm else None
-        self.residual: bool = residual
-        if act_cls is None:
-            self.act: nn.Module | None = None
-        else:
-            self.act = act_cls()
-            if isinstance(self.act, HasInplace):
-                self.act.inplace = True
-
-        self.soft_init: bool = soft_init
-        self.init = self.get_init(self.act, soft_init)
-        self.init(cast(torch.Tensor, self.dense.weight))
+        self.n_groups_dense: int = n_groups_dense
+        self.use_bias: bool = True if norm_cls is None else False
+        self.layer = self.get_dense_layer()
+        self.norm = self.get_norm_layer(norm_cls, out_dim)
+        self.use_residual: bool = use_residual
+        self.act = self.get_activation(act_cls)
+        self.soft_init: bool = use_soft_init
+        self.init = self.get_init(self.act, use_soft_init)
+        self.init(cast(torch.Tensor, self.layer.weight))
         if DEBUG_MODE:
             self.register_forward_hook(debug_check)
             self.register_full_backward_hook(debug_check)
 
         return
 
+    @abc.abstractmethod
+    def get_dense_layer(self) -> nn.Module:
+        """Get the wrapped layer"""
+
+    def forward(self, x):
+        """Forward pass."""
+        y = self.layer(x)
+
+        if self.norm is not None:
+            y = self.norm(y)
+
+        if self.act is not None:
+            y = self.act(y)
+
+        if self.use_residual:
+            return y + x.repeat_interleave(self.out_dim // self.in_dim + 1, 1)[:, : y.shape[1], ...]
+
+        return y
+
+    @staticmethod
+    def get_activation(act_cls: ActClass | None) -> nn.Module | None:
+        """Get the activation function."""
+        if act_cls is None:
+            return None
+
+        act = act_cls()
+        if isinstance(act, HasInplace):
+            act.inplace = True
+
+        return act
+
     @staticmethod
     def get_init(act: nn.Module | None, soft_init: bool) -> Callable[[torch.Tensor], torch.Tensor]:
-        """This static method returns an initialization determined based on the type of activation."""
+        """Get initialization strategy according to the type of activation."""
 
         if soft_init:
             return functools.partial(nn.init.xavier_normal_, gain=0.01)
@@ -148,51 +170,37 @@ class GeneralizedLinearLayer(nn.Module, metaclass=abc.ABCMeta):
 
         return lambda x: x
 
-    @abc.abstractmethod
-    def get_dense_layer(self) -> nn.Module:
-        """Get the wrapped layer"""
-
-    def get_norm_layer(self) -> nn.Module:
+    @staticmethod
+    def get_norm_layer(norm_cls: NormClass | None, out_dim: int) -> nn.Module | None:
         """Get the batch normalization layer"""
-        n_groups = int(math.sqrt(self.out_dim))
-        while self.out_dim % n_groups:
-            n_groups -= 1
+        if norm_cls is None:
+            return None
 
-        return nn.GroupNorm(num_groups=n_groups, num_channels=self.out_dim)
-
-    def forward(self, x):
-        """Forward pass."""
-        y = self.norm(self.dense(x)) if self.norm is not None else self.dense(x)
-        if self.act is not None:
-            y = self.act(y)
-
-        if self.residual:
-            return y + x.repeat_interleave(self.out_dim // self.in_dim + 1, 1)[:, : y.shape[1], ...]
-
-        return y
+        return norm_cls(out_dim)
 
 
 # Input (Batch, Features)
-class LinearLayer(GeneralizedLinearLayer):
+class LinearLayer(BaseLayer):
     @override
     def get_dense_layer(self) -> nn.Module:
-        if self.groups > 1:
-            raise NotImplementedError('nn.Linear has not option for groups')
+        if self.n_groups_dense > 1:
+            raise NotImplementedError('nn.Linear has no option for groups')
 
-        return nn.Linear(self.in_dim, self.out_dim, bias=self.bias)
+        return nn.Linear(self.in_dim, self.out_dim, bias=self.use_bias)
 
 
 # Input (Batch, Points, Features)
-class PointsConvLayer(GeneralizedLinearLayer):
+class PointsConvLayer(BaseLayer):
     @override
     def get_dense_layer(self) -> nn.Module:
-        return nn.Conv1d(self.in_dim, self.out_dim, kernel_size=1, bias=self.bias, groups=self.groups)
+        return nn.Conv1d(self.in_dim, self.out_dim, kernel_size=1, bias=self.use_bias, groups=self.n_groups_dense)
 
 
-class EdgeConvLayer(GeneralizedLinearLayer):
+# Input (Batch, Points, Features, Features)
+class EdgeConvLayer(BaseLayer):
     @override
     def get_dense_layer(self) -> nn.Module:
-        return nn.Conv2d(self.in_dim, self.out_dim, kernel_size=1, bias=self.bias, groups=self.groups)
+        return nn.Conv2d(self.in_dim, self.out_dim, kernel_size=1, bias=self.use_bias, groups=self.n_groups_dense)
 
 
 class TemperatureScaledSoftmax(nn.Softmax):

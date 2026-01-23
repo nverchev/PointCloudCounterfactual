@@ -7,7 +7,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
-from src.config import ActClass
+from src.config import ActClass, NormClass
 from src.config.experiment import Experiment
 from src.config.options import Decoders
 from src.data import OUT_CHAN
@@ -26,6 +26,7 @@ class BasePointDecoder(nn.Module, metaclass=abc.ABCMeta):
         self.conv_dims: tuple[int, ...] = cfg_decoder.conv_dims
         self.w_dim: int = cfg_ae_model.w_dim
         self.act_cls: ActClass = cfg_decoder.act_cls
+        self.norm_cls: NormClass = cfg_decoder.norm_cls
         self.filtering: bool = cfg_decoder.filter
         self.sample_dim: int = cfg_decoder.sample_dim
         self.n_components: int = cfg_decoder.n_components
@@ -46,9 +47,9 @@ class PCGen(BasePointDecoder):
         modules: list[nn.Module] = []
         dim_pairs = itertools.pairwise([self.sample_dim, *self.map_dims])
         for in_dim, out_dim in dim_pairs:
-            modules.append(PointsConvLayer(in_dim, out_dim, grouped_norm=False, act_cls=torch.nn.ReLU))
+            modules.append(PointsConvLayer(in_dim, out_dim, act_cls=torch.nn.ReLU))
 
-        modules.append(PointsConvLayer(self.map_dims[-1], self.w_dim, grouped_norm=False, act_cls=nn.Hardtanh))
+        modules.append(PointsConvLayer(self.map_dims[-1], self.w_dim, act_cls=nn.Hardtanh))
         self.map_sample = nn.Sequential(*modules)
         self.group_conv = nn.ModuleList()
         self.group_final = nn.ModuleList()
@@ -56,13 +57,15 @@ class PCGen(BasePointDecoder):
             modules = []
             dim_pairs = itertools.pairwise([self.w_dim, *self.conv_dims])
             for in_dim, out_dim in dim_pairs:
-                modules.append(PointsConvLayer(in_dim, out_dim, act_cls=self.act_cls, residual=True))
+                modules.append(
+                    PointsConvLayer(in_dim, out_dim, act_cls=self.act_cls, norm_cls=self.norm_cls, use_residual=True)
+                )
 
             self.group_conv.append(nn.Sequential(*modules))
-            self.group_final.append(PointsConvLayer(self.conv_dims[-1], OUT_CHAN, grouped_norm=False, soft_init=True))
+            self.group_final.append(PointsConvLayer(self.conv_dims[-1], OUT_CHAN, use_soft_init=True))
 
         if self.n_components > 1:
-            self.att = PointsConvLayer(self.conv_dims[-1] * self.n_components, self.n_components, grouped_norm=False)
+            self.att = PointsConvLayer(self.conv_dims[-1] * self.n_components, self.n_components)
 
         return
 

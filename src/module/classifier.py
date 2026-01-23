@@ -7,6 +7,7 @@ import torch
 from torch import nn
 from torch.nn import functional as F
 
+from src.config import ActClass, NormClass
 from src.config.experiment import Experiment
 from src.config.options import Classifiers
 from src.data import IN_CHAN
@@ -23,25 +24,28 @@ class DGCNN(nn.Module):
         cfg = Experiment.get_config()
         cfg_class_model = cfg.classifier.model
         self.k: int = cfg_class_model.n_neighbors
-        self.act_cls = cfg_class_model.act_cls
+        self.act_cls: ActClass = cfg_class_model.act_cls
+        self.norm_cls: NormClass = cfg_class_model.norm_cls
         self.conv_dims: tuple[int, ...] = cfg_class_model.conv_dims
         self.feature_dim: int = cfg_class_model.feature_dim
         self.mlp_dims: tuple[int, ...] = cfg_class_model.mlp_dims
         self.dropout_rates: tuple[float, ...] = cfg_class_model.dropout_rates
         self.n_classes: int = cfg.data.dataset.n_classes
-        conv_modules: list[torch.nn.Module] = [EdgeConvLayer(2 * IN_CHAN, self.conv_dims[0], act_cls=self.act_cls)]
-        for in_dim, out_dim in itertools.pairwise(self.conv_dims):
-            conv_modules.append(EdgeConvLayer(2 * in_dim, out_dim, act_cls=self.act_cls))
+        conv_modules: list[torch.nn.Module] = []
+        for in_dim, out_dim in itertools.pairwise((2 * IN_CHAN, *self.conv_dims)):
+            conv_modules.append(EdgeConvLayer(2 * in_dim, out_dim, act_cls=self.act_cls, norm_cls=self.norm_cls))
 
         self.edge_convolutions = nn.Sequential(*conv_modules)
         self.final_conv = PointsConvLayer(sum(self.conv_dims), self.feature_dim)
-        mlp_modules: list[torch.nn.Module] = [LinearLayer(2 * self.feature_dim, self.mlp_dims[0], act_cls=self.act_cls)]
+        mlp_modules: list[torch.nn.Module] = [
+            LinearLayer(2 * self.feature_dim, self.mlp_dims[0], act_cls=self.act_cls, norm_cls=self.norm_cls)
+        ]
 
         for (in_dim, out_dim), rate in zip(itertools.pairwise(self.mlp_dims), self.dropout_rates, strict=False):
             mlp_modules.append(nn.Dropout(p=rate))
-            mlp_modules.append(LinearLayer(in_dim, out_dim, act_cls=self.act_cls))
+            mlp_modules.append(LinearLayer(in_dim, out_dim, act_cls=self.act_cls, norm_cls=self.norm_cls))
 
-        mlp_modules.append(LinearLayer(self.mlp_dims[-1], self.n_classes, grouped_norm=False))
+        mlp_modules.append(LinearLayer(self.mlp_dims[-1], self.n_classes))
         self.mlp = nn.Sequential(*mlp_modules)
         return
 

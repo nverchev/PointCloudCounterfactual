@@ -6,7 +6,7 @@ import itertools
 import torch
 import torch.nn as nn
 
-from src.config import ActClass, Experiment
+from src.config import ActClass, Experiment, NormClass
 from src.config.options import Encoders
 from src.data import IN_CHAN
 from src.module.layers import EdgeConvLayer, PointsConvLayer
@@ -22,6 +22,8 @@ class BasePointEncoder(nn.Module, metaclass=abc.ABCMeta):
         self.conv_dims: tuple[int, ...] = cfg_ae_model.encoder.conv_dims
         self.w_dim: int = cfg_ae_model.w_dim
         self.act_cls: ActClass = cfg_ae_model.encoder.act_cls
+        self.norm_cls: NormClass = cfg_ae_model.encoder.norm_cls
+        return
 
     @abc.abstractmethod
     def forward(self, x: torch.Tensor, indices: torch.Tensor) -> torch.Tensor:
@@ -33,13 +35,12 @@ class DGCNN(BasePointEncoder):
 
     def __init__(self) -> None:
         super().__init__()
-        self.h_dim = (64, 64, 128, 256)
-        modules = [EdgeConvLayer(2 * IN_CHAN, self.h_dim[0])]
-        for in_dim, out_dim in itertools.pairwise(self.h_dim):
-            modules.append(EdgeConvLayer(2 * in_dim, out_dim, act_cls=self.act_cls))
+        modules: list[torch.nn.Module] = []
+        for in_dim, out_dim in itertools.pairwise((IN_CHAN, *self.conv_dims)):
+            modules.append(EdgeConvLayer(2 * in_dim, out_dim, act_cls=self.act_cls, norm_cls=self.norm_cls))
 
         self.edge_convolutions = nn.Sequential(*modules)
-        self.final_conv = PointsConvLayer(sum(self.h_dim), self.w_dim, grouped_norm=False)
+        self.final_conv = PointsConvLayer(sum(self.conv_dims), self.w_dim)
         return
 
     def forward(self, x: torch.Tensor, indices: torch.Tensor) -> torch.Tensor:
@@ -64,13 +65,13 @@ class LDGCNN(BasePointEncoder):
 
     def __init__(self) -> None:
         super().__init__()
-        self.edge_conv = EdgeConvLayer(2 * IN_CHAN, self.conv_dims[0])
+        self.edge_conv = EdgeConvLayer(2 * IN_CHAN, self.conv_dims[0], act_cls=self.act_cls, norm_cls=self.norm_cls)
         modules: list[nn.Module] = []
         for in_dim, out_dim in itertools.pairwise(self.conv_dims):
-            modules.append(PointsConvLayer(in_dim, out_dim, act_cls=self.act_cls))
+            modules.append(PointsConvLayer(in_dim, out_dim, act_cls=self.act_cls, norm_cls=self.norm_cls))
 
         self.points_convolutions = nn.Sequential(*modules)
-        self.final_conv = PointsConvLayer(sum(self.conv_dims), self.w_dim, grouped_norm=False)
+        self.final_conv = PointsConvLayer(sum(self.conv_dims), self.w_dim)
         return
 
     def forward(self, x: torch.Tensor, indices: torch.Tensor) -> torch.Tensor:

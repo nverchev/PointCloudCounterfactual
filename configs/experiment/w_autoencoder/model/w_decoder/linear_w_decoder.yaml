@@ -2,3 +2,4 @@ class_name: Linear
 mlp_dims: [2048, 2048, 2048]
 dropout_rates: [0., 0.1, 0.3]
 act_name: ''
+norm_name: BatchNorm1d
