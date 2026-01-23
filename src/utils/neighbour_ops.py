@@ -60,14 +60,6 @@ def self_square_distance(t1: torch.Tensor) -> torch.Tensor:
     return dist
 
 
-def knn(x: torch.Tensor, k: int) -> torch.Tensor:
-    """Find the k nearest neighbors for each point in a point cloud."""
-    if x.device.type == 'cuda':
-        return pykeops_knn(x, k)
-    else:
-        return torch_knn(x, k)
-
-
 def torch_knn(x: torch.Tensor, k: int) -> torch.Tensor:
     """Find the k nearest neighbors using PyTorch backend."""
     d_ij = self_square_distance(x)
@@ -82,48 +74,59 @@ def pykeops_knn(x: torch.Tensor, k: int) -> torch.Tensor:
     return indices
 
 
-def get_neighbours(x: torch.Tensor, indices: torch.Tensor, k: int):
-    """Get the k nearest neighbors of each point in a point cloud."""
+def knn(x: torch.Tensor, k: int) -> torch.Tensor:
+    """Find the k nearest neighbors for each point in a point cloud."""
+    if x.device.type == 'cuda':
+        return pykeops_knn(x, k)
+    else:
+        return torch_knn(x, k)
+
+
+def get_neighbours(x: torch.Tensor, indices: torch.Tensor, n_neighbors: int) -> tuple[torch.Tensor, torch.Tensor]:
+    """Get the nearest neighbors of each point in a point cloud."""
     batch, n_feat, n_points = x.size()
     if indices.numel():
         indices = indices
     else:
-        indices = knn(x, k)  # (batch_size, num_points, k)
-    indices_expanded = indices.contiguous().view(batch, 1, k * n_points).expand(-1, n_feat, -1)
-    neighbours = torch.gather(x, 2, indices_expanded).view(batch, n_feat, n_points, k)
+        indices = knn(x, n_neighbors)  # (batch_size, num_points, n_neighbors)
+
+    indices_expanded = indices.contiguous().view(batch, 1, n_neighbors * n_points).expand(-1, n_feat, -1)
+    neighbours = torch.gather(x, 2, indices_expanded).view(batch, n_feat, n_points, n_neighbors)
     return indices, neighbours
 
 
-def get_local_covariance(x: torch.Tensor, indices: torch.Tensor, k: int = 16) -> torch.Tensor:
+def get_local_covariance(x: torch.Tensor, indices: torch.Tensor, n_neighbors: int = 16) -> torch.Tensor:
     """Compute the local covariance matrix for each point in a point cloud."""
-    neighbours = get_neighbours(x, indices, k)[1]
+    neighbours = get_neighbours(x, indices, n_neighbors)[1]
     neighbours -= neighbours.mean(3, keepdim=True)
     covariances = torch.matmul(neighbours.transpose(1, 2), neighbours.permute(0, 2, 3, 1))
     x = torch.cat([x, covariances.flatten(start_dim=2).transpose(1, 2)], dim=1).contiguous()
     return x
 
 
-def graph_max_pooling(x: torch.Tensor, indices: torch.Tensor, k: int = 16) -> torch.Tensor:
-    """Perform max pooling operation over the k nearest neighbors."""
-    neighbours = get_neighbours(x, indices, k)[1]
+def graph_max_pooling(x: torch.Tensor, indices: torch.Tensor, n_neighbors: int = 16) -> torch.Tensor:
+    """Perform max pooling operation over the nearest neighbors."""
+    neighbours = get_neighbours(x, indices, n_neighbors)[1]
     max_pooling = torch.max(neighbours, dim=-1)[0]
     return max_pooling
 
 
-def get_graph_features(x: torch.Tensor, indices: torch.Tensor, k: int = 20) -> tuple[torch.Tensor, torch.Tensor]:
-    """Extract graph features by concatenating the difference between points and their k nearest neighbors."""
-    indices_out, neighbours = get_neighbours(x, indices, k)
-    x = x.unsqueeze(3).expand(-1, -1, -1, k)
+def get_graph_features(
+    x: torch.Tensor, indices: torch.Tensor, n_neighbors: int = 20
+) -> tuple[torch.Tensor, torch.Tensor]:
+    """Extract graph features by concatenating the difference between points and their nearest neighbors."""
+    indices_out, neighbours = get_neighbours(x, indices, n_neighbors)
+    x = x.unsqueeze(3).expand(-1, -1, -1, n_neighbors)
     feature = torch.cat([neighbours - x, x], dim=1).contiguous()
-    # (batch_size, 2 * num_dims, num_points, k)
+    # (batch_size, 2 * num_dims, num_points, n_neighbors)
     return indices_out, feature
 
 
-def graph_filtering(x: torch.Tensor, k: int = 4) -> torch.Tensor:
+def graph_filtering(x: torch.Tensor, n_neighbors: int = 4) -> torch.Tensor:
     """Apply a graph-based filtering operation on the point cloud."""
-    neighbours = get_neighbours(x, k=k, indices=torch.empty(0))[1]
+    neighbours = get_neighbours(x, n_neighbors=n_neighbors, indices=torch.empty(0))[1]
     neighbours = neighbours[..., 1:]  # the closest neighbor is the point itself
-    diff = x.unsqueeze(-1).expand(-1, -1, -1, k - 1) - neighbours
+    diff = x.unsqueeze(-1).expand(-1, -1, -1, n_neighbors - 1) - neighbours
     dist = torch.sqrt(abs((diff**2).sum(1)))
     sigma = torch.clamp(dist[..., 0:1].mean(1, keepdim=True), min=0.005)
     norm_dist = dist / sigma
