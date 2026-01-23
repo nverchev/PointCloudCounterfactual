@@ -87,7 +87,7 @@ class PCGen(BasePointDecoder):
                 transformer_layers.append(layer)
 
             self.group_transformer.append(nn.ModuleList(transformer_layers))
-            self.group_final.append(PointsConvLayer(self.conv_dims[-1], OUT_CHAN, soft_init=True))
+            self.group_final.append(PointsConvLayer(self.conv_dims[-1], OUT_CHAN, use_soft_init=True))
 
         if self.n_components > 1:
             self.att = PointsConvLayer(self.conv_dims[-1] * self.n_components, self.n_components)
