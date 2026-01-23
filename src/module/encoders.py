@@ -48,7 +48,7 @@ class DGCNN(BasePointEncoder):
         xs = []
         x = x.transpose(2, 1)
         for conv in self.edge_convolutions:
-            indices, x = get_graph_features(x, k=self.n_neighbors, indices=indices)  # [batch, features, num_points, k]
+            indices, x = get_graph_features(x, n_neighbors=self.n_neighbors, indices=indices)
             indices = torch.empty(0)  # finds new neighbors dynamically every iteration
             x = conv(x)
             x = x.max(dim=3, keepdim=False)[0]  # [batch, features, num_points]
@@ -77,12 +77,12 @@ class LDGCNN(BasePointEncoder):
     def forward(self, x: torch.Tensor, indices: torch.Tensor) -> torch.Tensor:
         """Forward pass."""
         x = x.transpose(2, 1)
-        indices, x = get_graph_features(x, k=self.n_neighbors, indices=indices)
+        indices, x = get_graph_features(x, n_neighbors=self.n_neighbors, indices=indices)
         x = self.edge_conv(x)
         x = x.max(dim=3, keepdim=False)[0]
         xs = [x]
         for conv in self.points_convolutions:
-            x = graph_max_pooling(x, k=self.n_neighbors, indices=indices)
+            x = graph_max_pooling(x, n_neighbors=self.n_neighbors, indices=indices)
             x = conv(x)
             xs.append(x)
 
