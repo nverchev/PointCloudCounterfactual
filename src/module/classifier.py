@@ -41,7 +41,7 @@ class DGCNN(nn.Module):
             mlp_modules.append(nn.Dropout(p=rate))
             mlp_modules.append(LinearLayer(in_dim, out_dim, act_cls=self.act_cls))
 
-        mlp_modules.append(LinearLayer(self.mlp_dims[-1], self.n_classes, batch_norm=False))
+        mlp_modules.append(LinearLayer(self.mlp_dims[-1], self.n_classes, grouped_norm=False))
         self.mlp = nn.Sequential(*mlp_modules)
         return
 

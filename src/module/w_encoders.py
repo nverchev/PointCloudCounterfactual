@@ -60,7 +60,7 @@ class ConvolutionalWEncoder(BaseWEncoder):
         for in_dim, out_dim in dim_pairs:
             modules.append(PointsConvLayer(in_dim, out_dim))
 
-        modules.append(PointsConvLayer(self.conv_dims[-1], 2 * self.z1_dim, batch_norm=False, soft_init=True))
+        modules.append(PointsConvLayer(self.conv_dims[-1], 2 * self.z1_dim, grouped_norm=False, soft_init=True))
         self.encode = nn.Sequential(*modules)
         return
 
@@ -76,7 +76,7 @@ class TransformerWEncoder(BaseWEncoder):
 
     def __init__(self) -> None:
         super().__init__()
-        self.input_proj = LinearLayer(self.embedding_dim, self.proj_dim, batch_norm=False)
+        self.input_proj = LinearLayer(self.embedding_dim, self.proj_dim, grouped_norm=False)
         self.positional_encoding = nn.Parameter(torch.randn(1, self.n_codes, self.proj_dim))
         transformer_layers: list[nn.Module] = []
         for hidden_dim, drate in zip(self.mlp_dims, self.dropout_rates, strict=False):
@@ -92,7 +92,7 @@ class TransformerWEncoder(BaseWEncoder):
             transformer_layers.append(encoder_layer)
 
         self.transformer = nn.ModuleList(transformer_layers)
-        self.to_latent = LinearLayer(self.proj_dim, 2 * self.z1_dim, batch_norm=False, soft_init=True)
+        self.to_latent = LinearLayer(self.proj_dim, 2 * self.z1_dim, grouped_norm=False, soft_init=True)
         return
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:

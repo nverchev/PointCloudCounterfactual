@@ -7,5 +7,5 @@ defaults:
   - data: default_data
   - _self_
 
-variation: development
+variation: grouped_norm
 final: false

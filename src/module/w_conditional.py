@@ -21,7 +21,7 @@ class ConditionalPrior(nn.Module):
         self.n_classes: int = cfg.data.dataset.n_classes
         self.n_codes: int = cfg_ae_model.n_codes
         self.z2_dim: int = cfg_wae_model.z2_dim
-        self.prior = LinearLayer(self.n_classes, self.n_codes * 2 * self.z2_dim, batch_norm=False)
+        self.prior = LinearLayer(self.n_classes, self.n_codes * 2 * self.z2_dim, grouped_norm=False)
         return
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
@@ -60,9 +60,9 @@ class TransformerWConditionalEncoder(BaseWConditionalEncoder):
 
     def __init__(self) -> None:
         super().__init__()
-        self.input_proj = LinearLayer(self.embedding_dim, self.proj_dim, batch_norm=False)
+        self.input_proj = LinearLayer(self.embedding_dim, self.proj_dim, grouped_norm=False)
         self.positional_encoding = nn.Parameter(torch.randn(1, self.n_codes, self.proj_dim))
-        self.prob_proj = LinearLayer(self.n_classes, self.proj_dim, batch_norm=False)
+        self.prob_proj = LinearLayer(self.n_classes, self.proj_dim, grouped_norm=False)
         transformer_layers: list[nn.Module] = []
         for hidden_dim, do in zip(self.mlp_dims, self.dropout, strict=False):
             encoder_layer = nn.TransformerEncoderLayer(
@@ -77,7 +77,7 @@ class TransformerWConditionalEncoder(BaseWConditionalEncoder):
             transformer_layers.append(encoder_layer)
 
         self.transformer = nn.ModuleList(transformer_layers)
-        self.to_latent = LinearLayer(self.proj_dim, 2 * self.z2_dim, batch_norm=False, soft_init=True)
+        self.to_latent = LinearLayer(self.proj_dim, 2 * self.z2_dim, grouped_norm=False, soft_init=True)
         return
 
     def forward(self, probs: torch.Tensor, x: torch.Tensor) -> torch.Tensor:

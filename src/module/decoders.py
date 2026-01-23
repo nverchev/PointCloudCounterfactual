@@ -46,9 +46,9 @@ class PCGen(BasePointDecoder):
         modules: list[nn.Module] = []
         dim_pairs = itertools.pairwise([self.sample_dim, *self.map_dims])
         for in_dim, out_dim in dim_pairs:
-            modules.append(PointsConvLayer(in_dim, out_dim, batch_norm=False, act_cls=torch.nn.ReLU))
+            modules.append(PointsConvLayer(in_dim, out_dim, grouped_norm=False, act_cls=torch.nn.ReLU))
 
-        modules.append(PointsConvLayer(self.map_dims[-1], self.w_dim, batch_norm=False, act_cls=nn.Hardtanh))
+        modules.append(PointsConvLayer(self.map_dims[-1], self.w_dim, grouped_norm=False, act_cls=nn.Hardtanh))
         self.map_sample = nn.Sequential(*modules)
         self.group_conv = nn.ModuleList()
         self.group_final = nn.ModuleList()
@@ -59,10 +59,10 @@ class PCGen(BasePointDecoder):
                 modules.append(PointsConvLayer(in_dim, out_dim, act_cls=self.act_cls, residual=True))
 
             self.group_conv.append(nn.Sequential(*modules))
-            self.group_final.append(PointsConvLayer(self.conv_dims[-1], OUT_CHAN, batch_norm=False, soft_init=True))
+            self.group_final.append(PointsConvLayer(self.conv_dims[-1], OUT_CHAN, grouped_norm=False, soft_init=True))
 
         if self.n_components > 1:
-            self.att = PointsConvLayer(self.conv_dims[-1] * self.n_components, self.n_components, batch_norm=False)
+            self.att = PointsConvLayer(self.conv_dims[-1] * self.n_components, self.n_components, grouped_norm=False)
 
         return
 

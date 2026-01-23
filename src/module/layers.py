@@ -2,6 +2,7 @@
 
 import abc
 import functools
+import math
 import pdb
 import sys
 
@@ -75,7 +76,7 @@ class GeneralizedLinearLayer(nn.Module, metaclass=abc.ABCMeta):
         in_dim: The number of input features
         out_dim: The number of output features
         act_cls: An optional callable for the output activation of the linear layer
-        batch_norm: A boolean value indicating whether to include batch normalization in the layer
+        grouped_norm: A boolean value indicating whether to include batch normalization in the layer
         groups: The number of groups for the linear layer. Default is 1.
         soft_init: A boolean value indicating whether to use a soft initialization for the weights of the dense layer
 
@@ -85,7 +86,7 @@ class GeneralizedLinearLayer(nn.Module, metaclass=abc.ABCMeta):
         groups (int): The number of groups for the linear layer
         bias (bool): A boolean value indicating whether the bias term is in the layer (and not in batch normalization)
         dense (nn.Module): The wrapped layer of the neural network
-        bn (nn.Module): The batch normalization layer of the neural network, if included
+        norm (nn.Module): The grouped normalization layer of the neural network, if included
         act (Optional[nn.Module]): The activation function applied to the output of the linear layer or None
         init (Callable[[torch.Tensor], torch.Tensor]): The initialization function for the weights of the dense layer
 
@@ -96,7 +97,7 @@ class GeneralizedLinearLayer(nn.Module, metaclass=abc.ABCMeta):
         in_dim: int,
         out_dim: int,
         act_cls: ActClass | None = None,
-        batch_norm: bool = True,
+        grouped_norm: bool = True,
         bn_momentum: float | None = None,
         groups: int = 1,
         residual: bool = False,
@@ -106,10 +107,9 @@ class GeneralizedLinearLayer(nn.Module, metaclass=abc.ABCMeta):
         self.in_dim: int = in_dim
         self.out_dim: int = out_dim
         self.groups: int = groups
-        self.bias: bool = False if batch_norm else True
+        self.bias: bool = False if grouped_norm else True
         self.dense = self.get_dense_layer()
-        self.bn_momentum: float = 0.1 if bn_momentum is None else bn_momentum
-        self.bn: nn.Module | None = self.get_bn_layer() if batch_norm else None
+        self.norm: nn.Module | None = self.get_norm_layer() if grouped_norm else None
         self.residual: bool = residual
         if act_cls is None:
             self.act: nn.Module | None = None
@@ -152,13 +152,17 @@ class GeneralizedLinearLayer(nn.Module, metaclass=abc.ABCMeta):
     def get_dense_layer(self) -> nn.Module:
         """Get the wrapped layer"""
 
-    @abc.abstractmethod
-    def get_bn_layer(self) -> nn.Module:
+    def get_norm_layer(self) -> nn.Module:
         """Get the batch normalization layer"""
+        n_groups = int(math.sqrt(self.out_dim))
+        while self.out_dim % n_groups:
+            n_groups -= 1
+
+        return nn.GroupNorm(num_groups=n_groups, num_channels=self.out_dim)
 
     def forward(self, x):
         """Forward pass."""
-        y = self.bn(self.dense(x)) if self.bn is not None else self.dense(x)
+        y = self.norm(self.dense(x)) if self.norm is not None else self.dense(x)
         if self.act is not None:
             y = self.act(y)
 
@@ -177,10 +181,6 @@ class LinearLayer(GeneralizedLinearLayer):
 
         return nn.Linear(self.in_dim, self.out_dim, bias=self.bias)
 
-    @override
-    def get_bn_layer(self) -> nn.Module:
-        return nn.BatchNorm1d(self.out_dim, momentum=self.bn_momentum)
-
 
 # Input (Batch, Points, Features)
 class PointsConvLayer(GeneralizedLinearLayer):
@@ -188,19 +188,11 @@ class PointsConvLayer(GeneralizedLinearLayer):
     def get_dense_layer(self) -> nn.Module:
         return nn.Conv1d(self.in_dim, self.out_dim, kernel_size=1, bias=self.bias, groups=self.groups)
 
-    @override
-    def get_bn_layer(self) -> nn.Module:
-        return nn.BatchNorm1d(self.out_dim, momentum=self.bn_momentum)
-
 
 class EdgeConvLayer(GeneralizedLinearLayer):
     @override
     def get_dense_layer(self) -> nn.Module:
         return nn.Conv2d(self.in_dim, self.out_dim, kernel_size=1, bias=self.bias, groups=self.groups)
-
-    @override
-    def get_bn_layer(self) -> nn.Module:
-        return nn.BatchNorm2d(self.out_dim, momentum=self.bn_momentum)
 
 
 class TemperatureScaledSoftmax(nn.Softmax):

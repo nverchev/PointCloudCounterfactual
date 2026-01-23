@@ -39,7 +39,7 @@ class DGCNN(BasePointEncoder):
             modules.append(EdgeConvLayer(2 * in_dim, out_dim, act_cls=self.act_cls))
 
         self.edge_convolutions = nn.Sequential(*modules)
-        self.final_conv = PointsConvLayer(sum(self.h_dim), self.w_dim, batch_norm=False)
+        self.final_conv = PointsConvLayer(sum(self.h_dim), self.w_dim, grouped_norm=False)
         return
 
     def forward(self, x: torch.Tensor, indices: torch.Tensor) -> torch.Tensor:
@@ -70,7 +70,7 @@ class LDGCNN(BasePointEncoder):
             modules.append(PointsConvLayer(in_dim, out_dim, act_cls=self.act_cls))
 
         self.points_convolutions = nn.Sequential(*modules)
-        self.final_conv = PointsConvLayer(sum(self.conv_dims), self.w_dim, batch_norm=False)
+        self.final_conv = PointsConvLayer(sum(self.conv_dims), self.w_dim, grouped_norm=False)
         return
 
     def forward(self, x: torch.Tensor, indices: torch.Tensor) -> torch.Tensor:

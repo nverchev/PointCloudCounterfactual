@@ -52,7 +52,7 @@ class LinearWDecoder(BaseWDecoder):
             modules.append(PointsConvLayer(in_dim, out_dim, groups=self.n_codes, act_cls=self.act_cls))
             modules.append(nn.Dropout(rate))
 
-        modules.append(PointsConvLayer(self.mlp_dims[-1], self.w_dim, groups=self.n_codes, batch_norm=False))
+        modules.append(PointsConvLayer(self.mlp_dims[-1], self.w_dim, groups=self.n_codes, grouped_norm=False))
         self.decode = nn.Sequential(*modules)
         return
 
@@ -67,8 +67,8 @@ class TransformerWDecoder(BaseWDecoder):
 
     def __init__(self) -> None:
         super().__init__()
-        self.z1_proj = LinearLayer(self.z2_dim, self.proj_dim, batch_norm=False)
-        self.z2_proj = LinearLayer(self.z2_dim, self.proj_dim, batch_norm=False)
+        self.z1_proj = LinearLayer(self.z2_dim, self.proj_dim, grouped_norm=False)
+        self.z2_proj = LinearLayer(self.z2_dim, self.proj_dim, grouped_norm=False)
         self.positional_embedding = nn.Parameter(torch.randn(1, self.n_codes, self.proj_dim))
         self.memory_positional_embedding = nn.Parameter(torch.randn(1, self.n_codes, self.proj_dim))
         transformer_layers: list[nn.Module] = []
@@ -85,7 +85,7 @@ class TransformerWDecoder(BaseWDecoder):
             transformer_layers.append(layer)
 
         self.transformer = nn.ModuleList(transformer_layers)
-        self.compress = LinearLayer(self.proj_dim, self.embedding_dim, batch_norm=False)
+        self.compress = LinearLayer(self.proj_dim, self.embedding_dim, grouped_norm=False)
         return
 
     def forward(self, z1: torch.Tensor, z2: torch.Tensor) -> torch.Tensor:
