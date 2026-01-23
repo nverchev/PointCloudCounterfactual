@@ -37,9 +37,9 @@ def get_activation_cls(act_name: str) -> ActClass:
 def get_norm_cls(norm_name: str) -> NormClass:
     """Get normalization class from name."""
     try:
-        return getattr(nn.modules.activation, norm_name)
+        return getattr(nn, norm_name)
     except AttributeError as ae:
-        raise ValueError(f'Input act_name "{norm_name}" is not the name of a pytorch activation.') from ae
+        raise ValueError(f'Input norm_name "{norm_name}" is not the name of a pytorch nn.Module.') from ae
 
 
 def get_optim_cls(optimizer_name: str) -> type[torch.optim.Optimizer]:
