@@ -1,5 +1,5 @@
 defaults:
-  - encoder: dgcnn
+  - encoder: ldgcnn
   - decoder: pcgen
   - _self_
 
