@@ -15,6 +15,7 @@ class Encoders(enum.StrEnum):
 
     LDGCNN = enum.auto()
     DGCNN = enum.auto()
+    Transformer = enum.auto()
 
 
 class Decoders(enum.StrEnum):
