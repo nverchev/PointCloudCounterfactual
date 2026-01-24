@@ -3,8 +3,8 @@ defaults:
     - _self_
 
 optimizer_name: AdamW
-learning_rate: 0.001
+learning_rate: 0.0014
 grad_op: ParamHistClipper
 clip_criterion: EMA
 opt_settings:
-    weight_decay: 0.001
+    weight_decay: 0.004
