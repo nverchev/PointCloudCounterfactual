@@ -26,8 +26,8 @@ class ModelNet40Split(PointCloudDataset):
         self.pcd = pcd.astype(np.float32)
         self.labels = labels
         self.input_points = cfg_data.n_input_points
-        self.resample_target = cfg_data.resample_target
-        self.sample_with_replacement = cfg_data.sample_with_replacement
+        self.resample = cfg_data.resample
+        self.replace = cfg_data.sample_with_replacement
         self.augment = augment_clouds()
         self.jitter = jitter_cloud()
         return
@@ -39,18 +39,18 @@ class ModelNet40Split(PointCloudDataset):
         np_cloud, np_label = self.pcd[index], self.labels[index]
         label = torch.tensor(np_label, dtype=torch.long)
         if not torch.is_inference_mode_enabled():
-            index_pool = np.arange(np_cloud.shape[0])
-            sampled_indices = np.random.choice(index_pool, size=self.input_points, replace=self.sample_with_replacement)
-            input_cloud = normalise(np_cloud[sampled_indices])[0]
-            cloud = torch.from_numpy(input_cloud)
-            cloud = self.jitter(cloud)
-            if self.resample_target:
-                sampled_indices = np.random.choice(index_pool, size=self.input_points, replace=False)
-                np_ref_cloud = normalise(np_cloud[sampled_indices])[0]
-                ref_cloud = torch.from_numpy(np_ref_cloud[sampled_indices])
-                cloud, ref_cloud, *_ = self.augment([cloud, ref_cloud])
+            if self.resample:
+                index_pool = np.arange(np_cloud.shape[0])
+                sampled_indices = np.random.choice(index_pool, size=self.input_points, replace=self.replace)
+                np_cloud = np_cloud[sampled_indices]
             else:
-                ref_cloud = torch.from_numpy(normalise(np_cloud[: self.input_points])[0])
+                np_cloud = np_cloud[: self.input_points]
+
+            np_cloud = normalise(np_cloud)[0]
+            cloud = torch.from_numpy(np_cloud)
+            cloud = self.jitter(cloud)
+            ref_cloud = torch.from_numpy(normalise(np_cloud[: self.input_points])[0])
+            cloud, ref_cloud, *_ = self.augment([cloud, ref_cloud])
 
         else:
             ref_cloud = cloud = torch.from_numpy(np_cloud[: self.input_points])
@@ -71,9 +71,9 @@ class ModelNet40Dataset(SplitCreator):
     def __init__(self) -> None:
         cfg = Experiment.get_config()
         user_cfg = cfg.user
-
         with open(user_cfg.path.metadata_dir / 'modelnet_classes.txt') as f:
             self.classes = f.read().splitlines()
+
         selected_classes = cfg.data.dataset.settings['select_classes']
         try:
             selected_labels = [self.classes.index(selected_class) for selected_class in selected_classes]

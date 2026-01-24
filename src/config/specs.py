@@ -60,8 +60,8 @@ class DataConfig:
         rotate (bool): Whether to apply random rotation to training inputs and reference
         jitter_sigma (PositiveFloat): The variance for random perturbation of training inputs
         jitter_clip (PositiveFloat): The threshold value for random perturbation of training inputs
+        resample (bool): Whether to use two different samplings for input and reference
         sample_with_replacement: Whether to sample with replacement when resampling the input points
-        resample_target (bool): Whether to use two different samplings for input and reference
     """
 
     dataset: DatasetConfig
@@ -71,8 +71,8 @@ class DataConfig:
     rotate: bool
     jitter_sigma: PositiveFloat
     jitter_clip: PositiveFloat
+    resample: bool
     sample_with_replacement: bool
-    resample_target: bool
 
 
 @dataclass(kw_only=True)
