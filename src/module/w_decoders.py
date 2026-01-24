@@ -99,7 +99,7 @@ class TransformerWDecoder(BaseWDecoder):
         z1_proj = self.z1_proj(z1).view(batch_size, self.n_codes, self.proj_dim)
         z2_proj = self.z2_proj(z2).view(batch_size, self.n_codes, self.proj_dim)
         memory = z1_proj + self.memory_positional_embedding.expand(batch_size, -1, -1)
-        self.norm(memory.transpose(1, 2)).transpose_(1, 2)
+        memory = self.norm(memory.transpose(1, 2)).transpose_(1, 2)
         x = z2_proj + self.positional_embedding.expand(batch_size, -1, -1)
         for layer in self.transformer:
             x = layer(x, memory)

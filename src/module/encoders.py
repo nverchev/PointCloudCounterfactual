@@ -104,7 +104,6 @@ class TransformerEncoder(BasePointEncoder):
 
     def __init__(self) -> None:
         super().__init__()
-        super().__init__()
         self.edge_conv = EdgeConvLayer(2 * IN_CHAN, self.conv_dims[0], act_cls=self.act_cls, norm_cls=self.norm_cls)
         modules: list[nn.Module] = []
         for in_dim, out_dim in itertools.pairwise(self.conv_dims):
@@ -151,7 +150,7 @@ class TransformerEncoder(BasePointEncoder):
         x_max = y.max(dim=2, keepdim=False)[0]
         queries = self.proj_codes(x_max.view(batch, self.n_codes, self.embedding_dim))
         memory = self.proj_input(x)
-        self.norm(memory.transpose(1, 2)).transpose_(1, 2)
+        memory = self.norm(memory.transpose(1, 2)).transpose_(1, 2)
         for layer in self.transformer_codes:
             queries = layer(queries, memory)
 
