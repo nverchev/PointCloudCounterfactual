@@ -172,7 +172,7 @@ class BaseLayer(nn.Module, metaclass=abc.ABCMeta):
 
     @staticmethod
     def get_norm_layer(norm_cls: NormClass | None, out_dim: int) -> nn.Module | None:
-        """Get the batch normalization layer"""
+        """Get the normalization layer"""
         if norm_cls is None:
             return None
 

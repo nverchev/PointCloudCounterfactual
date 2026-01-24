@@ -125,8 +125,9 @@ class TransformerEncoder(BasePointEncoder):
                     norm_first=True,
                 )
             )
-        self.proj_codes = LinearLayer(self.embedding_dim, self.proj_dim, act_cls=self.act_cls, norm_cls=self.norm_cls)
-        self.proj_input = LinearLayer(IN_CHAN, self.proj_dim, act_cls=self.act_cls, norm_cls=self.norm_cls)
+        self.proj_codes = LinearLayer(self.embedding_dim, self.proj_dim, act_cls=self.act_cls)
+        self.norm = self.norm_cls(self.proj_dim)
+        self.proj_input = LinearLayer(IN_CHAN, self.proj_dim, act_cls=self.act_cls)
         self.transformer_codes = nn.Sequential(*modules)
         self.compress = LinearLayer(self.proj_dim, self.embedding_dim)
         return
@@ -149,6 +150,7 @@ class TransformerEncoder(BasePointEncoder):
         x_max = y.max(dim=2, keepdim=False)[0]
         queries = self.proj_codes(x_max.view(batch, self.n_codes, self.embedding_dim))
         memory = self.proj_input(x)
+        self.norm(memory.transpose(1, 2)).transpose_(1, 2)
         for layer in self.transformer_codes:
             queries = layer(queries, memory)
 

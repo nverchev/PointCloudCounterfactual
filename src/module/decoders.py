@@ -62,6 +62,7 @@ class PCGen(BasePointDecoder):
         self.group_transformer = nn.ModuleList()
         self.group_final = nn.ModuleList()
         self.memory_positional_encoding = nn.Parameter(torch.randn(1, self.n_codes, self.conv_dims[-1]))
+        self.norm = self.norm_cls(self.conv_dims[-1])
         self.proj_w = LinearLayer(self.embedding_dim, self.conv_dims[-1], act_cls=self.act_cls)
         for _ in range(self.n_components):
             modules = []
@@ -155,6 +156,7 @@ class PCGen(BasePointDecoder):
 
         # Process component groups
         memory = self.proj_w(w.view(batch, self.n_codes, self.embedding_dim)) + self.memory_positional_encoding
+        memory = self.norm(memory.transpose(1, 2)).transpose_(1, 2)
 
         xs, group_atts = self._process_component_groups(x, memory)
 
