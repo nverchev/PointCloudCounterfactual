@@ -51,7 +51,6 @@ class ModelNet40Split(PointCloudDataset):
                 ref_cloud = torch.from_numpy(np_ref_cloud[sampled_indices])
                 cloud, ref_cloud, *_ = self.augment([cloud, ref_cloud])
             else:
-                cloud, *_ = self.augment([cloud])
                 ref_cloud = cloud
         else:
             ref_cloud = cloud = torch.from_numpy(np_cloud)

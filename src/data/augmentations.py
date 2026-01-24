@@ -57,14 +57,14 @@ def random_scale_and_translate() -> Callable[[torch.Tensor], torch.Tensor]:
 
 
 class CloudAugmenter:
-    """Picklable augmentation class for rotation, scaling, and translation."""
+    """Augmentation class for rotation, scaling, and translation."""
 
-    def __init__(self, rotation: bool, translation_and_scale: bool):
-        self.rotation = rotation
-        self.translation_and_scale = translation_and_scale
+    def __init__(self, rotate: bool, translate_and_scale: bool):
+        self.rotate = rotate
+        self.translation_and_scale = translate_and_scale
 
     def __call__(self, clouds: Iterable[torch.Tensor]) -> Iterable[torch.Tensor]:
-        if self.rotation:
+        if self.rotate:
             rotate = random_rotation()
             clouds = map(rotate, clouds)
         if self.translation_and_scale:
@@ -74,7 +74,7 @@ class CloudAugmenter:
 
 
 class CloudJitterer:
-    """Picklable jitter class."""
+    """Jitter class."""
 
     def __init__(self, jitter_sigma: float | None, jitter_clip: float | None):
         self.jitter_sigma = jitter_sigma
@@ -83,13 +83,14 @@ class CloudJitterer:
     def __call__(self, cloud: torch.Tensor) -> torch.Tensor:
         if self.jitter_sigma and self.jitter_clip:
             return jitter(cloud, self.jitter_sigma, self.jitter_clip)
+
         return cloud
 
 
 def augment_clouds() -> CloudAugmenter:
     """Create a callable for augmentation based on configuration."""
     cfg_data = Experiment.get_config().data
-    return CloudAugmenter(rotation=cfg_data.rotate, translation_and_scale=cfg_data.translate)
+    return CloudAugmenter(rotate=cfg_data.rotate, translate_and_scale=cfg_data.translate)
 
 
 def jitter_cloud() -> CloudJitterer:
