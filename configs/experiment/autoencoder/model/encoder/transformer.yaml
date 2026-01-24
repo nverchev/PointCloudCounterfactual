@@ -1,5 +1,5 @@
 class_name: Transformer
-n_neighbors: ${data.n_neighbors}
+n_neighbors: 25
 conv_dims: [ 64, 64, 128, 256]
 n_heads: 4
 mlp_dims: [ 1024, 1024, 1024]

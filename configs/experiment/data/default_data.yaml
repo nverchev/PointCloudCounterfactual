@@ -8,5 +8,5 @@ translate: false
 rotate: false
 jitter_sigma: 0.01
 jitter_clip: 0.01
-resample: False
-n_neighbors: 25
+sample_with_replacement: true
+resample_target: false

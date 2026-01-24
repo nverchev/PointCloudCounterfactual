@@ -24,7 +24,7 @@ class ShapenetFlowSplit(PointCloudDataset):
         self.paths = paths
         self.pcd = list[npt.NDArray[Any]]()
         self.input_points = cfg_data.n_input_points
-        self.resample = cfg_data.resample
+        self.resample = cfg_data.resample_target
         self.folder_id_list = list[str]()
         self.augment = augment_clouds()
         for path in paths:

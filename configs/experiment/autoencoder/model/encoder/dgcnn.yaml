@@ -1,4 +1,4 @@
 class_name: DGCNN
-n_neighbors: ${data.n_neighbors}
+n_neighbors: 25
 conv_dims: [ 64, 64, 128, 256]
 act_name: ''

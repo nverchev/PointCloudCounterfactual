@@ -32,7 +32,7 @@ class BasePointEncoder(nn.Module, metaclass=abc.ABCMeta):
         return
 
     @abc.abstractmethod
-    def forward(self, x: torch.Tensor, indices: torch.Tensor) -> torch.Tensor:
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
         """Forward pass."""
 
 
@@ -49,10 +49,11 @@ class DGCNN(BasePointEncoder):
         self.final_conv = PointsConvLayer(sum(self.conv_dims), self.w_dim)
         return
 
-    def forward(self, x: torch.Tensor, indices: torch.Tensor) -> torch.Tensor:
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
         """Forward pass."""
         xs = []
         x = x.transpose(2, 1)
+        indices = torch.empty(0)
         for conv in self.edge_convolutions:
             indices, x = get_graph_features(x, n_neighbors=self.n_neighbors, indices=indices)
             indices = torch.empty(0)  # finds new neighbors dynamically every iteration
@@ -80,10 +81,10 @@ class LDGCNN(BasePointEncoder):
         self.final_conv = PointsConvLayer(sum(self.conv_dims), self.w_dim)
         return
 
-    def forward(self, x: torch.Tensor, indices: torch.Tensor) -> torch.Tensor:
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
         """Forward pass."""
         x = x.transpose(2, 1)
-        indices, x = get_graph_features(x, n_neighbors=self.n_neighbors, indices=indices)
+        indices, x = get_graph_features(x, n_neighbors=self.n_neighbors, indices=torch.empty(0))
         x = self.edge_conv(x)
         x = x.max(dim=3, keepdim=False)[0]
         xs = [x]
@@ -132,11 +133,11 @@ class TransformerEncoder(BasePointEncoder):
         self.compress = LinearLayer(self.proj_dim, self.embedding_dim)
         return
 
-    def forward(self, x: torch.Tensor, indices: torch.Tensor) -> torch.Tensor:
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
         """Forward pass."""
         batch = x.shape[0]
         y = x.transpose(2, 1)
-        indices, y = get_graph_features(y, n_neighbors=self.n_neighbors, indices=indices)
+        indices, y = get_graph_features(y, n_neighbors=self.n_neighbors, indices=torch.empty(0))
         y = self.edge_conv(y)
         y = y.max(dim=3, keepdim=False)[0]
         xs = [y]

@@ -12,12 +12,10 @@ class Inputs(NamedTuple):
 
     Attributes:
         cloud: the input cloud.
-        indices: precalculated indices for the nearest neighbors (number must match architecture).
         initial_sampling: specify the sampling for the reconstructed cloud from the initial sampling space.
     """
 
     cloud: torch.Tensor
-    indices: torch.Tensor = torch.empty(0)
     initial_sampling: torch.Tensor = torch.empty(0)
 
 

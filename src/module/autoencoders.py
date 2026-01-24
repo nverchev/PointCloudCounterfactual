@@ -104,7 +104,7 @@ class BaseVQVAE(BaseAutoencoder, abc.ABC, Generic[WA]):
     def encode(self, inputs: Inputs) -> Outputs:
         """Encode with optional double encoding."""
         data = Outputs()
-        data.w_q = self.encoder(inputs.cloud, inputs.indices)
+        data.w_q = self.encoder(inputs.cloud)
         return data
 
     def decode(self, data: Outputs, inputs: Inputs) -> Outputs:

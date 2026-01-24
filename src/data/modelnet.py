@@ -15,45 +15,45 @@ from src.config.experiment import Experiment
 from src.data.structures import Inputs, Targets
 from src.data.protocols import PointCloudDataset, Partitions, SplitCreator
 from src.utils.download import download_extract_zip
-from src.utils.neighbour_ops import index_k_neighbours
 
 
 class ModelNet40Split(PointCloudDataset):
     """Class for the ModelNet40 dataset sampled with 2048 points."""
 
-    def __init__(self, pcd, indices, labels) -> None:
+    def __init__(self, pcd: npt.NDArray[Any], labels: npt.NDArray[Any]) -> None:
         super().__init__()
         cfg_data = Experiment.get_config().data
         self.pcd = pcd.astype(np.float32)
-        self.indices = indices
         self.labels = labels
         self.input_points = cfg_data.n_input_points
-        self.resample = cfg_data.resample
+        self.resample_target = cfg_data.resample_target
+        self.sample_with_replacement = cfg_data.sample_with_replacement
         self.augment = augment_clouds()
         self.jitter = jitter_cloud()
+        return
 
     def __len__(self) -> int:
         return self.pcd.shape[0]
 
     def __getitem__(self, index: int) -> tuple[Inputs, Targets]:
-        np_cloud, label = self.pcd[index], self.labels[index]
-        label = torch.tensor(label, dtype=torch.long)
+        np_cloud, np_label = self.pcd[index], self.labels[index]
+        label = torch.tensor(np_label, dtype=torch.long)
         if not torch.is_inference_mode_enabled():
             index_pool = np.arange(np_cloud.shape[0])
-            sampled_indices = np.random.choice(index_pool, size=self.input_points, replace=True)
+            sampled_indices = np.random.choice(index_pool, size=self.input_points, replace=self.sample_with_replacement)
             input_cloud = normalise(np_cloud[sampled_indices])[0]
             cloud = torch.from_numpy(input_cloud)
-
             cloud = self.jitter(cloud)
-            if self.resample:
-                sampled_indices = np.random.choice(index_pool, size=self.input_points, replace=True)
-                np_ref_cloud = normalise(np_cloud)[0]
+            if self.resample_target:
+                sampled_indices = np.random.choice(index_pool, size=self.input_points, replace=False)
+                np_ref_cloud = normalise(np_cloud[sampled_indices])[0]
                 ref_cloud = torch.from_numpy(np_ref_cloud[sampled_indices])
                 cloud, ref_cloud, *_ = self.augment([cloud, ref_cloud])
             else:
-                ref_cloud = cloud
+                ref_cloud = torch.from_numpy(normalise(np_cloud[: self.input_points])[0])
+
         else:
-            ref_cloud = cloud = torch.from_numpy(np_cloud)
+            ref_cloud = cloud = torch.from_numpy(np_cloud[: self.input_points])
 
         return Inputs(cloud=cloud), Targets(ref_cloud=ref_cloud, label=label)
 
@@ -85,13 +85,12 @@ class ModelNet40Dataset(SplitCreator):
         self.data_dir = user_cfg.path.data_dir
         self.modelnet_path = self.data_dir / 'modelnet40_hdf5_2048'
         self._download()
-        self.pcd, self.indices, self.labels = {}, {}, {}
+        self.pcd, self.labels = {}, {}
         for split in [Partitions.train, Partitions.test]:
-            pcd, indices, labels = self.load_h5(
+            pcd, labels = self.load_h5(
                 path=self.modelnet_path,
                 wild_str=f'*{split.name}*.h5',
                 input_points=cfg.data.n_input_points,
-                k=cfg.data.n_neighbors,
             )
             selected_indices: slice | np.ndarray[Any, np.dtype[np.bool_]]
             if cfg.data.dataset.n_classes == 40:
@@ -100,8 +99,9 @@ class ModelNet40Dataset(SplitCreator):
                 selected_indices = np.isin(labels, selected_labels)
 
             self.pcd[split] = pcd[selected_indices]
-            self.indices[split] = indices[selected_indices]
             self.labels[split] = np.vectorize(label_map.get)(labels[selected_indices])
+
+        return
 
     @override
     def split(self, split: Partitions) -> Dataset[tuple[Inputs, Targets]]:
@@ -110,7 +110,8 @@ class ModelNet40Dataset(SplitCreator):
             split = Partitions.train
         elif split in [Partitions.train, Partitions.val] and Partitions.val not in self.pcd.keys():
             self._train_val_to_train_and_val()
-        return ModelNet40Split(pcd=self.pcd[split], indices=self.indices[split], labels=self.labels[split])
+
+        return ModelNet40Split(pcd=self.pcd[split], labels=self.labels[split])
 
     def _download(self) -> None:
         url = 'https://gaimfs.ugent.be/Public/Dataset/modelnet40_hdf5_2048.zip'
@@ -122,16 +123,14 @@ class ModelNet40Dataset(SplitCreator):
         # partition train into train and val
         for new_split, new_split_idx in ((Partitions.val, val_idx), (Partitions.train, train_idx)):
             self.pcd[new_split] = self.pcd[Partitions.train][new_split_idx]
-            self.indices[new_split] = self.indices[Partitions.train][new_split_idx]
             self.labels[new_split] = self.labels[Partitions.train][new_split_idx]
 
+        return
+
     @staticmethod
-    def load_h5(
-        path: pathlib.Path, wild_str: str, input_points: int, k: int
-    ) -> tuple[npt.NDArray[Any], npt.NDArray[Any], npt.NDArray[Any]]:
-        """Loads and processes ModelNet data from H5 files, including point clouds, indices, and labels."""
+    def load_h5(path: pathlib.Path, wild_str: str, input_points: int) -> tuple[npt.NDArray[Any], npt.NDArray[Any]]:
+        """Loads and processes ModelNet data from H5 files, including point clouds and labels."""
         pcd_list: list[npt.NDArray[Any]] = []
-        indices_list: list[npt.NDArray[Any]] = []
         labels_list: list[npt.NDArray[Any]] = []
 
         for h5_name in path.glob(wild_str):
@@ -146,19 +145,9 @@ class ModelNet40Dataset(SplitCreator):
                 label_ds = cast(h5py.Dataset, f['label'])
                 label = label_ds[:].astype('int64')
 
-                index_k = f'index_{k}'
-                if index_k in f:
-                    idx_ds = cast(h5py.Dataset, f[index_k])
-                    index = idx_ds[:].astype(np.short)
-                else:
-                    index = index_k_neighbours(pcs, k).astype(np.short)
-                    f.create_dataset(index_k, data=index)
-
             pcd_list.append(pcs)
-            indices_list.append(index)
             labels_list.append(label)
 
         pcd = np.concatenate(pcd_list, axis=0)
-        indices = np.concatenate(indices_list, axis=0)
         labels = np.concatenate(labels_list, axis=0)
-        return pcd, indices, labels.ravel()
+        return pcd, labels.ravel()
