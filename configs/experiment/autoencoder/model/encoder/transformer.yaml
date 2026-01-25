@@ -1,7 +1,7 @@
 class_name: Transformer
 n_neighbors: 25
 conv_dims: [ 64, 64, 128, 256]
-n_heads: 4
+n_heads: 8
 mlp_dims: [ 1024, 1024, 1024]
 dropout_rates: [ 0.0, 0.0, 0.0, 0.0, 0.0, 0.0 ]
 proj_dim: 256
