@@ -18,6 +18,14 @@ params:
         high: 256
         log: true
 
+  autoencoder.model.decoder.conv_dims:
+    suggest: suggest_list
+    settings:
+      min_length: 1
+      max_length: 4
+      suggest: suggest_categorical
+      settings:
+        choices: [4, 8, 16]
 
   autoencoder.model.decoder.mlp_dims:
     suggest: suggest_list
