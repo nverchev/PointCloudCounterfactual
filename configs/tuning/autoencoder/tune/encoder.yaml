@@ -22,3 +22,24 @@ params:
       low: 10
       high: 30
       log: false
+
+  autoencoder.model.encoder.proj_dim:
+    suggest: suggest_categorical
+    settings:
+      choices: [256, 512]
+
+  autoencoder.model.encoder.mlp_dims:
+    suggest: suggest_list
+    settings:
+      min_length: 3
+      max_length: 5
+      suggest: suggest_int
+      settings:
+        low: 128
+        high: 512
+        log: true
+
+  autoencoder.model.encoder.n_heads:
+    suggest: suggest_categorical
+    settings:
+      choices: [ 4, 8 ]

@@ -7,11 +7,6 @@ n_startup_trials: 15
 
 params:
 
-  autoencoder.model.decoder.sample_dim:
-    suggest: suggest_categorical
-    settings:
-      choices: [8, 16, 32]
-
   autoencoder.model.decoder.map_dims:
     suggest: suggest_list
     settings:
@@ -23,13 +18,19 @@ params:
         high: 256
         log: true
 
-  autoencoder.model.decoder.conv_dims:
+
+  autoencoder.model.decoder.mlp_dims:
     suggest: suggest_list
     settings:
-      min_length: 1
-      max_length: 4
+      min_length: 3
+      max_length: 5
       suggest: suggest_int
       settings:
-        low: 64
+        low: 128
         high: 512
         log: true
+
+  autoencoder.model.decoder.n_heads:
+    suggest: suggest_categorical
+    settings:
+      choices: [4, 8]
