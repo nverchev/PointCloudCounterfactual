@@ -32,7 +32,7 @@ class DGCNN(nn.Module):
         self.dropout_rates: tuple[float, ...] = cfg_class_model.dropout_rates
         self.n_classes: int = cfg.data.dataset.n_classes
         conv_modules: list[torch.nn.Module] = []
-        for in_dim, out_dim in itertools.pairwise((2 * IN_CHAN, *self.conv_dims)):
+        for in_dim, out_dim in itertools.pairwise((IN_CHAN, *self.conv_dims)):
             conv_modules.append(EdgeConvLayer(2 * in_dim, out_dim, act_cls=self.act_cls, norm_cls=self.norm_cls))
 
         self.edge_convolutions = nn.Sequential(*conv_modules)
@@ -40,7 +40,6 @@ class DGCNN(nn.Module):
         mlp_modules: list[torch.nn.Module] = [
             LinearLayer(2 * self.feature_dim, self.mlp_dims[0], act_cls=self.act_cls, norm_cls=self.norm_cls)
         ]
-
         for (in_dim, out_dim), rate in zip(itertools.pairwise(self.mlp_dims), self.dropout_rates, strict=False):
             mlp_modules.append(nn.Dropout(p=rate))
             mlp_modules.append(LinearLayer(in_dim, out_dim, act_cls=self.act_cls, norm_cls=self.norm_cls))
@@ -52,7 +51,7 @@ class DGCNN(nn.Module):
     def forward(self, inputs: Inputs) -> torch.Tensor:
         """Forward Pass."""
         x = inputs.cloud
-        indices = inputs.indices
+        indices = torch.empty(0)
         xs = []
         x = x.transpose(2, 1)
         for conv in self.edge_convolutions:
