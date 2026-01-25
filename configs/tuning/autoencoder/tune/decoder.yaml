@@ -12,11 +12,9 @@ params:
     settings:
       min_length: 1
       max_length: 3
-      suggest: suggest_int
+      suggest: suggest_categorical
       settings:
-        low: 8
-        high: 256
-        log: true
+        choices: [8, 16, 32]
 
   autoencoder.model.decoder.conv_dims:
     suggest: suggest_list
@@ -25,18 +23,16 @@ params:
       max_length: 4
       suggest: suggest_categorical
       settings:
-        choices: [4, 8, 16]
+        choices: [128, 256, 512]
 
   autoencoder.model.decoder.mlp_dims:
     suggest: suggest_list
     settings:
       min_length: 3
       max_length: 5
-      suggest: suggest_int
+      suggest: suggest_categorical
       settings:
-        low: 128
-        high: 512
-        log: true
+        choices: [256, 512, 1024]
 
   autoencoder.model.decoder.n_heads:
     suggest: suggest_categorical

@@ -22,8 +22,6 @@ params:
     settings:
       min_length: 1
       max_length: 4
-      suggest: suggest_int
+      suggest: suggest_categorical
       settings:
-        low: 128
-        high: 1024
-        log: true
+        choices: [256, 512, 1024]

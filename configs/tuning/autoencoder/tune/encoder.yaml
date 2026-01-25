@@ -10,11 +10,9 @@ params:
     settings:
       min_length: 1
       max_length: 4
-      suggest: suggest_int
+      suggest: suggest_categorical
       settings:
-        low: 16
-        high: 512
-        log: true
+        choices: [64, 128, 256]
 
   autoencoder.model.encoder.n_neighbors:
     suggest: suggest_int
@@ -33,11 +31,9 @@ params:
     settings:
       min_length: 3
       max_length: 5
-      suggest: suggest_int
+      suggest: suggest_categorical
       settings:
-        low: 128
-        high: 512
-        log: true
+        choices: [256, 512, 1024]
 
   autoencoder.model.encoder.n_heads:
     suggest: suggest_categorical
