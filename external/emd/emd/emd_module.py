@@ -6,7 +6,7 @@
 
 from typing import Any, cast, override
 
-import emd_backend
+from emd import emd_backend
 import torch
 
 from torch import nn

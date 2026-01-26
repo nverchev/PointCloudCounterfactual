@@ -81,13 +81,14 @@ def get_recon_loss() -> LossBase[Outputs, Targets]:
 
 def get_embed_loss() -> Loss[Outputs, Targets]:
     """Calculate mean squared error between quantized (w_q) and encoded (w_e) embeddings."""
+    cfg_ae = Experiment.get_config().autoencoder
+    c_embed = cfg_ae.objective.c_embedding
     mse_loss = nn.MSELoss(reduction='none')
 
     def _embed_loss(data: Outputs, _not_used: Targets) -> torch.Tensor:
-        return mse_loss(data.w_q, data.w_e).mean(dim=1)
+        return c_embed * mse_loss(data.w_q, data.w_e.detach()).mean(dim=1)
 
-    embed_loss = Loss(_embed_loss, name='Embed. Loss')
-    return embed_loss
+    return Loss(_embed_loss, name='Embed. Loss')
 
 
 def gaussian_ll(x: torch.Tensor, mu: torch.Tensor, log_var: torch.Tensor) -> torch.Tensor:
@@ -259,8 +260,7 @@ def get_autoencoder_loss() -> LossBase[Outputs, Targets]:
     """Get autoencoder loss combining reconstruction and embedding losses."""
     cfg_ae = Experiment.get_config().autoencoder
     c_embed = cfg_ae.objective.c_embedding
-    loss = get_recon_loss()
     if cfg_ae.model.class_name is not AutoEncoders.AE:
-        return loss + c_embed * get_embed_loss()
+        return get_recon_loss() + c_embed * get_embed_loss()
 
-    return loss
+    return get_recon_loss()
