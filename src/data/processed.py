@@ -44,14 +44,12 @@ class ProcessedDataset(Generic[VQ], abc.ABC, metaclass=AbstractSingleton):
         """Common data loading logic."""
         dataset_batch = [self.dataset[i] for i in index_list]
         batched_cloud = torch.stack([data[0].cloud for data in dataset_batch]).to(self.device)
-        batched_indices = torch.cat([data[0].indices for data in dataset_batch]).to(self.device)
         batched_labels = torch.cat([data[1].label.unsqueeze(0) for data in dataset_batch]).to(self.device)
 
         for i in range(0, len(index_list), self.max_batch):
             batch_slice = slice(i, i + self.max_batch)
             cloud_batch = batched_cloud[batch_slice]
-            indices_batch = batched_indices[batch_slice]
-            batch_inputs = Inputs(cloud=cloud_batch, indices=indices_batch)
+            batch_inputs = Inputs(cloud=cloud_batch)
             batch_labels = batched_labels[batch_slice]
             yield batch_inputs, batch_labels
 

@@ -58,8 +58,7 @@ def create_and_render_counterfactuals() -> None:
 
         sample_i = test_dataset[i][0]
         cloud = sample_i.cloud.to(model.device).unsqueeze(0)
-        indices = sample_i.indices.to(model.device).unsqueeze(0)
-        sample_i = Inputs(cloud=cloud, indices=indices)
+        sample_i = Inputs(cloud=cloud)
         label_i = test_dataset[i][1].label
         print(f'Sample {i} with label {label_i}:')
 
