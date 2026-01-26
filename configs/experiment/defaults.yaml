@@ -7,5 +7,5 @@ defaults:
   - data: default_data
   - _self_
 
-variation: development
+variation: only_chamfer
 final: false

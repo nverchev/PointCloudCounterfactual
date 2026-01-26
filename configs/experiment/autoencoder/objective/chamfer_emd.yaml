@@ -1,3 +1,3 @@
 n_inference_output_points: ${data.n_target_points}
-recon_loss: ChamferEMD
+recon_loss: Chamfer
 c_embedding: 16
