@@ -109,8 +109,13 @@ class BaseVQVAE(BaseAutoencoder, abc.ABC, Generic[WA]):
 
     def decode(self, out: Outputs, inputs: Inputs) -> Outputs:
         """Decode with vector quantization."""
-        out.word_quantised, out.idx, _ = self.quantizer.quantize(out.word_approx, self.codebook)
-        out.one_hot_idx = self.quantizer.create_one_hot(out.idx)
+        with torch.no_grad():
+            out.word_quantised, out.idx, _ = self.quantizer.quantize(out.word_approx, self.codebook)
+            if self.training:
+                self.quantizer.update_codebook(self.codebook, out.idx, out.word_approx)
+
+            out.one_hot_idx = self.quantizer.create_one_hot(out.idx)
+
         out.word = self.transfer.apply(out.word_quantised, out.word_approx)
         return super().decode(out, inputs)
 
