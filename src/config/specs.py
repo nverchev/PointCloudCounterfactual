@@ -191,8 +191,9 @@ class AutoEncoderConfig:
         decoder (DecoderConfig): The decoder configuration
         book_size (StrictlyPositiveInt): The size of the dictionary for VQ-VAE
         embedding_dim (StrictlyPositiveInt): The length of the code embedding
-        w_dim (StrictlyPositiveInt): The codeword length
+        n_codes (StrictlyPositiveInt): The number of codes
         vq_noise (PositiveFloat): Quantity of noise to add when redistributing the codes
+        w_dim (StrictlyPositiveInt): The codeword length
     """
 
     name: str
@@ -201,13 +202,13 @@ class AutoEncoderConfig:
     decoder: DecoderConfig
     book_size: StrictlyPositiveInt
     embedding_dim: StrictlyPositiveInt
-    w_dim: StrictlyPositiveInt
+    n_codes: StrictlyPositiveInt
     vq_noise: PositiveFloat
 
-    @property
-    def n_codes(self) -> int:
-        """The number of codes."""
-        return self.w_dim // self.embedding_dim
+    def __post_init__(self) -> None:
+        """Calculate the word dimension."""
+        self.w_dim = self.embedding_dim * self.n_codes
+        return
 
 
 @dataclass
@@ -486,6 +487,7 @@ class UserSettings:
     path = PathSpecs()
 
     def __post_init__(self):
+        """Set seed for PyTorch and NumPy."""
         if self.seed is not None:
             set_seed(self.seed)
 

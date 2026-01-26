@@ -7,5 +7,5 @@ name: VQVAE
 class_name: CounterfactualVQVAE
 book_size: 16
 embedding_dim: 8
-w_dim: 1024
+n_codes: 256
 vq_noise: 2
