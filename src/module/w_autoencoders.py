@@ -17,17 +17,6 @@ from src.module.layers import reset_child_params, TemperatureScaledSoftmax
 from src.module.quantize import VectorQuantizer
 
 
-class GaussianSampler:
-    """Handles Gaussian sampling logic."""
-
-    @staticmethod
-    def sample(mu: torch.Tensor, log_var: torch.Tensor) -> torch.Tensor:
-        """Gaussian sample given mean and variance (returns mean if not training)."""
-        std = torch.exp(0.5 * log_var)
-        eps = torch.randn_like(std)
-        return eps.mul(std).add_(mu)
-
-
 class PseudoInputManager(torch.nn.Module):
     """Manages pseudo inputs and their latent representations."""
 
@@ -91,7 +80,6 @@ class BaseWAutoEncoder(nn.Module, metaclass=abc.ABCMeta):
         self.n_classes: int = cfg.data.dataset.n_classes
         self.n_pseudo_inputs: int = cfg_wae_model.n_pseudo_inputs
         self._codebook: torch.Tensor | None = None
-        self.sampler = GaussianSampler()
         self.quantizer = VectorQuantizer()
         self.pseudo_manager = PseudoInputManager() if self.n_pseudo_inputs > 0 else None
         return
@@ -105,7 +93,7 @@ class BaseWAutoEncoder(nn.Module, metaclass=abc.ABCMeta):
         return self._codebook
 
     @abc.abstractmethod
-    def forward(self, inputs: WInputs) -> Outputs:
+    def forward(self, inputs: WInputs, stochastic: bool = True) -> Outputs:
         """Forward pass."""
 
     @abc.abstractmethod
@@ -139,6 +127,13 @@ class BaseWAutoEncoder(nn.Module, metaclass=abc.ABCMeta):
 
         return self.pseudo_manager.get_combined_input(x)
 
+    @staticmethod
+    def sample_gaussian(mu: torch.Tensor, log_var: torch.Tensor) -> torch.Tensor:
+        """Gaussian sample given mean and variance."""
+        std = torch.exp(0.5 * log_var)
+        eps = torch.randn_like(std)
+        return eps.mul(std).add_(mu)
+
 
 class WAutoEncoder(BaseWAutoEncoder):
     """Standard W autoencoder."""
@@ -151,13 +146,13 @@ class WAutoEncoder(BaseWAutoEncoder):
         self.z2_posterior = get_conditional_w_encoder()
         return
 
-    def forward(self, inputs: WInputs) -> Outputs:
+    def forward(self, inputs: WInputs, stochastic: bool = True) -> Outputs:
         """Forward pass."""
         x = inputs.w_q.view(-1, self.n_codes, self.embedding_dim)
         data = self.encode_z1(x)
         data = self.get_probabilities(inputs, data)
         data = self.encode_z2(x, data)
-        data = self.sample_posterior(data)
+        data = self.sample_posterior(data) if stochastic else self.assign_mean(data)
         return self.decode(data)
 
     def encode_z1(self, x: torch.Tensor | None) -> Outputs:
@@ -181,10 +176,10 @@ class WAutoEncoder(BaseWAutoEncoder):
 
     def sample_posterior(self, data: Outputs) -> Outputs:
         """Sample from posterior distribution."""
-        data.z1 = self.sampler.sample(data.mu1, data.log_var1)
+        data.z1 = self.sample_gaussian(data.mu1, data.log_var1)
         mu2_combined = data.d_mu2 + data.p_mu2
         log_var2_combined = data.d_log_var2 + data.p_log_var2
-        data.z2 = self.sampler.sample(mu2_combined, log_var2_combined)
+        data.z2 = self.sample_gaussian(mu2_combined, log_var2_combined)
         return data
 
     def decode(self, data: Outputs) -> Outputs:
@@ -220,7 +215,7 @@ class WAutoEncoder(BaseWAutoEncoder):
             self.pseudo_manager.update_pseudo_latent(self.encode_z1)
             pseudo_z_list = []
             for mu, log_var in self.pseudo_manager.sample_pseudo_latent(batch_size):
-                pseudo_z_list.append(self.sampler.sample(mu, log_var))
+                pseudo_z_list.append(self.sample_gaussian(mu, log_var))
 
             return torch.stack(pseudo_z_list).contiguous()
 
@@ -233,7 +228,14 @@ class WAutoEncoder(BaseWAutoEncoder):
     def sample_z2_prior(self, probs: torch.Tensor) -> torch.Tensor:
         """Sample z2 from the prior distribution."""
         mu2_combined, log_var2_combined = self.z2_prior(probs).chunk(2, 2)
-        return self.sampler.sample(mu2_combined, log_var2_combined)
+        return self.sample_gaussian(mu2_combined, log_var2_combined)
+
+    @staticmethod
+    def assign_mean(data: Outputs) -> Outputs:
+        """Sample z2 from the prior distribution."""
+        data.z1 = data.mu1
+        data.z2 = data.p_mu2 + data.d_mu2
+        return data
 
 
 class CounterfactualWAutoEncoder(WAutoEncoder):
@@ -258,8 +260,7 @@ class CounterfactualWAutoEncoder(WAutoEncoder):
         target = self.get_target(old_probs, target_dim)
         data.probs = self.interpolate_probs(old_probs, target, target_value)
         data = self.encode_z2(x, data)
-        data.z1 = data.mu1  # no sampling here to keep fidelity with input
-        data.z2 = data.p_mu2 + data.d_mu2  # no sampling here for consistency during interpolation
+        data = self.assign_mean(data)  # no sampling to keep fidelity with input and consistency during interpolation
         return self.decode(data)
 
     @override

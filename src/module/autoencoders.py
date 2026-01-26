@@ -143,7 +143,7 @@ class VQVAE(BaseVQVAE[WAutoEncoder]):
         """Reconstruct from the continuous space."""
         self.w_autoencoder.update_codebook(self.codebook)
         w_q = self.encode(inputs).w_q.view(-1, self.n_codes, self.embedding_dim)
-        data = self.w_autoencoder(WInputs(w_q))
+        data = self.w_autoencoder(WInputs(w_q), stochastic=False)
         data.w_e = data.w = self.quantizer.decode_from_indices(data.idx, self.codebook)
         return BaseAutoencoder.decode(self, data, inputs)
 
@@ -162,7 +162,7 @@ class CounterfactualVQVAE(BaseVQVAE[CounterfactualWAutoEncoder]):
         """Reconstruct from the continuous space."""
         self.w_autoencoder.update_codebook(self.codebook)
         w_q = self.encode(inputs).w_q
-        data = self.w_autoencoder(WInputs(w_q, logits))
+        data = self.w_autoencoder(WInputs(w_q, logits), stochastic=False)
         data.w_e = data.w = self.quantizer.decode_from_indices(data.idx, self.codebook)
         return BaseAutoencoder.decode(self, data, inputs)
 
