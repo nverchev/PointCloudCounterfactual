@@ -2,6 +2,7 @@
 
 import abc
 from collections.abc import Callable, Generator
+from typing import override
 
 import numpy as np
 import torch
@@ -205,7 +206,7 @@ class WAutoEncoder(BaseWAutoEncoder):
         return self.decode(data)
 
     def get_probabilities(self, inputs: WInputs, data: Outputs) -> Outputs:
-        """Get probabilities for training."""
+        """Get probabilities for the forward pass."""
         data.probs = self.get_uniform_probabilities(data.z1.shape[0])
         return data
 
@@ -226,7 +227,7 @@ class WAutoEncoder(BaseWAutoEncoder):
         return torch.randn((batch_size, 1, self.z1_dim), device=self.codebook.device)
 
     def sample_prob(self, batch_size: int = 1) -> torch.Tensor:
-        """Sample a probability vector consisting of uniform probabilities over classes."""
+        """Sample a probability vector."""
         return self.get_uniform_probabilities(batch_size)
 
     def sample_z2_prior(self, probs: torch.Tensor) -> torch.Tensor:
@@ -261,6 +262,7 @@ class CounterfactualWAutoEncoder(WAutoEncoder):
         data.z2 = data.p_mu2 + data.d_mu2  # no sampling here for consistency during interpolation
         return self.decode(data)
 
+    @override
     def get_probabilities(self, inputs: WInputs, data: Outputs) -> Outputs:
         data.probs = self.get_probabilities_from_logits(inputs.logits)
         return data
@@ -269,8 +271,8 @@ class CounterfactualWAutoEncoder(WAutoEncoder):
         """Get probabilities from classifier logits."""
         return self.relaxed_softmax(logits)
 
+    @override
     def sample_prob(self, batch_size: int = 1) -> torch.Tensor:
-        """Sample a random probability vector."""
         alpha = torch.ones(self.n_classes, device=self.codebook.device)
         return torch.distributions.Dirichlet(concentration=alpha).sample((batch_size,))
 

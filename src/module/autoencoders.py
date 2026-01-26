@@ -2,7 +2,7 @@
 
 import abc
 
-from typing import Generic, TypeVar
+from typing import Generic, TypeVar, override
 
 import torch
 import torch.nn as nn
@@ -147,6 +147,7 @@ class VQVAE(BaseVQVAE[WAutoEncoder]):
         data.w_e = data.w = self.quantizer.decode_from_indices(data.idx, self.codebook)
         return BaseAutoencoder.decode(self, data, inputs)
 
+    @override
     def _init_w_autoencoder(self) -> WAutoEncoder:
         return WAutoEncoder()
 
@@ -180,6 +181,7 @@ class CounterfactualVQVAE(BaseVQVAE[CounterfactualWAutoEncoder]):
         data.w_e = data.w = self.quantizer.decode_from_indices(data.idx, self.codebook)
         return BaseAutoencoder.decode(self, data, inputs)
 
+    @override
     def _init_w_autoencoder(self) -> CounterfactualWAutoEncoder:
         return CounterfactualWAutoEncoder()
 
