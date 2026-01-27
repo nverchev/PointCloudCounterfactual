@@ -6,7 +6,7 @@ import numpy as np
 import torch
 import torch.nn.functional as F
 
-from structural_losses import match_cost
+from geomloss import samples_loss
 from torch import nn
 from torcheval.metrics.functional import multiclass_accuracy, multiclass_f1_score
 
@@ -48,9 +48,10 @@ def torch_chamfer(t1: torch.Tensor, t2: torch.Tensor) -> torch.Tensor:
 
 def get_emd_loss() -> LossBase[Outputs, Targets]:
     """Calculate earthmover's distance between two point clouds using PyTorch backend."""
+    criterion = samples_loss.SamplesLoss(loss='sinkhorn', p=2, blur=0.05)
 
     def _emd(out: Outputs, targets: Targets) -> torch.Tensor:
-        return match_cost(out.recon, targets.ref_cloud)
+        return criterion(out.recon, targets.ref_cloud)
 
     return Loss(_emd, name='EMD')
 
@@ -73,7 +74,7 @@ def get_recon_loss() -> LossBase[Outputs, Targets]:
     recon_loss = cfg_autoencoder.objective.recon_loss
     chamfer_loss = get_chamfer_loss()
     if recon_loss == ReconLosses.ChamferEMD and torch.cuda.is_available() and not cfg.user.cpu:
-        return chamfer_loss + get_emd_loss()
+        return get_emd_loss()
 
     return chamfer_loss
 
