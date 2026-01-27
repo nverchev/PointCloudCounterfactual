@@ -92,7 +92,6 @@ class ModelNet40Dataset(SplitCreator):
                 wild_str=f'*{split.name}*.h5',
                 input_points=cfg.data.n_input_points,
             )
-            logging.info('Loaded ModelNet %s', split.name.capitalize())
             selected_indices: slice | np.ndarray[Any, np.dtype[np.bool_]]
             if cfg.data.dataset.n_classes == 40:
                 selected_indices = slice(None)
@@ -112,6 +111,7 @@ class ModelNet40Dataset(SplitCreator):
         elif split in [Partitions.train, Partitions.val] and Partitions.val not in self.pcd.keys():
             self._train_val_to_train_and_val()
 
+        logging.info('Loaded ModelNet %s', split.name.capitalize())
         return ModelNet40Split(pcd=self.pcd[split], labels=self.labels[split])
 
     def _download(self) -> None:
