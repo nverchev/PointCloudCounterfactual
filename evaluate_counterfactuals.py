@@ -21,7 +21,7 @@ from src.train.metrics_and_losses import get_classification_loss
 def get_label_distribution(test_loader: p.LoaderProtocol[tuple[Inputs, Targets]], num_classes: int) -> Tensor:
     """Extract labels from the test loader and compute distribution."""
     with torch.inference_mode():  # using inference mode to prevent augmentation
-        labels = torch.cat([data[1].label for data in test_loader])
+        labels = torch.cat([batch_data[1].label for batch_data in test_loader])
 
     distribution = {'count_' + str(i): int((labels == i).sum().item()) for i in range(num_classes)}
     print('label distribution:', distribution)

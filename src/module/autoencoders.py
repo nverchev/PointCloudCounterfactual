@@ -49,9 +49,9 @@ class Oracle(AbstractAutoEncoder):
 
     def forward(self, inputs: Inputs) -> Outputs:
         """Forward pass."""
-        data = Outputs()
-        data.recon = inputs.cloud[:, : self.n_output_points, :]
-        return data
+        out = Outputs()
+        out.recon = inputs.cloud[:, : self.n_output_points, :]
+        return out
 
 
 class BaseAutoencoder(AbstractAutoEncoder):
@@ -65,19 +65,19 @@ class BaseAutoencoder(AbstractAutoEncoder):
 
     def forward(self, inputs: Inputs) -> Outputs:
         """Forward pass."""
-        data = self.encode(inputs)
-        return self.decode(data, inputs)
+        out = self.encode(inputs)
+        return self.decode(out, inputs)
 
     def encode(self, inputs: Inputs) -> Outputs:
         """Encode point cloud to latent representation."""
-        data = Outputs()
-        return data
+        out = Outputs()
+        return out
 
-    def decode(self, data: Outputs, inputs: Inputs) -> Outputs:
+    def decode(self, out: Outputs, inputs: Inputs) -> Outputs:
         """Decode latent representation to point cloud."""
-        x = self.decoder(data.w, self.n_output_points, inputs.initial_sampling)
-        data.recon = x.transpose(2, 1).contiguous()
-        return data
+        x = self.decoder(out.word, self.n_output_points, inputs.initial_sampling)
+        out.recon = x.transpose(2, 1).contiguous()
+        return out
 
 
 class BaseVQVAE(BaseAutoencoder, abc.ABC, Generic[WA]):
@@ -103,16 +103,16 @@ class BaseVQVAE(BaseAutoencoder, abc.ABC, Generic[WA]):
 
     def encode(self, inputs: Inputs) -> Outputs:
         """Encode with optional double encoding."""
-        data = Outputs()
-        data.w_q = self.encoder(inputs.cloud)
-        return data
+        out = Outputs()
+        out.word_approx = self.encoder(inputs.cloud)
+        return out
 
-    def decode(self, data: Outputs, inputs: Inputs) -> Outputs:
+    def decode(self, out: Outputs, inputs: Inputs) -> Outputs:
         """Decode with vector quantization."""
-        data.w_e, data.idx, _ = self.quantizer.quantize(data.w_q, self.codebook)
-        data.one_hot_idx = self.quantizer.create_one_hot(data.idx)
-        data.w = self.transfer.apply(data.w_e, data.w_q)
-        return super().decode(data, inputs)
+        out.word_quantised, out.idx, _ = self.quantizer.quantize(out.word_approx, self.codebook)
+        out.one_hot_idx = self.quantizer.create_one_hot(out.idx)
+        out.word = self.transfer.apply(out.word_quantised, out.word_approx)
+        return super().decode(out, inputs)
 
     @abc.abstractmethod
     def _init_w_autoencoder(self) -> WA:
@@ -131,9 +131,9 @@ class BaseVQVAE(BaseAutoencoder, abc.ABC, Generic[WA]):
         initial_sampling = initial_sampling.to(self.codebook.device)
         inputs = Inputs(self._null_tensor, initial_sampling)
         z1_bias = z1_bias.to(self.codebook.device)
-        data = self.w_autoencoder.generate_discrete_latent_space(z1_bias, batch_size=batch_size, probs=probs)
-        data.w_e = data.w = self.quantizer.decode_from_indices(data.idx, self.codebook)
-        return BaseAutoencoder.decode(self, data, inputs)
+        out = self.w_autoencoder.generate_discrete_latent_space(z1_bias, batch_size=batch_size, probs=probs)
+        out.word_quantised = out.word = self.quantizer.decode_from_indices(out.idx, self.codebook)
+        return BaseAutoencoder.decode(self, out, inputs)
 
 
 class VQVAE(BaseVQVAE[WAutoEncoder]):
@@ -142,10 +142,10 @@ class VQVAE(BaseVQVAE[WAutoEncoder]):
     def double_reconstruct(self, inputs: Inputs) -> Outputs:
         """Reconstruct from the continuous space."""
         self.w_autoencoder.update_codebook(self.codebook)
-        w_q = self.encode(inputs).w_q.view(-1, self.n_codes, self.embedding_dim)
-        data = self.w_autoencoder(WInputs(w_q), stochastic=False)
-        data.w_e = data.w = self.quantizer.decode_from_indices(data.idx, self.codebook)
-        return BaseAutoencoder.decode(self, data, inputs)
+        w_q = self.encode(inputs).word_approx.view(-1, self.n_codes, self.embedding_dim)
+        out = self.w_autoencoder(WInputs(w_q), stochastic=False)
+        out.word_quantised = out.word = self.quantizer.decode_from_indices(out.idx, self.codebook)
+        return BaseAutoencoder.decode(self, out, inputs)
 
     @override
     def _init_w_autoencoder(self) -> WAutoEncoder:
@@ -161,10 +161,10 @@ class CounterfactualVQVAE(BaseVQVAE[CounterfactualWAutoEncoder]):
     def double_reconstruct_with_logits(self, inputs: Inputs, logits: torch.Tensor) -> Outputs:
         """Reconstruct from the continuous space."""
         self.w_autoencoder.update_codebook(self.codebook)
-        w_q = self.encode(inputs).w_q
-        data = self.w_autoencoder(WInputs(w_q, logits), stochastic=False)
-        data.w_e = data.w = self.quantizer.decode_from_indices(data.idx, self.codebook)
-        return BaseAutoencoder.decode(self, data, inputs)
+        w_q = self.encode(inputs).word_approx
+        out = self.w_autoencoder(WInputs(w_q, logits), stochastic=False)
+        out.word_quantised = out.word = self.quantizer.decode_from_indices(out.idx, self.codebook)
+        return BaseAutoencoder.decode(self, out, inputs)
 
     @torch.inference_mode()
     def generate_counterfactual(
@@ -176,10 +176,10 @@ class CounterfactualVQVAE(BaseVQVAE[CounterfactualWAutoEncoder]):
     ) -> Outputs:
         """Generate counterfactual samples."""
         self.w_autoencoder.update_codebook(self.codebook)
-        w_q = self.encode(inputs).w_q
-        data = self.w_autoencoder.generate_counterfactual(WInputs(w_q, sample_logits), target_dim, target_value)
-        data.w_e = data.w = self.quantizer.decode_from_indices(data.idx, self.codebook)
-        return BaseAutoencoder.decode(self, data, inputs)
+        w_q = self.encode(inputs).word_approx
+        out = self.w_autoencoder.generate_counterfactual(WInputs(w_q, sample_logits), target_dim, target_value)
+        out.word_quantised = out.word = self.quantizer.decode_from_indices(out.idx, self.codebook)
+        return BaseAutoencoder.decode(self, out, inputs)
 
     @override
     def _init_w_autoencoder(self) -> CounterfactualWAutoEncoder:

@@ -112,10 +112,10 @@ class WandbLogReconstruction:
 
         # Get samples and generate reconstructions
         inputs, _targets = take_from_dataset(self._dataset, self._num_samples, device=model.device)
-        outputs = model(inputs)
+        out = model(inputs)
 
         # Log reconstructions as 3D objects
-        for i, recon in enumerate(outputs.recon.detach().cpu().numpy()):
+        for i, recon in enumerate(out.recon.detach().cpu().numpy()):
             self.run.log({f'Recon {i}': wandb.Object3D(recon)})
 
 
@@ -152,9 +152,9 @@ class TensorBoardLogReconstruction:
         model = trainer.model
 
         inputs, _targets = take_from_dataset(self._dataset, self._num_samples, device=model.device)
-        outputs = model(inputs)
+        out = model(inputs)
 
-        for i, recon in enumerate(outputs.recon.detach().cpu()):
+        for i, recon in enumerate(out.recon.detach().cpu()):
             self.writer.add_mesh(
                 tag=f'Recon {i}',
                 vertices=recon.unsqueeze(0),

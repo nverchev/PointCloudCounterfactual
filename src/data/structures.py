@@ -39,42 +39,36 @@ class Outputs:
 
     Attributes:
         model_epoch: the epoch of the model (used for annealing in some losses)
-        recon: the reconstruction output.
-        w: the discrete encodings' embeddings (with straight-through gradients).
-        w_q: outer encoder approximation of the discrete encodings' embedding.
-        w_e: the discrete encodings' embeddings (no gradients).
-        w_recon: inner autoencoder approximations of the discrete encodings' embeddings.
-        w_dist_2: square distances between w and the embeddings.
+        recon: the reconstructed point cloud.
+        word: the discrete encodings' embeddings (with straight-through gradients to word_approx).
+        word_approx: outer encoder approximation of the discrete encodings' embedding.
+        word_quantised: the discrete encodings' embeddings vectorized (gradients flow to codebook).
+        word_recon: inner autoencoder reconstruction of the discrete encodings' embeddings.
+        quantization_error: square distances between w and the embeddings.
         idx: the discrete encoding as the index for the embedding.
         one_hot_idx: the discrete encoding as one hot encoding for the index.
-        attention_weights: torch.Tensor
-        components: torch.Tensor
         z1: the first latent variable.
         z2: the second latent variable.
         mu1: the mean of the distribution for z1.
         log_var1: the log variance of the distribution for z1.
         pseudo_mu1: the mean of the distribution for the VAMP loss for z1.
         pseudo_log_var1: the log variance of the distribution for the VAMP loss for z1
-        p_mu2: the mean of the prior distribution for z2.
-        p_log_var2:  the log variance of the prior distribution for z2.
-        d_mu2: the difference in mean between the prior and posterior distributions for z2.
-        d_log_var2: the difference in log variance between the prior and posterior distributions for z2.
-        p_mu2: the mean of the prior distribution for z2.
-        p_log_var2:  the log variance of the prior distribution for z2.
-        probs: optional condition value for the z2.
+        p_mu2: the mean of the prior distribution for z2 | probs.
+        p_log_var2:  the log variance of the prior distribution for z2 | probs.
+        d_mu2: the difference in mean between the prior and posterior distributions for z2 | probs.
+        d_log_var2: the difference in log variance between the prior and posterior distributions for z2 | probs.
+        probs: classifier or counterfactual probabilities for z2 | probs.
     """
 
     model_epoch: int
     recon: torch.Tensor
-    w: torch.Tensor
-    w_q: torch.Tensor
-    w_e: torch.Tensor
-    w_recon: torch.Tensor
-    w_dist_2: torch.Tensor
+    word: torch.Tensor
+    word_approx: torch.Tensor
+    word_quantised: torch.Tensor
+    word_recon: torch.Tensor
+    quantization_error: torch.Tensor
     idx: torch.Tensor
     one_hot_idx: torch.Tensor
-    attention_weights: torch.Tensor
-    components: torch.Tensor
     z1: torch.Tensor
     z2: torch.Tensor
     mu1: torch.Tensor
@@ -116,11 +110,11 @@ class WInputs(NamedTuple):
     """Targets for training the inner autoencoder.
 
     Attributes:
-        w_q: outer encoder approximation of the discrete encodings' embedding.
-        logits: optional argument for learning a conditional distribution given a classifier evaluation.
+        word_approx: outer encoder approximation of the discrete encodings' embedding.
+        logits: classifier evaluation needed for CounterFactualWAutoencoder.
     """
 
-    w_q: torch.Tensor
+    word_approx: torch.Tensor
     logits: torch.Tensor = torch.empty(0)
 
 
@@ -128,11 +122,11 @@ class WTargets(NamedTuple):
     """Targets for training the inner autoencoder.
 
     Attributes:
-        w_e: the discrete encodings' embedding vectorized.
+        word_quantized: the discrete encodings' embedding vectorized.
         one_hot_idx: torch.Tensor
-        logits: optional argument to get a conditional distribution given a classifier's evaluation.
+        logits: classifier evaluation needed for CounterFactualWAutoencoder.
     """
 
-    w_e: torch.Tensor
+    word_quantized: torch.Tensor
     one_hot_idx: torch.Tensor
     logits: torch.Tensor = torch.empty(0)

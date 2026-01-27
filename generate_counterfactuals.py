@@ -65,26 +65,26 @@ def create_and_render_counterfactuals() -> None:
         input_pc = cloud.squeeze().cpu().numpy()
         logits, str_original = calculate_and_print_probs(classifier, sample_i.cloud, 'Original')
 
-        data = vqvae_module(sample_i)
-        recon = data.recon.detach().squeeze().cpu().numpy()
-        _, str_recon = calculate_and_print_probs(classifier, data.recon, 'Reconstruction')
+        out = vqvae_module(sample_i)
+        recon = out.recon.detach().squeeze().cpu().numpy()
+        _, str_recon = calculate_and_print_probs(classifier, out.recon, 'Reconstruction')
 
-        data = vqvae_module.double_reconstruct_with_logits(sample_i, logits)
-        double_recon = data.recon.detach().squeeze().cpu().numpy()
-        _, str_double_recon = calculate_and_print_probs(classifier, data.recon, 'Double Reconstruction')
+        out = vqvae_module.double_reconstruct_with_logits(sample_i, logits)
+        double_recon = out.recon.detach().squeeze().cpu().numpy()
+        _, str_double_recon = calculate_and_print_probs(classifier, out.recon, 'Double Reconstruction')
 
         counterfactuals = list[npt.NDArray[Any]]()
         str_counterfactual = list[str]()
         for j in range(num_classes):
-            data = vqvae_module.generate_counterfactual(
+            out = vqvae_module.generate_counterfactual(
                 sample_i,
                 sample_logits=logits,
                 target_dim=j,
                 target_value=counterfactual_value,
             )
-            _, str_out = calculate_and_print_probs(classifier, data.recon, f'Counterfactual to {j}')
+            _, str_out = calculate_and_print_probs(classifier, out.recon, f'Counterfactual to {j}')
             str_counterfactual.append(str_out)
-            counterfactual = data.recon.detach().squeeze().cpu().numpy()
+            counterfactual = out.recon.detach().squeeze().cpu().numpy()
             counterfactuals.append(counterfactual)
 
         print()

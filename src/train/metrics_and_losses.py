@@ -6,7 +6,6 @@ import numpy as np
 import torch
 import torch.nn.functional as F
 
-
 from structural_losses import match_cost
 from torch import nn
 from torcheval.metrics.functional import multiclass_accuracy, multiclass_f1_score
@@ -50,8 +49,8 @@ def torch_chamfer(t1: torch.Tensor, t2: torch.Tensor) -> torch.Tensor:
 def get_emd_loss() -> LossBase[Outputs, Targets]:
     """Calculate earthmover's distance between two point clouds using PyTorch backend."""
 
-    def _emd(data: Outputs, targets: Targets) -> torch.Tensor:
-        return match_cost(data.recon, targets.ref_cloud)
+    def _emd(out: Outputs, targets: Targets) -> torch.Tensor:
+        return match_cost(out.recon, targets.ref_cloud)
 
     return Loss(_emd, name='EMD')
 
@@ -61,8 +60,8 @@ def get_chamfer_loss() -> LossBase[Outputs, Targets]:
     cfg = Experiment.get_config()
     chamfer_backend = pykeops_chamfer if torch.cuda.is_available() and not cfg.user.cpu else torch_chamfer
 
-    def _chamfer(data: Outputs, targets: Targets) -> torch.Tensor:
-        return chamfer_backend(data.recon, targets.ref_cloud)
+    def _chamfer(out: Outputs, targets: Targets) -> torch.Tensor:
+        return chamfer_backend(out.recon, targets.ref_cloud)
 
     return Loss(_chamfer, name='Chamfer')
 
@@ -85,8 +84,8 @@ def get_embed_loss() -> Loss[Outputs, Targets]:
     c_embed = cfg_ae.objective.c_embedding
     mse_loss = nn.MSELoss(reduction='none')
 
-    def _embed_loss(data: Outputs, _not_used: Targets) -> torch.Tensor:
-        return c_embed * mse_loss(data.w_q, data.w_e).mean(dim=1)
+    def _embed_loss(out: Outputs, _not_used: Targets) -> torch.Tensor:
+        return c_embed * mse_loss(out.word_approx, out.word_quantised).mean(dim=1)
 
     return Loss(_embed_loss, name='Embed. Loss')
 
@@ -109,8 +108,8 @@ def diff_gaussian_kld(d_mu: torch.Tensor, d_log_var: torch.Tensor, p_log_var: to
 def get_kld1_loss() -> LossBase[Outputs, WTargets]:
     """Get KL divergence loss for the first latent variable in the variational autoencoder."""
 
-    def _kld1(data: Outputs, _: WTargets) -> torch.Tensor:
-        return gaussian_kld(mu=data.mu1, log_var=data.log_var1).sum((1, 2))
+    def _kld1(out: Outputs, _: WTargets) -> torch.Tensor:
+        return gaussian_kld(mu=out.mu1, log_var=out.log_var1).sum((1, 2))
 
     return Loss(_kld1, name='KLD1')
 
@@ -118,8 +117,8 @@ def get_kld1_loss() -> LossBase[Outputs, WTargets]:
 def get_kld2_loss() -> LossBase[Outputs, WTargets]:
     """Get KL divergence loss for the second latent variable in the variational autoencoder."""
 
-    def _kld2(data: Outputs, _: WTargets) -> torch.Tensor:
-        return diff_gaussian_kld(d_mu=data.d_mu2, d_log_var=data.d_log_var2, p_log_var=data.p_log_var2).sum((1, 2))
+    def _kld2(out: Outputs, _: WTargets) -> torch.Tensor:
+        return diff_gaussian_kld(d_mu=out.d_mu2, d_log_var=out.d_log_var2, p_log_var=out.p_log_var2).sum((1, 2))
 
     return Loss(_kld2, name='KLD2')
 
@@ -129,13 +128,13 @@ def get_kld_vamp_loss() -> LossBase[Outputs, WTargets]:
     cfg = Experiment.get_config()
     n_pseudo_inputs = cfg.w_autoencoder.model.n_pseudo_inputs
 
-    def _kld2_vamp(data: Outputs, _: WTargets) -> torch.Tensor:
+    def _kld2_vamp(out: Outputs, _: WTargets) -> torch.Tensor:
         """Calculate KL divergence loss for VAMP prior."""
-        z_kld = data.z1
-        mu_kld = data.mu1
-        log_var_kld = data.log_var1
-        pseudo_mu = data.pseudo_mu1
-        pseudo_log_var = data.pseudo_log_var1
+        z_kld = out.z1
+        mu_kld = out.mu1
+        log_var_kld = out.log_var1
+        pseudo_mu = out.pseudo_mu1
+        pseudo_log_var = out.pseudo_log_var1
         batch = mu_kld.shape[0]
         z = z_kld.unsqueeze(1).expand(-1, n_pseudo_inputs, -1, -1)  # create a copy for each pseudo input
         posterior_ll = gaussian_ll(z_kld, mu_kld, log_var_kld).sum((1, 2))  # sum dimensions
@@ -156,7 +155,7 @@ def get_annealing() -> Loss[Outputs, WTargets]:
     total_epochs = Experiment.get_config().w_autoencoder.train.n_epochs
 
     def _annealing(outputs: Outputs, _: WTargets) -> torch.Tensor:
-        time_fraction = torch.tensor(outputs.model_epoch / total_epochs, device=outputs.w_recon.device)
+        time_fraction = torch.tensor(outputs.model_epoch / total_epochs, device=outputs.word_recon.device)
         time_fraction = torch.clamp(time_fraction, 0.0, 1.0)
         return 0.5 * (1.0 - torch.cos(time_fraction * math.pi))
 
@@ -175,9 +174,9 @@ def get_kld_loss() -> LossBase[Outputs, WTargets]:
 def get_nll_loss() -> LossBase[Outputs, WTargets]:
     """Get negative log likelihood loss."""
 
-    def _nll(data: Outputs, targets: WTargets) -> torch.Tensor:
-        w_weights = 1.0 / data.w_dist_2.clamp(min=1e-6)
-        sum_weights = data.w_dist_2.sum(dim=2, keepdim=True)
+    def _nll(out: Outputs, targets: WTargets) -> torch.Tensor:
+        w_weights = 1.0 / out.quantization_error.clamp(min=1e-6)
+        sum_weights = out.quantization_error.sum(dim=2, keepdim=True)
 
         nll = ((torch.log(sum_weights) - torch.log(w_weights)) * targets.one_hot_idx).sum((1, 2))
         return nll
@@ -188,8 +187,8 @@ def get_nll_loss() -> LossBase[Outputs, WTargets]:
 def get_mse_loss() -> LossBase[Outputs, WTargets]:
     """Get negative log likelihood loss."""
 
-    def _mse(data: Outputs, targets: WTargets) -> torch.Tensor:
-        return torch.pow(data.w_recon - targets.w_e, 2).sum(1)
+    def _mse(out: Outputs, targets: WTargets) -> torch.Tensor:
+        return torch.pow(out.word_recon - targets.word_quantized, 2).sum(1)
 
     return Loss(_mse, name='MSE')
 
@@ -197,8 +196,8 @@ def get_mse_loss() -> LossBase[Outputs, WTargets]:
 def get_w_accuracy() -> Metric[Outputs, WTargets]:
     """Get accuracy metric for quantization."""
 
-    def _accuracy(data: Outputs, targets: WTargets) -> torch.Tensor:
-        one_hot_predictions = F.one_hot(data.w_dist_2.argmin(2), num_classes=targets.one_hot_idx.shape[2])
+    def _accuracy(out: Outputs, targets: WTargets) -> torch.Tensor:
+        one_hot_predictions = F.one_hot(out.quantization_error.argmin(2), num_classes=targets.one_hot_idx.shape[2])
         return (targets.one_hot_idx * one_hot_predictions).sum(2).mean(1)
 
     return Metric(_accuracy, name='Quantisation Accuracy', higher_is_better=True)

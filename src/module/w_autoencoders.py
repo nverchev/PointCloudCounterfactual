@@ -44,9 +44,9 @@ class PseudoInputManager(torch.nn.Module):
 
     def update_pseudo_latent(self, encoder_func: Callable[[None], Outputs]) -> None:
         """Update pseudo latent parameters based on encoder output."""
-        pseudo_data = encoder_func(None)
-        self.pseudo_mu.data = pseudo_data.pseudo_mu1
-        self.pseudo_log_var.data = pseudo_data.pseudo_log_var1
+        pseudo_out = encoder_func(None)
+        self.pseudo_mu.data = pseudo_out.pseudo_mu1
+        self.pseudo_log_var.data = pseudo_out.pseudo_log_var1
         return
 
     def get_combined_input(self, x: torch.Tensor | None) -> torch.Tensor:
@@ -148,62 +148,62 @@ class WAutoEncoder(BaseWAutoEncoder):
 
     def forward(self, inputs: WInputs, stochastic: bool = True) -> Outputs:
         """Forward pass."""
-        x = inputs.w_q.view(-1, self.n_codes, self.embedding_dim)
-        data = self.encode_z1(x)
-        data = self.get_probabilities(inputs, data)
-        data = self.encode_z2(x, data)
-        data = self.sample_posterior(data) if stochastic else self.assign_mean(data)
-        return self.decode(data)
+        x = inputs.word_approx.view(-1, self.n_codes, self.embedding_dim)
+        out = self.encode_z1(x)
+        out = self.get_probabilities(inputs, out)
+        out = self.encode_z2(x, out)
+        out = self.sample_posterior(out) if stochastic else self.assign_mean(out)
+        return self.decode(out)
 
     def encode_z1(self, x: torch.Tensor | None) -> Outputs:
         """Encode from discrete to continuous latent space."""
-        data = Outputs()
+        out = Outputs()
         input_tensor = self._get_input(x)
         latent = self.encoder(input_tensor)
         if self.pseudo_manager is not None:
             split_index = [-self.pseudo_manager.n_pseudo_inputs]
             latent, pseudo_latent = torch.tensor_split(latent, split_index)
-            data.pseudo_mu1, data.pseudo_log_var1 = pseudo_latent.chunk(2, 2)
+            out.pseudo_mu1, out.pseudo_log_var1 = pseudo_latent.chunk(2, 2)
 
-        data.mu1, data.log_var1 = latent.chunk(2, 2)
-        return data
+        out.mu1, out.log_var1 = latent.chunk(2, 2)
+        return out
 
-    def encode_z2(self, x: torch.Tensor, data: Outputs) -> Outputs:
+    def encode_z2(self, x: torch.Tensor, out: Outputs) -> Outputs:
         """Encode from discrete to continuous latent space conditioned on classifier probabilities."""
-        data.p_mu2, data.p_log_var2 = self.z2_prior(data.probs).chunk(2, 2)
-        data.d_mu2, data.d_log_var2 = self.z2_posterior(data.probs, x).chunk(2, 2)
-        return data
+        out.p_mu2, out.p_log_var2 = self.z2_prior(out.probs).chunk(2, 2)
+        out.d_mu2, out.d_log_var2 = self.z2_posterior(out.probs, x).chunk(2, 2)
+        return out
 
-    def sample_posterior(self, data: Outputs) -> Outputs:
+    def sample_posterior(self, out: Outputs) -> Outputs:
         """Sample from posterior distribution."""
-        data.z1 = self.sample_gaussian(data.mu1, data.log_var1)
-        mu2_combined = data.d_mu2 + data.p_mu2
-        log_var2_combined = data.d_log_var2 + data.p_log_var2
-        data.z2 = self.sample_gaussian(mu2_combined, log_var2_combined)
-        return data
+        out.z1 = self.sample_gaussian(out.mu1, out.log_var1)
+        mu2_combined = out.d_mu2 + out.p_mu2
+        log_var2_combined = out.d_log_var2 + out.p_log_var2
+        out.z2 = self.sample_gaussian(mu2_combined, log_var2_combined)
+        return out
 
-    def decode(self, data: Outputs) -> Outputs:
+    def decode(self, out: Outputs) -> Outputs:
         """Decode from continuous to discrete latent space."""
-        data.w_recon = self.decoder(data.z1, data.z2)
-        _, data.idx, data.w_dist_2 = self.quantizer.quantize(data.w_recon, self.codebook)
-        return data
+        out.word_recon = self.decoder(out.z1, out.z2)
+        _, out.idx, out.quantization_error = self.quantizer.quantize(out.word_recon, self.codebook)
+        return out
 
     @torch.inference_mode()
     def generate_discrete_latent_space(
         self, z1_bias: torch.Tensor, batch_size: int = 1, probs: torch.Tensor | None = None
     ) -> Outputs:
         """Generate discrete latent space samples from the continuous prior distribution."""
-        data = Outputs()
+        out = Outputs()
         self.eval()
-        data.z1 = self.sample_z1_prior() + z1_bias
-        data.probs = probs.to(self.codebook.device) if probs is not None else self.sample_prob(batch_size)
-        data.z2 = self.sample_z2_prior(data.probs)
-        return self.decode(data)
+        out.z1 = self.sample_z1_prior() + z1_bias
+        out.probs = probs.to(self.codebook.device) if probs is not None else self.sample_prob(batch_size)
+        out.z2 = self.sample_z2_prior(out.probs)
+        return self.decode(out)
 
-    def get_probabilities(self, inputs: WInputs, data: Outputs) -> Outputs:
+    def get_probabilities(self, inputs: WInputs, out: Outputs) -> Outputs:
         """Get probabilities for the forward pass."""
-        data.probs = self.get_uniform_probabilities(data.z1.shape[0])
-        return data
+        out.probs = self.get_uniform_probabilities(out.z1.shape[0])
+        return out
 
     def get_uniform_probabilities(self, batch_size: int) -> torch.Tensor:
         """Get uniform probabilities over classes."""
@@ -231,11 +231,11 @@ class WAutoEncoder(BaseWAutoEncoder):
         return self.sample_gaussian(mu2_combined, log_var2_combined)
 
     @staticmethod
-    def assign_mean(data: Outputs) -> Outputs:
+    def assign_mean(out: Outputs) -> Outputs:
         """Sample z2 from the prior distribution."""
-        data.z1 = data.mu1
-        data.z2 = data.p_mu2 + data.d_mu2
-        return data
+        out.z1 = out.mu1
+        out.z2 = out.p_mu2 + out.d_mu2
+        return out
 
 
 class CounterfactualWAutoEncoder(WAutoEncoder):
@@ -254,19 +254,19 @@ class CounterfactualWAutoEncoder(WAutoEncoder):
         target_value: float = 1.0,
     ) -> Outputs:
         """Create counterfactual discrete variables."""
-        x = inputs.w_q.view(-1, self.n_codes, self.embedding_dim)
-        data = self.encode_z1(x)
+        x = inputs.word_approx.view(-1, self.n_codes, self.embedding_dim)
+        out = self.encode_z1(x)
         old_probs = self.get_probabilities_from_logits(inputs.logits)
         target = self.get_target(old_probs, target_dim)
-        data.probs = self.interpolate_probs(old_probs, target, target_value)
-        data = self.encode_z2(x, data)
-        data = self.assign_mean(data)  # no sampling to keep fidelity with input and consistency during interpolation
-        return self.decode(data)
+        out.probs = self.interpolate_probs(old_probs, target, target_value)
+        out = self.encode_z2(x, out)
+        out = self.assign_mean(out)  # no sampling to keep fidelity with input and consistency during interpolation
+        return self.decode(out)
 
     @override
-    def get_probabilities(self, inputs: WInputs, data: Outputs) -> Outputs:
-        data.probs = self.get_probabilities_from_logits(inputs.logits)
-        return data
+    def get_probabilities(self, inputs: WInputs, out: Outputs) -> Outputs:
+        out.probs = self.get_probabilities_from_logits(inputs.logits)
+        return out
 
     def get_probabilities_from_logits(self, logits: torch.Tensor) -> torch.Tensor:
         """Get probabilities from classifier logits."""

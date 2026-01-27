@@ -52,7 +52,7 @@ def train_classifier() -> None:
 
     outputs_probs = torch.cat(final_test.outputs_list)
     predictions = outputs_probs.argmax(dim=1)
-    labels = torch.cat([data[1].label for data in test_loader.get_loader(inference=True)])
+    labels = torch.cat([batch_data[1].label for batch_data in test_loader.get_loader(inference=True)])
     misclassified_indices = [x.item() for x in (predictions != labels).nonzero().squeeze(1)]
     max_indices_to_log = 100
     misclassified_indices_str = str(misclassified_indices[:max_indices_to_log])
