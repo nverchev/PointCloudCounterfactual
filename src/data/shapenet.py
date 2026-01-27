@@ -13,6 +13,7 @@ from src.data.augmentations import augment_clouds, normalise, jitter_cloud
 from src.config.experiment import Experiment
 from src.data.structures import Inputs, Targets
 from src.data.protocols import PointCloudDataset, Partitions, SplitCreator
+from src.utils.download import download_extract_zip
 
 
 class ShapenetFlowSplit(PointCloudDataset):
@@ -67,10 +68,6 @@ class ShapenetFlowSplit(PointCloudDataset):
 class ShapeNetDatasetFlow(SplitCreator):
     """This class creates the splits for the Shapenet Dataset."""
 
-    data_dir: pathlib.Path
-    shapenet_path: pathlib.Path
-    paths: dict[Partitions, list[pathlib.Path]]
-
     def __init__(self):
         cfg = Experiment.get_config()
         user_cfg = cfg.user
@@ -79,12 +76,12 @@ class ShapeNetDatasetFlow(SplitCreator):
             self.classes = json.load(f)
 
         self.data_dir = user_cfg.path.data_dir
-        self.shapenet_path = self.data_dir / 'ShapeNetCore.v2.PC15k'
-        if not self.shapenet_path.exists():
+        self.dir = self.data_dir / 'ShapeNetCore.v2.PC15k'
+        if not self.dir.exists():
             self._download()
 
         self.paths = dict[Partitions, list[pathlib.Path]]()
-        folders = self.shapenet_path.glob('*')
+        folders = self.dir.glob('*')
         if cfg.data.dataset.n_classes < len(self.classes):
             selected_classes = cfg.data.dataset.settings['select_classes']
             folders = [folder for folder in folders if self.classes[folder.name] in selected_classes]
@@ -103,8 +100,8 @@ class ShapeNetDatasetFlow(SplitCreator):
         return
 
     def _download(self) -> None:
-        url = 'https://drive.google.com/drive/folders/1G0rf-6HSHoTll6aH7voh-dXj6hCRhSAQ'
-        raise NotImplementedError(f'Download not implemented yet. Download and extract dataset from here: {url}')
+        url = 'https://gaimfs.ugent.be/Public/Dataset/ShapeNetCore.v2.PC15k.zip'
+        return download_extract_zip(target_folder=self.dir, url=url)
 
     @override
     def split(self, split: Partitions) -> Dataset[tuple[Inputs, Targets]]:

@@ -63,7 +63,7 @@ class ModelNet40Dataset(SplitCreator):
 
     classes: list[str]
     data_dir: pathlib.Path
-    modelnet_path: pathlib.Path
+    dir: pathlib.Path
     pcd: dict[Partitions, npt.NDArray[Any]]
     indices: dict[Partitions, npt.NDArray[Any]]
     labels: dict[Partitions, npt.NDArray[Any]]
@@ -83,12 +83,12 @@ class ModelNet40Dataset(SplitCreator):
         label_map = {old: new for new, old in enumerate(selected_labels)}
 
         self.data_dir = user_cfg.path.data_dir
-        self.modelnet_path = self.data_dir / 'modelnet40_hdf5_2048'
+        self.dir = self.data_dir / 'modelnet40_hdf5_2048'
         self._download()
         self.pcd, self.labels = {}, {}
         for split in [Partitions.train, Partitions.test]:
             pcd, labels = self.load_h5(
-                path=self.modelnet_path,
+                path=self.dir,
                 wild_str=f'*{split.name}*.h5',
                 input_points=cfg.data.n_input_points,
             )
@@ -115,7 +115,7 @@ class ModelNet40Dataset(SplitCreator):
 
     def _download(self) -> None:
         url = 'https://gaimfs.ugent.be/Public/Dataset/modelnet40_hdf5_2048.zip'
-        return download_extract_zip(target_folder=self.modelnet_path, url=url)
+        return download_extract_zip(target_folder=self.dir, url=url)
 
     def _train_val_to_train_and_val(self, val_every: int = 6) -> None:
         train_idx = list(range(self.pcd[Partitions.train].shape[0]))
