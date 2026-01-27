@@ -46,7 +46,8 @@ def train_autoencoder(trial: Trial | None = None) -> None:
         trainer.load_checkpoint(cfg_user.load_checkpoint)
 
     if isinstance(ae, BaseVQVAE):
-        rearrange_hook = StaticHook(DiscreteSpaceOptimizer(diagnostic)).bind(call_every(cfg_ae.diagnose_every))
+        start = interval = cfg_ae.diagnose_every
+        rearrange_hook = StaticHook(DiscreteSpaceOptimizer(diagnostic)).bind(call_every(interval, start))
         trainer.pre_epoch_hooks.register(rearrange_hook)  # pre-hook to ensure new embeddings are trained
 
     if not cfg.final:
