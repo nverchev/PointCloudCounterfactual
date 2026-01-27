@@ -2,8 +2,6 @@
 
 import abc
 import itertools
-from typing import cast
-from collections.abc import Iterable
 
 import torch
 import torch.nn as nn
@@ -111,11 +109,8 @@ class PCGen(BasePointDecoder):
         for group in range(self.n_components):
             x_group = self.group_conv[group](x)
             group_atts.append(x_group)
-            transformer = cast(Iterable[nn.TransformerDecoderLayer], self.group_transformer[group])
             x_group = x_group.transpose(2, 1)
-            for layer in transformer:
-                x_group = layer(x_group, memory=memory)
-
+            x_group = self.group_transformer[group](x_group, memory=memory)
             x_group = x_group.transpose(2, 1)
             x_group = self.group_final[group](x_group)
             xs_list.append(x_group)
