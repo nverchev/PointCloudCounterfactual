@@ -111,20 +111,6 @@ class TransformerEncoder(BasePointEncoder):
 
         self.points_convolutions = nn.Sequential(*modules)
         self.final_conv = PointsConvLayer(sum(self.conv_dims), self.w_dim)
-
-        for hidden_dim, rate in zip(self.mlp_dims, self.dropout_rates, strict=False):
-            modules.append(
-                nn.TransformerDecoderLayer(
-                    d_model=self.proj_dim,
-                    nhead=self.n_heads,
-                    dropout=rate,
-                    dim_feedforward=hidden_dim,
-                    activation=self.act_cls(),
-                    batch_first=True,
-                    norm_first=True,
-                )
-            )
-
         self.proj_codes = LinearLayer(self.embedding_dim, self.proj_dim, act_cls=self.act_cls)
         self.norm = self.norm_cls(self.proj_dim)
         self.proj_input = LinearLayer(IN_CHAN, self.proj_dim, act_cls=self.act_cls)
@@ -134,9 +120,7 @@ class TransformerEncoder(BasePointEncoder):
             hidden_dim=self.mlp_dims[-1],
             dropout_rate=self.dropout_rates[-1],
             act_cls=self.act_cls,
-            norm_cls=self.norm_cls,
             num_layers=len(self.mlp_dims),
-            use_final_norm=True,
         )
         self.compress = LinearLayer(self.proj_dim, self.embedding_dim)
         return

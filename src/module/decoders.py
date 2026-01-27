@@ -69,18 +69,14 @@ class PCGen(BasePointDecoder):
                 modules.append(
                     PointsConvLayer(in_dim, out_dim, act_cls=self.act_cls, norm_cls=self.norm_cls, use_residual=True)
                 )
-
             self.group_conv.append(nn.Sequential(*modules))
-            self.transformer = nn.ModuleList()
             transformer_decoder = TransformerDecoder(
                 in_dim=self.conv_dims[-1],
                 n_heads=self.n_heads,
                 hidden_dim=self.mlp_dims[-1],
                 dropout_rate=self.dropout_rates[-1],
                 act_cls=self.act_cls,
-                norm_cls=self.norm_cls,
                 num_layers=len(self.mlp_dims),
-                use_final_norm=True,
             )
             self.group_transformer.append(transformer_decoder)
             self.group_final.append(PointsConvLayer(self.conv_dims[-1], OUT_CHAN, use_soft_init=True))

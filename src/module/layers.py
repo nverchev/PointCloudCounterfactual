@@ -110,7 +110,7 @@ class BaseLayer(nn.Module, metaclass=abc.ABCMeta):
         self.use_residual: bool = use_residual
         self.act = self.get_activation(act_cls)
         self.soft_init: bool = use_soft_init
-        self.init = self.get_init(self.act, use_soft_init)
+        self.init = self.get_init(self.act, use_soft_init or use_residual)
         self.init(cast(torch.Tensor, self.layer.weight))
         if DEBUG_MODE:
             self.register_forward_hook(debug_check)
@@ -159,14 +159,14 @@ class BaseLayer(nn.Module, metaclass=abc.ABCMeta):
         if act is None:
             return functools.partial(nn.init.xavier_normal_, gain=1)
 
+        if isinstance(act, nn.Hardtanh):
+            return functools.partial(nn.init.xavier_normal_, gain=nn.init.calculate_gain('tanh'))
+
         if isinstance(act, nn.ReLU):
             return functools.partial(nn.init.kaiming_uniform_, nonlinearity='relu')
 
         if isinstance(act, nn.LeakyReLU):
             return functools.partial(nn.init.kaiming_uniform_, a=act.negative_slope)
-
-        if isinstance(act, nn.Hardtanh):
-            return functools.partial(nn.init.xavier_normal_, gain=nn.init.calculate_gain('tanh'))
 
         if isinstance(act, nn.GELU):
             return functools.partial(nn.init.xavier_normal_, gain=1.0)
@@ -228,7 +228,6 @@ class TransformerEncoderLayer(nn.Module):
         n_heads: Number of attention heads
         hidden_dim: Dimension of the hidden layer in the feedforward network
         act_cls: Activation class for feedforward network
-        norm_cls: Normalization class
         dropout_rate: Dropout probability
         out_dim: The number of output embeddings. Defaults to in_dim
         use_residual: Whether to use residual connections
@@ -240,7 +239,6 @@ class TransformerEncoderLayer(nn.Module):
         n_heads: int,
         hidden_dim: int,
         act_cls: ActClass,
-        norm_cls: NormClass,
         dropout_rate: float,
         out_dim: int | None = None,
         use_residual: bool = True,
@@ -256,10 +254,10 @@ class TransformerEncoderLayer(nn.Module):
             raise ValueError('Output dimension must be equal to input dimension if residual connections are used')
 
         self.self_attn = nn.MultiheadAttention(in_dim, n_heads, dropout=dropout_rate, batch_first=True)
-        self.linear1 = LinearLayer(in_dim, hidden_dim, act_cls=act_cls)
-        self.linear2 = LinearLayer(hidden_dim, self.out_dim)
-        self.norm1 = norm_cls(in_dim)
-        self.norm2 = norm_cls(self.out_dim)
+        self.linear1 = LinearLayer(in_dim, hidden_dim, act_cls=act_cls, use_soft_init=True)
+        self.linear2 = LinearLayer(hidden_dim, self.out_dim, use_soft_init=True)
+        self.norm1 = nn.LayerNorm(in_dim)
+        self.norm2 = nn.LayerNorm(self.out_dim)
         self.dropout1 = nn.Dropout(dropout_rate)
         self.dropout2 = nn.Dropout(dropout_rate)
         return
@@ -291,7 +289,6 @@ class TransformerDecoderLayer(nn.Module):
         n_heads: Number of attention heads
         hidden_dim: Dimension of the hidden layer in the feedforward network
         act_cls: Activation class for feedforward network
-        norm_cls: Normalization class
         dropout_rate: Dropout probability
         out_dim: The number of output embeddings. Defaults to in_dim
         use_residual: Whether to use residual connections
@@ -303,7 +300,6 @@ class TransformerDecoderLayer(nn.Module):
         n_heads: int,
         hidden_dim: int,
         act_cls: ActClass,
-        norm_cls: NormClass,
         dropout_rate: float,
         out_dim: int | None = None,
         use_residual: bool = True,
@@ -321,10 +317,10 @@ class TransformerDecoderLayer(nn.Module):
         self.self_attn = nn.MultiheadAttention(in_dim, n_heads, dropout=dropout_rate, batch_first=True)
         self.cross_attn = nn.MultiheadAttention(in_dim, n_heads, dropout=dropout_rate, batch_first=True)
         self.linear1 = LinearLayer(in_dim, hidden_dim, act_cls=act_cls)
-        self.linear2 = LinearLayer(hidden_dim, self.out_dim)
-        self.norm1 = norm_cls(in_dim)
-        self.norm2 = norm_cls(in_dim)
-        self.norm3 = norm_cls(self.out_dim)
+        self.linear2 = LinearLayer(hidden_dim, self.out_dim, use_soft_init=True)
+        self.norm1 = nn.LayerNorm(in_dim)
+        self.norm2 = nn.LayerNorm(in_dim)
+        self.norm3 = nn.LayerNorm(self.out_dim)
         self.dropout1 = nn.Dropout(dropout_rate)
         self.dropout2 = nn.Dropout(dropout_rate)
         self.dropout3 = nn.Dropout(dropout_rate)
@@ -385,7 +381,6 @@ class TransformerEncoder(nn.Module):
         n_heads: Number of attention heads
         hidden_dim: Dimension of the hidden layer in the feedforward network
         act_cls: Activation class for feedforward network
-        norm_cls: Normalization class
         dropout_rate: Dropout probability
         num_layers: Number of encoder layers to stack
         out_dim: The number of output embeddings. Defaults to in_dim
@@ -399,7 +394,6 @@ class TransformerEncoder(nn.Module):
         n_heads: int,
         hidden_dim: int,
         act_cls: ActClass,
-        norm_cls: NormClass,
         dropout_rate: float,
         num_layers: int,
         out_dim: int | None = None,
@@ -415,7 +409,6 @@ class TransformerEncoder(nn.Module):
                     n_heads=n_heads,
                     hidden_dim=hidden_dim,
                     act_cls=act_cls,
-                    norm_cls=norm_cls,
                     dropout_rate=dropout_rate,
                     out_dim=self.out_dim,
                     use_residual=use_residual,
@@ -423,7 +416,7 @@ class TransformerEncoder(nn.Module):
                 for _ in range(num_layers)
             ]
         )
-        self.norm = norm_cls(self.out_dim) if use_final_norm else None
+        self.norm = nn.LayerNorm(self.out_dim) if use_final_norm else None
         return
 
     def forward(
@@ -450,7 +443,6 @@ class TransformerDecoder(nn.Module):
         n_heads: Number of attention heads
         hidden_dim: Dimension of the hidden layer in the feedforward network
         act_cls: Activation class for feedforward network
-        norm_cls: Normalization class
         dropout_rate: Dropout probability
         num_layers: Number of decoder layers to stack
         out_dim: The number of output embeddings. Defaults to in_dim.
@@ -464,7 +456,6 @@ class TransformerDecoder(nn.Module):
         n_heads: int,
         hidden_dim: int,
         act_cls: ActClass,
-        norm_cls: NormClass,
         dropout_rate: float,
         num_layers: int,
         out_dim: int | None = None,
@@ -480,7 +471,6 @@ class TransformerDecoder(nn.Module):
                     n_heads=n_heads,
                     hidden_dim=hidden_dim,
                     act_cls=act_cls,
-                    norm_cls=norm_cls,
                     dropout_rate=dropout_rate,
                     out_dim=self.out_dim,
                     use_residual=use_residual,
@@ -489,7 +479,7 @@ class TransformerDecoder(nn.Module):
             ]
         )
 
-        self.norm = norm_cls(self.out_dim) if use_final_norm else None
+        self.norm = nn.LayerNorm(self.out_dim) if use_final_norm else None
         return
 
     def forward(
