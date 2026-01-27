@@ -1,5 +1,6 @@
 """Hooks to execute during training."""
 
+import logging
 from typing import cast
 
 import numpy as np
@@ -32,6 +33,11 @@ class DiscreteSpaceOptimizer:
         Args:
             model_runner: Runner containing the model to optimize.
         """
+        cfg_ae = Experiment.get_config().autoencoder
+        cfg_ae_model = cfg_ae.model
+        self.n_codes = cfg_ae_model.n_codes
+        self.book_size = cfg_ae_model.book_size
+        self.vq_noise = cfg_ae_model.vq_noise
         self.model_runner = model_runner
         if isinstance(model_runner.model.module, torch.nn.parallel.DistributedDataParallel):
             self.module = cast(BaseVQVAE[WAutoEncoder], model_runner.model.module.module)
@@ -41,9 +47,7 @@ class DiscreteSpaceOptimizer:
         if not isinstance(self.module, BaseVQVAE):
             raise ValueError('Model not supported for VQ optimization.')
 
-        cfg_ae = Experiment.get_config().autoencoder
-        self.cfg_ae_model = cfg_ae.model
-        self.final_epoch = cfg_ae.train.n_epochs
+        return
 
     def __call__(self) -> None:
         """Optimize codebook usage by reassigning unused entries."""
@@ -51,30 +55,26 @@ class DiscreteSpaceOptimizer:
         if dist.is_initialized() and dist.get_rank() != 0:
             return
 
-        # Calculate codebook usage statistics
-        codebook_usage = torch.vstack([output.one_hot_idx for output in self.model_runner.outputs_list]).sum(0)
+        codebook_usage = sum((out.one_hot_idx.sum(0) for out in self.model_runner.outputs_list), torch.tensor(0))
         unused_entries = torch.eq(codebook_usage, 0)
 
-        # Process each codebook
-        for book_idx in range(self.cfg_ae_model.w_dim // self.cfg_ae_model.embedding_dim):
-            # Calculate the probability distribution of used codebook entries
-            usage_probs = np.array(codebook_usage[book_idx])
-            usage_probs = usage_probs / usage_probs.sum()
+        logging.info('Codebook usage: %.2f %%', unused_entries.sum() / unused_entries.numel() * 100)
+        for code in range(self.n_codes):
+            idx_frequency = np.array(codebook_usage[code])
+            idx_frequency = idx_frequency / idx_frequency.sum()
 
             # Reassign unused entries
-            for entry_idx in range(self.cfg_ae_model.book_size):
-                if unused_entries[book_idx, entry_idx]:
+            for code_idx in range(self.book_size):
+                if unused_entries[code, code_idx]:
                     # Sample from used entries and add noise to create new embedding
-                    sampled_idx = np.random.choice(np.arange(self.cfg_ae_model.book_size), p=usage_probs)
-                    template_embedding = self.module.codebook.data[book_idx, sampled_idx]
+                    sampled_idx = np.random.choice(np.arange(self.book_size), p=idx_frequency)
+                    template_embedding = self.module.codebook.data[code, sampled_idx]
 
-                    if self.model_runner.model.epoch == self.final_epoch:
-                        # Disable unused entries in final epoch
-                        self.module.codebook.data[book_idx, entry_idx] = 1000
-                    else:
-                        # Add noise to template embedding
-                        noise = self.cfg_ae_model.vq_noise * torch.randn_like(template_embedding)
-                        self.module.codebook.data[book_idx, entry_idx] = template_embedding + noise
+                    # Add noise to template embedding
+                    noise = self.vq_noise * torch.randn_like(template_embedding)
+                    self.module.codebook.data[code, code_idx] = template_embedding + noise
+
+        return
 
 
 class WandbLogReconstruction:
