@@ -81,7 +81,9 @@ def train_autoencoder(trial: Trial | None = None) -> None:
         trainer.post_epoch_hooks.register(prune_hook)
 
     trainer.train_until(cfg_ae.train.n_epochs)
-    trainer.save_checkpoint()
+    if trial is None:
+        trainer.save_checkpoint()
+
     test_all_metrics()
     return
 
