@@ -55,24 +55,22 @@ class DiscreteSpaceOptimizer:
         if dist.is_initialized() and dist.get_rank() != 0:
             return
 
-        codebook_usage = sum((out.one_hot_idx.sum(0) for out in self.model_runner.outputs_list), torch.tensor(0))
-        unused_entries = torch.eq(codebook_usage, 0)
-
-        logging.info('Codebook usage: %.2f %%', unused_entries.sum() / unused_entries.numel() * 100)
+        zeros = torch.zeros(self.n_codes, self.book_size)
+        codebook_usage = sum((out.one_hot_idx.sum(0) for out in self.model_runner.outputs_list), zeros)
+        unused_mask = codebook_usage == 0
+        usage_pct = (~unused_mask).float().mean() * 100
+        logging.info('Codebook usage: %.2f%%', usage_pct)
         for code in range(self.n_codes):
-            idx_frequency = np.array(codebook_usage[code])
-            idx_frequency = idx_frequency / idx_frequency.sum()
-
-            # Reassign unused entries
-            for code_idx in range(self.book_size):
-                if unused_entries[code, code_idx]:
-                    # Sample from used entries and add noise to create new embedding
-                    sampled_idx = np.random.choice(np.arange(self.book_size), p=idx_frequency)
-                    template_embedding = self.module.codebook.data[code, sampled_idx]
-
-                    # Add noise to template embedding
-                    noise = self.vq_noise * torch.randn_like(template_embedding)
-                    self.module.codebook.data[code, code_idx] = template_embedding + noise
+            usage_freq = codebook_usage[code].float()
+            prob = (usage_freq / usage_freq.sum()).cpu().numpy()
+            dead_indices = torch.where(unused_mask[code])[0]
+            # Re-allocating dead embeddings
+            for code_idx in dead_indices:
+                sampled_idx = np.random.choice(self.book_size, p=prob)
+                template = self.module.codebook.data[code, sampled_idx]
+                codebook_std = self.module.codebook.data[code].std()
+                noise = torch.randn_like(template) * codebook_std * self.vq_noise
+                self.module.codebook.data[code, code_idx] = template + noise
 
         return
 

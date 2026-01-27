@@ -8,4 +8,4 @@ class_name: CounterfactualVQVAE
 book_size: 16
 embedding_dim: 4
 n_codes: 256
-vq_noise: 2
+vq_noise: 0.1

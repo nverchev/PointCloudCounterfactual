@@ -45,12 +45,12 @@ def train_autoencoder(trial: Trial | None = None) -> None:
     if cfg_user.load_checkpoint:
         trainer.load_checkpoint(cfg_user.load_checkpoint)
 
+    if not cfg.final:
+        trainer.add_validation(test_loader)  # when not final, this uses the validation dataset
+
     if isinstance(ae, BaseVQVAE):
         rearrange_hook = StaticHook(DiscreteSpaceOptimizer(diagnostic)).bind(call_every(cfg_ae.diagnose_every))
         trainer.post_epoch_hooks.register(rearrange_hook)
-
-    if not cfg.final:
-        trainer.add_validation(test_loader)  # when not final, this uses the validation dataset
 
     try:
         from src.train.hooks import TensorBoardLogReconstruction
