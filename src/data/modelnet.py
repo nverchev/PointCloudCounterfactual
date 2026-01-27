@@ -92,6 +92,7 @@ class ModelNet40Dataset(SplitCreator):
                 wild_str=f'*{split.name}*.h5',
                 input_points=cfg.data.n_input_points,
             )
+            logging.info('Loaded ModelNet %s', split.name.capitalize())
             selected_indices: slice | np.ndarray[Any, np.dtype[np.bool_]]
             if cfg.data.dataset.n_classes == 40:
                 selected_indices = slice(None)
@@ -135,8 +136,6 @@ class ModelNet40Dataset(SplitCreator):
 
         for h5_name in path.glob(wild_str):
             with h5py.File(h5_name, 'r+') as f:
-                logging.info('Load: %s', h5_name)
-
                 # Use cast to resolve Dataset ambiguity
                 pcs_ds = cast(h5py.Dataset, f['data'])
                 pcs = pcs_ds[:].astype('float32')

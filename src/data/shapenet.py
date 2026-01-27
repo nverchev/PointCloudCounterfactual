@@ -1,6 +1,7 @@
 """Dataset for the Shapenet dataset."""
 
 import json
+import logging
 import pathlib
 from typing import Any, override
 
@@ -38,6 +39,7 @@ class ShapenetFlowSplit(PointCloudDataset):
         set_id = set(self.folder_id_list)
         map_id = {folder_id: i for i, folder_id in enumerate(sorted(set_id))}
         self.labels = [map_id[folder_id] for folder_id in self.folder_id_list]
+        return
 
     def __len__(self) -> int:
         return len(self.pcd)
@@ -65,7 +67,7 @@ class ShapenetFlowSplit(PointCloudDataset):
         return Inputs(cloud=cloud), Targets(ref_cloud=ref_cloud, label=label)
 
 
-class ShapeNetDatasetFlow(SplitCreator):
+class ShapeNetFlowDataset(SplitCreator):
     """This class creates the splits for the Shapenet Dataset."""
 
     def __init__(self):
@@ -105,4 +107,6 @@ class ShapeNetDatasetFlow(SplitCreator):
 
     @override
     def split(self, split: Partitions) -> Dataset[tuple[Inputs, Targets]]:
-        return ShapenetFlowSplit(self.paths[split])
+        dataset = ShapenetFlowSplit(self.paths[split])
+        logging.info('Loaded ShapeNetFlow %s', split.name.capitalize())
+        return dataset

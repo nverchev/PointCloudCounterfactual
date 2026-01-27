@@ -8,7 +8,7 @@ from src.config import Experiment
 from src.config.options import Datasets
 from src.data.modelnet import ModelNet40Dataset
 from src.data.protocols import Partitions, PointCloudDataset
-from src.data.shapenet import ShapeNetDatasetFlow
+from src.data.shapenet import ShapeNetFlowDataset
 
 
 def get_dataset(partition: Partitions) -> PointCloudDataset:
@@ -20,7 +20,7 @@ def get_dataset(partition: Partitions) -> PointCloudDataset:
     dataset_name = cfg.data.dataset.name
     dataset_dict: dict[Datasets, Any] = {
         Datasets.ModelNet: ModelNet40Dataset,
-        Datasets.ShapenetFlow: ShapeNetDatasetFlow,
+        Datasets.ShapenetFlow: ShapeNetFlowDataset,
     }
     dataset = dataset_dict[dataset_name]().split(partition)
     return dataset

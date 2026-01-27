@@ -3,7 +3,7 @@
 from src.data.dataset import get_dataset, get_datasets
 from src.data.modelnet import ModelNet40Dataset
 from src.data.protocols import PointCloudDataset, Partitions
-from src.data.shapenet import ShapeNetDatasetFlow
+from src.data.shapenet import ShapeNetFlowDataset
 from src.data.structures import Inputs, Outputs, Targets, WInputs, WTargets
 
 IN_CHAN = 3
@@ -17,7 +17,7 @@ __all__ = [
     'Outputs',
     'Partitions',
     'PointCloudDataset',
-    'ShapeNetDatasetFlow',
+    'ShapeNetFlowDataset',
     'Targets',
     'WInputs',
     'WTargets',
