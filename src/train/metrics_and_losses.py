@@ -86,7 +86,7 @@ def get_embed_loss() -> Loss[Outputs, Targets]:
     mse_loss = nn.MSELoss(reduction='none')
 
     def _embed_loss(data: Outputs, _not_used: Targets) -> torch.Tensor:
-        return c_embed * mse_loss(data.w_q, data.w_e.detach()).mean(dim=1)
+        return c_embed * mse_loss(data.w_q, data.w_e).mean(dim=1)
 
     return Loss(_embed_loss, name='Embed. Loss')
 
