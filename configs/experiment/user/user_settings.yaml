@@ -12,7 +12,7 @@ load_checkpoint: 0  # load a checkpoint from the experiments folder, -1 indicate
 # Optional trackers for monitoring the experiment
 trackers:
   hydra: true  # saves a local copy of the config file
-  tensorboard: true  # start a tensorboard server and log metrics
+  tensorboard: false  # start a tensorboard server and log metrics
   wandb: false  # logs metrics to wandb
   sqlalchemy: false  # saves metrics to a local database
   csv: true  # saves metrics to a csv file
