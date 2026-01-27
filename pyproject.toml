@@ -3,7 +3,7 @@ name = "pointcloudcounterfactual"
 version = "1.9"
 description = 'Code to replicate the article "Towards Point Cloud Counterfactual Explanations" DOI: 10.23919/EUSIPCO63237.2025.11226754'
 readme = "README.md"
-requires-python = ">=3.13"
+requires-python = "~=3.13"
 dependencies = [
     "drytorch==0.1.0rc5",
     "dotenv>=0.9.9",
