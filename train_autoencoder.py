@@ -11,6 +11,7 @@ from src.data import get_datasets
 from src.module import BaseVQVAE, get_autoencoder
 from src.config import AllConfig, Experiment, get_trackers, hydra_main
 from src.train import get_autoencoder_loss, get_learning_schema
+from src.train.metrics_and_losses import get_chamfer_loss
 from src.train.hooks import DiscreteSpaceOptimizer
 from src.train.metrics_and_losses import get_emd_loss, get_recon_loss
 from src.utils.parallel import DistributedWorker
@@ -39,8 +40,8 @@ def train_autoencoder(trial: Trial | None = None) -> None:
     )
     learning_schema = get_learning_schema(cfg.autoencoder)
     loss = get_autoencoder_loss()
-    trainer = Trainer(model, loader=train_loader, loss=loss, learning_schema=learning_schema)
-    diagnostic = Diagnostic(model, loader=train_loader, objective=loss)
+    trainer = Trainer(model, loader=train_loader, loss=loss | get_chamfer_loss(), learning_schema=learning_schema)
+    diagnostic = Diagnostic(model, loader=train_loader, objective=loss | get_chamfer_loss())
     test_all_metrics = Test(model, loader=test_loader, metric=loss | get_emd_loss())
     if cfg_user.load_checkpoint:
         trainer.load_checkpoint(cfg_user.load_checkpoint)
