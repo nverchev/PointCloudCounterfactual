@@ -9,7 +9,7 @@ import torch.nn as nn
 from src.config import ActClass, Experiment, NormClass
 from src.config.options import Encoders
 from src.data import IN_CHAN
-from src.module.layers import EdgeConvLayer, PointsConvLayer, LinearLayer
+from src.module.layers import EdgeConvLayer, PointsConvLayer, LinearLayer, TransformerDecoder
 from src.utils.neighbour_ops import get_graph_features, graph_max_pooling
 
 
@@ -112,7 +112,6 @@ class TransformerEncoder(BasePointEncoder):
         self.points_convolutions = nn.Sequential(*modules)
         self.final_conv = PointsConvLayer(sum(self.conv_dims), self.w_dim)
 
-        modules.clear()
         for hidden_dim, rate in zip(self.mlp_dims, self.dropout_rates, strict=False):
             modules.append(
                 nn.TransformerDecoderLayer(
@@ -125,10 +124,20 @@ class TransformerEncoder(BasePointEncoder):
                     norm_first=True,
                 )
             )
+
         self.proj_codes = LinearLayer(self.embedding_dim, self.proj_dim, act_cls=self.act_cls)
         self.norm = self.norm_cls(self.proj_dim)
         self.proj_input = LinearLayer(IN_CHAN, self.proj_dim, act_cls=self.act_cls)
-        self.transformer_codes = nn.Sequential(*modules)
+        self.transformer_codes = TransformerDecoder(
+            in_dim=self.proj_dim,
+            n_heads=self.n_heads,
+            hidden_dim=self.mlp_dims[-1],
+            dropout_rate=self.dropout_rates[-1],
+            act_cls=self.act_cls,
+            norm_cls=self.norm_cls,
+            num_layers=len(self.mlp_dims),
+            use_final_norm=True,
+        )
         self.compress = LinearLayer(self.proj_dim, self.embedding_dim)
         return
 
@@ -151,11 +160,9 @@ class TransformerEncoder(BasePointEncoder):
         queries = self.proj_codes(x_max.view(batch, self.n_codes, self.embedding_dim))
         memory = self.proj_input(x)
         memory = self.norm(memory.transpose(1, 2)).transpose_(1, 2)
-        for layer in self.transformer_codes:
-            queries = layer(queries, memory)
-
-        y = self.compress(queries)
-        return y.view(batch, self.w_dim)
+        x = self.transformer_codes(queries, memory)
+        x = self.compress(x)
+        return x.view(batch, self.w_dim)
 
 
 def get_encoder() -> BasePointEncoder:

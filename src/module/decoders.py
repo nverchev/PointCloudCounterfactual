@@ -13,7 +13,7 @@ from src.config import ActClass, NormClass
 from src.config.experiment import Experiment
 from src.config.options import Decoders
 from src.data import OUT_CHAN
-from src.module.layers import PointsConvLayer, LinearLayer
+from src.module.layers import PointsConvLayer, LinearLayer, TransformerDecoder
 from src.utils.neighbour_ops import graph_filtering
 
 
@@ -74,20 +74,17 @@ class PCGen(BasePointDecoder):
 
             self.group_conv.append(nn.Sequential(*modules))
             self.transformer = nn.ModuleList()
-            transformer_layers: list[nn.Module] = []
-            for hidden_dim, rate in zip(self.mlp_dims, self.dropout_rates, strict=False):
-                layer = nn.TransformerDecoderLayer(
-                    d_model=self.conv_dims[-1],
-                    nhead=self.n_heads,
-                    dropout=rate,
-                    dim_feedforward=hidden_dim,
-                    activation=self.act_cls(),
-                    batch_first=True,
-                    norm_first=True,
-                )
-                transformer_layers.append(layer)
-
-            self.group_transformer.append(nn.ModuleList(transformer_layers))
+            transformer_decoder = TransformerDecoder(
+                in_dim=self.conv_dims[-1],
+                n_heads=self.n_heads,
+                hidden_dim=self.mlp_dims[-1],
+                dropout_rate=self.dropout_rates[-1],
+                act_cls=self.act_cls,
+                norm_cls=self.norm_cls,
+                num_layers=len(self.mlp_dims),
+                use_final_norm=True,
+            )
+            self.group_transformer.append(transformer_decoder)
             self.group_final.append(PointsConvLayer(self.conv_dims[-1], OUT_CHAN, use_soft_init=True))
 
         if self.n_components > 1:
