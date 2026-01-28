@@ -2,11 +2,14 @@
 
 import abc
 import functools
+import itertools
+import math
 import pdb
 import sys
 
 from collections.abc import Callable
-from typing import Any, Protocol, cast, override, runtime_checkable
+from typing import Any, Protocol, cast, override, runtime_checkable, TypeVar, Generic
+from collections.abc import Sequence
 
 import torch
 import torch.nn as nn
@@ -34,6 +37,13 @@ class HasInplace(Protocol):
     """Protocol for classes that have an inplace option."""
 
     inplace: bool
+
+
+@runtime_checkable
+class Weighted(Protocol):
+    """Protocol for classes that have a weight attribute."""
+
+    weight: torch.Tensor
 
 
 class View(nn.Module):
@@ -76,17 +86,18 @@ class BaseLayer(nn.Module, metaclass=abc.ABCMeta):
         act_cls: An optional callable for the output activation of the output
         norm_cls: An optional callable for normalization on the output (before the activation)
         n_groups_dense: The number of groups for the dense layer. Default is 1.
-        use_soft_init: Whether to initialize the weights of the dense layer very close to zero.
+        use_trunc_init: Whether to initialize the weights of the dense layer very close to zero.
 
     Attributes:
         in_dim (int): The number of input features
         out_dim (int): The number of output features
         n_groups_dense (int): The number of groups for the dense layer
         use_bias (bool): A boolean value indicating whether the bias term is in the layer (and no normalization)
-        layer (nn.Module): The wrapped layer of the neural network
+        module (nn.Module): The wrapped layer of the neural network
         norm (nn.Module): A boolean value indicating whether to add grouped normalization on the output
         act (Optional[nn.Module]): The activation function applied to the output
-        init (Callable[[torch.Tensor], torch.Tensor]): The initialization function for the weights of the dense layer
+        init_weight (Callable[[torch.Tensor], torch.Tensor]): The initialization function for the dense layer's weights
+        init_bias (Callable[[torch.Tensor], torch.Tensor]): The initialization function for the dense layer's bias
 
     """
 
@@ -97,21 +108,25 @@ class BaseLayer(nn.Module, metaclass=abc.ABCMeta):
         act_cls: ActClass | None = None,
         norm_cls: NormClass | None = None,
         n_groups_dense: int = 1,
-        use_residual: bool = False,
-        use_soft_init: bool = False,
+        use_trunc_init: bool = False,
     ) -> None:
         super().__init__()
         self.in_dim: int = in_dim
         self.out_dim: int = out_dim
         self.n_groups_dense: int = n_groups_dense
         self.use_bias: bool = True if norm_cls is None else False
-        self.layer = self.get_dense_layer()
+        self.module = self.get_module()
         self.norm = self.get_norm_layer(norm_cls, out_dim)
-        self.use_residual: bool = use_residual
         self.act = self.get_activation(act_cls)
-        self.soft_init: bool = use_soft_init
-        self.init = self.get_init(self.act, use_soft_init or use_residual)
-        self.init(cast(torch.Tensor, self.layer.weight))
+        self.use_trunc_init: bool = use_trunc_init
+        self.init_weight = self.get_init_weight(self.act, use_trunc_init)
+        self.init_bias = self.get_init_bias()
+        self.init_weight(cast(torch.Tensor, self.module.weight))
+        if self.norm is None:
+            self.init_bias(cast(torch.Tensor, self.module.bias))
+        else:
+            self.init_bias(cast(torch.Tensor, self.norm.bias))
+
         if DEBUG_MODE:
             self.register_forward_hook(debug_check)
             self.register_full_backward_hook(debug_check)
@@ -119,21 +134,18 @@ class BaseLayer(nn.Module, metaclass=abc.ABCMeta):
         return
 
     @abc.abstractmethod
-    def get_dense_layer(self) -> nn.Module:
+    def get_module(self) -> nn.Module:
         """Get the wrapped layer"""
 
     def forward(self, x):
         """Forward pass."""
-        y = self.layer(x)
+        y = self.module(x)
 
         if self.norm is not None:
             y = self.norm(y)
 
         if self.act is not None:
             y = self.act(y)
-
-        if self.use_residual:
-            return y + x.repeat_interleave(self.out_dim // self.in_dim + 1, 1)[:, : y.shape[1], ...]
 
         return y
 
@@ -150,28 +162,33 @@ class BaseLayer(nn.Module, metaclass=abc.ABCMeta):
         return act
 
     @staticmethod
-    def get_init(act: nn.Module | None, soft_init: bool) -> Callable[[torch.Tensor], torch.Tensor]:
-        """Get initialization strategy according to the type of activation."""
+    def get_init_weight(act: nn.Module | None, use_trunc_init: bool) -> Callable[[torch.Tensor], torch.Tensor]:
+        """Get initialization for the weight strategy according to the type of activation."""
 
-        if soft_init:
-            return functools.partial(nn.init.xavier_normal_, gain=0.01)
+        if use_trunc_init:
+            return functools.partial(nn.init.trunc_normal_, mean=0.0, std=0.02, a=-0.04, b=0.04)
 
         if act is None:
             return functools.partial(nn.init.xavier_normal_, gain=1)
 
-        if isinstance(act, nn.Hardtanh):
+        if isinstance(act, nn.Tanh):
             return functools.partial(nn.init.xavier_normal_, gain=nn.init.calculate_gain('tanh'))
 
         if isinstance(act, nn.ReLU):
             return functools.partial(nn.init.kaiming_uniform_, nonlinearity='relu')
 
         if isinstance(act, nn.LeakyReLU):
-            return functools.partial(nn.init.kaiming_uniform_, a=act.negative_slope)
+            return functools.partial(nn.init.kaiming_normal_, a=act.negative_slope, nonlinearity='leaky_relu')
 
         if isinstance(act, nn.GELU):
-            return functools.partial(nn.init.xavier_normal_, gain=1.0)
+            return functools.partial(nn.init.xavier_normal_, gain=1)
 
-        return lambda x: x
+        return functools.partial(nn.init.xavier_normal_, gain=1)
+
+    @staticmethod
+    def get_init_bias() -> Callable[[torch.Tensor], torch.Tensor]:
+        """Get initialization strategy for the bias according to the type of activation."""
+        return torch.nn.init.zeros_
 
     @staticmethod
     def get_norm_layer(norm_cls: NormClass | None, out_dim: int) -> nn.Module | None:
@@ -185,7 +202,7 @@ class BaseLayer(nn.Module, metaclass=abc.ABCMeta):
 # Input (Batch, Features)
 class LinearLayer(BaseLayer):
     @override
-    def get_dense_layer(self) -> nn.Module:
+    def get_module(self) -> nn.Module:
         if self.n_groups_dense > 1:
             raise NotImplementedError('nn.Linear has no option for groups')
 
@@ -195,29 +212,114 @@ class LinearLayer(BaseLayer):
 # Input (Batch, Points, Features)
 class PointsConvLayer(BaseLayer):
     @override
-    def get_dense_layer(self) -> nn.Module:
+    def get_module(self) -> nn.Module:
         return nn.Conv1d(self.in_dim, self.out_dim, kernel_size=1, bias=self.use_bias, groups=self.n_groups_dense)
 
 
 # Input (Batch, Points, Features, Features)
 class EdgeConvLayer(BaseLayer):
     @override
-    def get_dense_layer(self) -> nn.Module:
+    def get_module(self) -> nn.Module:
         return nn.Conv2d(self.in_dim, self.out_dim, kernel_size=1, bias=self.use_bias, groups=self.n_groups_dense)
 
 
-class TemperatureScaledSoftmax(nn.Softmax):
-    temperature: torch.Tensor
+Layer = TypeVar('Layer', bound=BaseLayer)
 
-    def __init__(self, dim: int | None = None, temperature: float = 1):
-        super().__init__(dim)
-        self.temperature = torch.tensor(temperature, dtype=torch.float)
+
+class BaseBlock(nn.Module, Generic[Layer], abc.ABC):
+    """A block of a neural network consisting of a sequence of layers."""
+
+    def __init__(
+        self,
+        dims: Sequence[int],
+        act_cls: ActClass | None = None,
+        norm_cls: NormClass | None = None,
+        n_groups_dense: int = 1,
+        use_residual: bool = False,
+    ) -> None:
+        super().__init__()
+        self.dims: Sequence[int] = dims
+        self.act_cls: ActClass | None = act_cls
+        self.norm_cls: NormClass | None = norm_cls
+        self.n_groups_dense: int = n_groups_dense
+        self.use_residual: bool = use_residual
+        self.layers = nn.ModuleList()
+        self.projections = nn.ModuleList()
+        for in_dim, out_dim in itertools.pairwise(dims):
+            self.layers.append(self.get_layer(in_dim, out_dim))
+            if use_residual:
+                if in_dim == out_dim:
+                    self.projections.append(nn.Identity())
+                else:
+                    self.projections.append(self.get_projection(in_dim, out_dim))
+
+        if self.use_residual:
+            with torch.no_grad():
+                for layer in self.layers:
+                    if isinstance(layer.module, Weighted):
+                        layer.module.weight.mul_(1 / math.sqrt(len(dims) - 1))
+
         return
 
-    @override
     def forward(self, x: Tensor) -> Tensor:
-        """Forward pass"""
-        return super().forward(x / self.temperature)
+        """Forward pass."""
+        for i, layer in enumerate(self.layers):
+            if self.use_residual:
+                x = self.projections[i](x) + layer(x)
+            else:
+                x = layer(x)
+
+        return x
+
+    @abc.abstractmethod
+    def get_layer(self, in_dim: int, out_dim: int) -> Layer:
+        """Get the layer"""
+
+    @abc.abstractmethod
+    def get_projection(self, in_dim: int, out_dim: int) -> nn.Module:
+        """Get a projection layer"""
+
+
+class LinearBlock(BaseBlock[LinearLayer]):
+    """A block of a neural network consisting of a sequence of linear layers."""
+
+    @override
+    def get_layer(self, in_dim: int, out_dim: int) -> LinearLayer:
+        return LinearLayer(in_dim, out_dim, self.act_cls, self.norm_cls, self.n_groups_dense)
+
+    @override
+    def get_projection(self, in_dim: int, out_dim: int) -> nn.Module:
+        projection = nn.Linear(in_dim, out_dim, bias=False)
+        nn.init.eye_(projection.weight)
+        return projection
+
+
+class PointsConvBlock(BaseBlock[PointsConvLayer]):
+    """A block of a neural network consisting of a sequence of points convolution layers."""
+
+    @override
+    def get_layer(self, in_dim: int, out_dim: int) -> PointsConvLayer:
+        return PointsConvLayer(in_dim, out_dim, self.act_cls, self.norm_cls, self.n_groups_dense)
+
+    @override
+    def get_projection(self, in_dim: int, out_dim: int) -> nn.Module:
+        projection = nn.Conv1d(in_dim, out_dim, kernel_size=1, bias=False)
+        nn.init.eye_(projection.weight)
+        return projection
+
+
+class EdgeConvBlock(BaseBlock[EdgeConvLayer]):
+    """A block of a neural network consisting of a sequence of edge convolution layers."""
+
+    @override
+    def get_layer(self, in_dim: int, out_dim: int) -> EdgeConvLayer:
+        return EdgeConvLayer(in_dim, out_dim, self.act_cls, self.norm_cls, self.n_groups_dense)
+
+    @override
+    def get_projection(self, in_dim: int, out_dim: int) -> nn.Module:
+        projection = nn.Conv2d(in_dim, out_dim, kernel_size=1, bias=False)
+        nn.init.eye_(projection.weight)
+        return projection
 
 
 class TransformerEncoderLayer(nn.Module):
@@ -254,8 +356,8 @@ class TransformerEncoderLayer(nn.Module):
             raise ValueError('Output dimension must be equal to input dimension if residual connections are used')
 
         self.self_attn = nn.MultiheadAttention(in_dim, n_heads, dropout=dropout_rate, batch_first=True)
-        self.linear1 = LinearLayer(in_dim, hidden_dim, act_cls=act_cls, use_soft_init=True)
-        self.linear2 = LinearLayer(hidden_dim, self.out_dim, use_soft_init=True)
+        self.linear1 = LinearLayer(in_dim, hidden_dim, act_cls=act_cls, use_trunc_init=True)
+        self.linear2 = LinearLayer(hidden_dim, self.out_dim, use_trunc_init=True)
         self.norm1 = nn.LayerNorm(in_dim)
         self.norm2 = nn.LayerNorm(self.out_dim)
         self.dropout1 = nn.Dropout(dropout_rate)
@@ -316,8 +418,9 @@ class TransformerDecoderLayer(nn.Module):
 
         self.self_attn = nn.MultiheadAttention(in_dim, n_heads, dropout=dropout_rate, batch_first=True)
         self.cross_attn = nn.MultiheadAttention(in_dim, n_heads, dropout=dropout_rate, batch_first=True)
-        self.linear1 = LinearLayer(in_dim, hidden_dim, act_cls=act_cls)
-        self.linear2 = LinearLayer(hidden_dim, self.out_dim, use_soft_init=True)
+        self.linear1 = LinearLayer(in_dim, hidden_dim, act_cls=act_cls, use_trunc_init=True)
+        self.linear2 = LinearLayer(hidden_dim, self.out_dim, use_trunc_init=True)
+        self.memory_norm = nn.LayerNorm(in_dim)
         self.norm1 = nn.LayerNorm(in_dim)
         self.norm2 = nn.LayerNorm(in_dim)
         self.norm3 = nn.LayerNorm(self.out_dim)
@@ -356,6 +459,7 @@ class TransformerDecoderLayer(nn.Module):
             y = x + y
 
         # Cross-attention block
+        memory = self.memory_norm(memory)
         y = self.norm2(y)
         z = self.cross_attn(
             y, memory, memory, attn_mask=memory_mask, key_padding_mask=memory_key_padding_mask, need_weights=False
@@ -379,10 +483,10 @@ class TransformerEncoder(nn.Module):
     Args:
         in_dim: Input embedding dimension
         n_heads: Number of attention heads
-        hidden_dim: Dimension of the hidden layer in the feedforward network
+        feedforward_dim: Dimension of the hidden layer in the feedforward network
         act_cls: Activation class for feedforward network
         dropout_rate: Dropout probability
-        num_layers: Number of encoder layers to stack
+        n_layers: Number of encoder layers to stack
         out_dim: The number of output embeddings. Defaults to in_dim
         use_residual: Whether to use residual connections
         use_final_norm: Whether to apply normalization after all layers
@@ -392,10 +496,10 @@ class TransformerEncoder(nn.Module):
         self,
         in_dim: int,
         n_heads: int,
-        hidden_dim: int,
+        feedforward_dim: int,
         act_cls: ActClass,
         dropout_rate: float,
-        num_layers: int,
+        n_layers: int,
         out_dim: int | None = None,
         use_residual: bool = True,
         use_final_norm: bool = False,
@@ -407,13 +511,13 @@ class TransformerEncoder(nn.Module):
                 TransformerEncoderLayer(
                     in_dim=in_dim,
                     n_heads=n_heads,
-                    hidden_dim=hidden_dim,
+                    hidden_dim=feedforward_dim,
                     act_cls=act_cls,
                     dropout_rate=dropout_rate,
                     out_dim=self.out_dim,
                     use_residual=use_residual,
                 )
-                for _ in range(num_layers)
+                for _ in range(n_layers)
             ]
         )
         self.norm = nn.LayerNorm(self.out_dim) if use_final_norm else None
@@ -444,7 +548,7 @@ class TransformerDecoder(nn.Module):
         hidden_dim: Dimension of the hidden layer in the feedforward network
         act_cls: Activation class for feedforward network
         dropout_rate: Dropout probability
-        num_layers: Number of decoder layers to stack
+        n_layers: Number of decoder layers to stack
         out_dim: The number of output embeddings. Defaults to in_dim.
         use_residual: Whether to use residual connections
         use_final_norm: Whether to apply normalization after all layers
@@ -457,7 +561,7 @@ class TransformerDecoder(nn.Module):
         hidden_dim: int,
         act_cls: ActClass,
         dropout_rate: float,
-        num_layers: int,
+        n_layers: int,
         out_dim: int | None = None,
         use_residual: bool = True,
         use_final_norm: bool = False,
@@ -475,7 +579,7 @@ class TransformerDecoder(nn.Module):
                     out_dim=self.out_dim,
                     use_residual=use_residual,
                 )
-                for _ in range(num_layers)
+                for _ in range(n_layers)
             ]
         )
 
@@ -518,6 +622,20 @@ class TransformerDecoder(nn.Module):
             tgt = self.norm(tgt)
 
         return tgt
+
+
+class TemperatureScaledSoftmax(nn.Softmax):
+    temperature: torch.Tensor
+
+    def __init__(self, dim: int | None = None, temperature: float = 1):
+        super().__init__(dim)
+        self.temperature = torch.tensor(temperature, dtype=torch.float)
+        return
+
+    @override
+    def forward(self, x: Tensor) -> Tensor:
+        """Forward pass"""
+        return super().forward(x / self.temperature)
 
 
 class TransferGrad(Function):

@@ -1,14 +1,13 @@
 """Decoder architecture for the W-Autoencoder."""
 
 import abc
-import itertools
 
 import torch
 from torch import nn as nn
 
 from src.config import Experiment, ActClass, NormClass
 from src.config.options import WDecoders
-from src.module.layers import LinearLayer, PointsConvLayer
+from src.module.layers import LinearLayer, PointsConvLayer, PointsConvBlock, TransformerDecoder
 
 
 class BaseWDecoder(nn.Module, metaclass=abc.ABCMeta):
@@ -31,8 +30,9 @@ class BaseWDecoder(nn.Module, metaclass=abc.ABCMeta):
         self.proj_dim: int = cfg_w_decoder.proj_dim
         self.n_heads: int = cfg_w_decoder.n_heads
         self.conv_dims: tuple[int, ...] = cfg_w_decoder.conv_dims
-        self.mlp_dims: tuple[int, ...] = cfg_w_decoder.mlp_dims
-        self.dropout_rates: tuple[float, ...] = cfg_w_decoder.dropout_rates
+        self.n_transformer_layers: int = cfg_w_decoder.n_transformer_layers
+        self.transformer_feedforward_dim: int = cfg_w_decoder.transformer_feedforward_dim
+        self.transformer_dropout: float = cfg_w_decoder.transformer_dropout
         self.act_cls: ActClass = cfg_w_decoder.act_cls
         self.norm_cls: NormClass = cfg_w_decoder.norm_cls
         return
@@ -47,18 +47,15 @@ class LinearWDecoder(BaseWDecoder):
 
     def __init__(self) -> None:
         super().__init__()
-        modules: list[nn.Module] = []
-        dim_pairs = itertools.pairwise([(self.z1_dim + self.z2_dim) * self.n_codes, *self.mlp_dims])
-        for (in_dim, out_dim), rate in zip(dim_pairs, self.dropout_rates, strict=False):
-            modules.append(
-                PointsConvLayer(
-                    in_dim, out_dim, n_groups_dense=self.n_codes, act_cls=self.act_cls, norm_cls=self.norm_cls
-                )
-            )
-            modules.append(nn.Dropout(rate))
-
-        modules.append(PointsConvLayer(self.mlp_dims[-1], self.w_dim, n_groups_dense=self.n_codes))
-        self.decode = nn.Sequential(*modules)
+        self.decode = nn.Sequential(
+            PointsConvBlock(
+                [(self.z1_dim + self.z2_dim) * self.n_codes, *self.conv_dims],
+                n_groups_dense=self.n_codes,
+                act_cls=self.act_cls,
+                norm_cls=self.norm_cls,
+            ),
+            PointsConvLayer(self.conv_dims[-1], self.w_dim, n_groups_dense=self.n_codes),
+        )
         return
 
     def forward(self, z1: torch.Tensor, z2: torch.Tensor):
@@ -72,25 +69,18 @@ class TransformerWDecoder(BaseWDecoder):
 
     def __init__(self) -> None:
         super().__init__()
-        self.z1_proj = LinearLayer(self.z2_dim, self.proj_dim, act_cls=self.act_cls)
-        self.z2_proj = LinearLayer(self.z2_dim, self.proj_dim, act_cls=self.act_cls)
+        self.z1_proj = LinearLayer(self.z2_dim, self.proj_dim)
+        self.z2_proj = LinearLayer(self.z2_dim, self.proj_dim)
         self.positional_embedding = nn.Parameter(torch.randn(1, self.n_codes, self.proj_dim))
         self.memory_positional_embedding = nn.Parameter(torch.randn(1, self.n_codes, self.proj_dim))
-        self.norm = self.norm_cls(self.proj_dim)
-        transformer_layers: list[nn.Module] = []
-        for hidden_dim, rate in zip(self.mlp_dims, self.dropout_rates, strict=False):
-            layer = nn.TransformerDecoderLayer(
-                d_model=self.proj_dim,
-                nhead=self.n_heads,
-                dropout=rate,
-                dim_feedforward=hidden_dim,
-                activation=self.act_cls(),
-                batch_first=True,
-                norm_first=True,
-            )
-            transformer_layers.append(layer)
-
-        self.transformer = nn.ModuleList(transformer_layers)
+        self.transformer = TransformerDecoder(
+            in_dim=self.proj_dim,
+            n_heads=self.n_heads,
+            hidden_dim=self.transformer_feedforward_dim,
+            dropout_rate=self.transformer_dropout,
+            act_cls=self.act_cls,
+            n_layers=self.n_transformer_layers,
+        )
         self.compress = LinearLayer(self.proj_dim, self.embedding_dim)
         return
 
@@ -99,11 +89,8 @@ class TransformerWDecoder(BaseWDecoder):
         z1_proj = self.z1_proj(z1).view(batch_size, self.n_codes, self.proj_dim)
         z2_proj = self.z2_proj(z2).view(batch_size, self.n_codes, self.proj_dim)
         memory = z1_proj + self.memory_positional_embedding.expand(batch_size, -1, -1)
-        memory = self.norm(memory.transpose(1, 2)).transpose_(1, 2)
         x = z2_proj + self.positional_embedding.expand(batch_size, -1, -1)
-        for layer in self.transformer:
-            x = layer(x, memory)
-
+        x = self.transformer(x, memory)
         x = self.compress(x)
         return x.view(batch_size, self.n_codes * self.embedding_dim)
 

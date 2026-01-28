@@ -1,14 +1,13 @@
 """Encoder architecture for the W-Autoencoder."""
 
 import abc
-import itertools
 
 import torch
 from torch import nn as nn
 
 from src.config import Experiment, ActClass, NormClass
 from src.config.options import WEncoders
-from src.module.layers import PointsConvLayer, LinearLayer
+from src.module.layers import PointsConvLayer, LinearLayer, PointsConvBlock, TransformerEncoder
 
 
 class BaseWEncoder(nn.Module, metaclass=abc.ABCMeta):
@@ -29,20 +28,21 @@ class BaseWEncoder(nn.Module, metaclass=abc.ABCMeta):
 
         # Latent space dimensions
         self.w_dim: int = cfg_ae_model.w_dim
-        self.embedding_dim: int = cfg_ae_model.embedding_dim  # Input embedding dimension
-        self.z1_dim: int = cfg_wae_model.z1_dim  # Z-space dimension
+        self.embedding_dim: int = cfg_ae_model.embedding_dim
+        self.z1_dim: int = cfg_wae_model.z1_dim
 
         # Vector quantization parameters
-        self.n_codes: int = cfg_ae_model.n_codes  # Number of codebook vectors
+        self.n_codes: int = cfg_ae_model.n_codes
         self.book_size: int = cfg_ae_model.book_size  # Size of each codebook
 
         # Network architecture parameters
         self.proj_dim: int = cfg_w_encoder.proj_dim
         self.n_heads: int = cfg_w_encoder.n_heads
-        self.conv_dims: tuple[int, ...] = cfg_w_encoder.conv_dims  # Hidden dimensions for the convolutional layers
-        self.mlp_dims: tuple[int, ...] = cfg_w_encoder.mlp_dims  # Hidden dimensions for mlp layers
-        self.dropout_rates: tuple[float, ...] = cfg_w_encoder.dropout_rates  # Dropout probabilities
-        self.act_cls: ActClass = cfg_w_encoder.act_cls  # Activation function class
+        self.conv_dims: tuple[int, ...] = cfg_w_encoder.conv_dims
+        self.n_transformer_layers: int = cfg_w_encoder.n_transformer_layers
+        self.transformer_feedforward_dim: int = cfg_w_encoder.transformer_feedforward_dim
+        self.transformer_dropout: float = cfg_w_encoder.transformer_dropout
+        self.act_cls: ActClass = cfg_w_encoder.act_cls
         self.norm_cls: NormClass = cfg_w_encoder.norm_cls
         return
 
@@ -56,13 +56,10 @@ class ConvolutionalWEncoder(BaseWEncoder):
 
     def __init__(self) -> None:
         super().__init__()
-        modules: list[nn.Module] = []
-        dim_pairs = itertools.pairwise([self.embedding_dim, *self.conv_dims])
-        for in_dim, out_dim in dim_pairs:
-            modules.append(PointsConvLayer(in_dim, out_dim, act_cls=self.act_cls, norm_cls=self.norm_cls))
-
-        modules.append(PointsConvLayer(self.conv_dims[-1], 2 * self.z1_dim, use_soft_init=True))
-        self.encode = nn.Sequential(*modules)
+        self.encode = nn.Sequential(
+            PointsConvBlock([self.embedding_dim, *self.conv_dims], act_cls=self.act_cls, norm_cls=self.norm_cls),
+            PointsConvLayer(self.conv_dims[-1], 2 * self.z1_dim, use_trunc_init=True),
+        )
         return
 
     def forward(self, x) -> torch.Tensor:
@@ -77,23 +74,17 @@ class TransformerWEncoder(BaseWEncoder):
 
     def __init__(self) -> None:
         super().__init__()
-        self.input_proj = LinearLayer(self.embedding_dim, self.proj_dim, act_cls=self.act_cls)
+        self.input_proj = LinearLayer(self.embedding_dim, self.proj_dim)
         self.positional_encoding = nn.Parameter(torch.randn(1, self.n_codes, self.proj_dim))
-        transformer_layers: list[nn.Module] = []
-        for hidden_dim, drate in zip(self.mlp_dims, self.dropout_rates, strict=False):
-            encoder_layer = nn.TransformerEncoderLayer(
-                d_model=self.proj_dim,
-                nhead=self.n_heads,
-                dim_feedforward=hidden_dim,
-                dropout=drate,
-                activation=self.act_cls(),
-                batch_first=True,
-                norm_first=True,
-            )
-            transformer_layers.append(encoder_layer)
-
-        self.transformer = nn.ModuleList(transformer_layers)
-        self.to_latent = LinearLayer(self.proj_dim, 2 * self.z1_dim, use_soft_init=True)
+        self.transformer = TransformerEncoder(
+            in_dim=self.proj_dim,
+            n_heads=self.n_heads,
+            feedforward_dim=self.transformer_feedforward_dim,
+            act_cls=self.act_cls,
+            dropout_rate=self.transformer_dropout,
+            n_layers=self.n_transformer_layers,
+        )
+        self.to_latent = LinearLayer(self.proj_dim, 2 * self.z1_dim, use_trunc_init=True)
         return
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
@@ -101,9 +92,7 @@ class TransformerWEncoder(BaseWEncoder):
         batch_size = x.shape[0]
         x = self.input_proj(x)
         x = self.positional_encoding.expand(batch_size, -1, -1) + x
-        for layer in self.transformer:
-            x = layer(x)
-
+        x = self.transformer(x)
         return self.to_latent(x)
 
 

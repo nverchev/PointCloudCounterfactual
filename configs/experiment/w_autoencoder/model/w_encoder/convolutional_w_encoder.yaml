@@ -1,5 +1,4 @@
 class_name: Convolutional
 conv_dims: [16, 128, 256]
-dropout_rates: [0., 0., 0,]
 act_name: ''
 norm_name: BatchNorm1d

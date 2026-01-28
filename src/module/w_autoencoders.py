@@ -1,6 +1,7 @@
 """W-autoencoder architecture."""
 
 import abc
+import math
 from collections.abc import Callable, Generator
 from typing import override
 
@@ -32,21 +33,12 @@ class PseudoInputManager(torch.nn.Module):
         self.pseudo_inputs = nn.Parameter(torch.empty(self.n_pseudo_inputs, self.n_codes, self.embedding_dim))
         self.pseudo_mu = nn.Parameter(torch.empty(self.n_pseudo_inputs, self.n_codes, self.z1_dim))
         self.pseudo_log_var = nn.Parameter(torch.empty(self.n_pseudo_inputs, self.n_codes, self.z1_dim))
-        self.initialize_parameters()
+        self.initialize_inputs()
         return
 
-    def initialize_parameters(self):
-        """Initialize pseudo input parameters."""
-        nn.init.normal_(self.pseudo_inputs)
-        nn.init.normal_(self.pseudo_mu)
-        nn.init.normal_(self.pseudo_log_var)
-        return
-
-    def update_pseudo_latent(self, encoder_func: Callable[[None], Outputs]) -> None:
-        """Update pseudo latent parameters based on encoder output."""
-        pseudo_out = encoder_func(None)
-        self.pseudo_mu.data = pseudo_out.pseudo_mu1
-        self.pseudo_log_var.data = pseudo_out.pseudo_log_var1
+    def initialize_inputs(self):
+        """Initialize parameters."""
+        nn.init.normal_(self.pseudo_inputs, std=1 / math.sqrt(self.embedding_dim))
         return
 
     def get_combined_input(self, x: torch.Tensor | None) -> torch.Tensor:
@@ -62,6 +54,13 @@ class PseudoInputManager(torch.nn.Module):
             i = np.random.randint(self.n_pseudo_inputs)
             yield self.pseudo_mu[i], self.pseudo_log_var[i]
 
+        return
+
+    def update_pseudo_latent(self, encoder_func: Callable[[None], Outputs]) -> None:
+        """Update pseudo latent parameters based on encoder output."""
+        pseudo_out = encoder_func(None)
+        self.pseudo_mu.data = pseudo_out.pseudo_mu1
+        self.pseudo_log_var.data = pseudo_out.pseudo_log_var1
         return
 
 
@@ -105,7 +104,7 @@ class BaseWAutoEncoder(nn.Module, metaclass=abc.ABCMeta):
     def recursive_reset_parameters(self):
         """Reset all parameters."""
         if self.pseudo_manager:
-            self.pseudo_manager.initialize_parameters()
+            self.pseudo_manager.initialize_inputs()
 
         reset_child_params(self)
         return

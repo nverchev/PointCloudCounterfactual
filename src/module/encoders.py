@@ -24,9 +24,10 @@ class BasePointEncoder(nn.Module, metaclass=abc.ABCMeta):
         self.embedding_dim: int = cfg_ae_model.embedding_dim
         self.n_heads: int = cfg_ae_model.encoder.n_heads
         self.proj_dim: int = cfg_ae_model.encoder.proj_dim
-        self.mlp_dims: tuple[int, ...] = cfg_ae_model.encoder.mlp_dims
+        self.n_transformer_layers: int = cfg_ae_model.encoder.n_transformer_layers
+        self.transformer_feedforward_dim: int = cfg_ae_model.encoder.transformer_feedforward_dim
+        self.transformer_dropout: float = cfg_ae_model.encoder.transformer_dropout
         self.n_codes: int = cfg_ae_model.n_codes
-        self.dropout_rates: tuple[float, ...] = cfg_ae_model.encoder.dropout_rates
         self.act_cls: ActClass = cfg_ae_model.encoder.act_cls
         self.norm_cls: NormClass = cfg_ae_model.encoder.norm_cls
         return
@@ -112,15 +113,14 @@ class TransformerEncoder(BasePointEncoder):
         self.points_convolutions = nn.Sequential(*modules)
         self.final_conv = PointsConvLayer(sum(self.conv_dims), self.w_dim)
         self.proj_codes = LinearLayer(self.embedding_dim, self.proj_dim, act_cls=self.act_cls)
-        self.norm = self.norm_cls(self.proj_dim)
         self.proj_input = LinearLayer(IN_CHAN, self.proj_dim, act_cls=self.act_cls)
         self.transformer_codes = TransformerDecoder(
             in_dim=self.proj_dim,
             n_heads=self.n_heads,
-            hidden_dim=self.mlp_dims[-1],
-            dropout_rate=self.dropout_rates[-1],
+            hidden_dim=self.transformer_feedforward_dim,
+            dropout_rate=self.transformer_dropout,
             act_cls=self.act_cls,
-            num_layers=len(self.mlp_dims),
+            n_layers=self.n_transformer_layers,
         )
         self.compress = LinearLayer(self.proj_dim, self.embedding_dim)
         return
@@ -143,7 +143,6 @@ class TransformerEncoder(BasePointEncoder):
         x_max = y.max(dim=2, keepdim=False)[0]
         queries = self.proj_codes(x_max.view(batch, self.n_codes, self.embedding_dim))
         memory = self.proj_input(x)
-        memory = self.norm(memory.transpose(1, 2)).transpose_(1, 2)
         x = self.transformer_codes(queries, memory)
         x = self.compress(x)
         return x.view(batch, self.w_dim)

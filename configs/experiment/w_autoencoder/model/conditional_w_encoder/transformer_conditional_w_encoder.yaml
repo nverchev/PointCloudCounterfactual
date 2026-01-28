@@ -1,6 +1,7 @@
 class_name: Transformer
-mlp_dims: [1024, 1024]
+n_transformer_layers: 2
 n_heads: 8
 proj_dim: 512
-dropout_rates: [0., 0., 0., 0., 0.]
+transformer_feedforward_dim: 1024
+transformer_dropout: 0.
 act_name: 'GELU'

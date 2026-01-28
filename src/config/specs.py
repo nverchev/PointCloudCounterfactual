@@ -77,40 +77,32 @@ class DataConfig:
 
 @dataclass(kw_only=True)
 class ArchitectureConfig:
-    """Base specification for an architecture comprising an optional convolutional and MLP/Transformer part.
+    """Base specification for an architecture with optional convolutional and transformer parts.
 
     Attributes:
         conv_dims (tuple[StrictlyPositiveInt]): Hidden dimensions for the convolutional part
-        mlp_dims(tuple[StrictlyPositiveInt]): Hidden dimensions for the MLP/transformer part
+        norm_cls (NormClass): The normalization class to be applied to the convolutional
         n_heads (StrictlyPositiveInt): Number of attention heads for self-attention
-        proj_dim (StrictlyPositiveInt): Number of dimensions in expanded embedding
-        dropout_rates (tuple[PositiveFloat]): Dropout probabilities for the MLP/transformer part
-        act_name (str): The name of the PyTorch activation function (e.g., 'ReLU', 'LeakyReLU')
-        act_cls (ActClass): The activation class to be applied to the layer's output
-        norm_cls (NormClass): The normalization class to be applied to the layer's output (before the activation)
+        proj_dim (StrictlyPositiveInt): Number of dimensions in expanded embedding for self-attention
+        act_name (str): The name of the PyTorch activation class (e.g., 'ReLU', 'LeakyReLU')
+        n_transformer_layers: Number of transformer layers
+        act_cls (ActClass): The activation class to be applied both to the convolutional and transformer parts
     """
 
     conv_dims: tuple[StrictlyPositiveInt, ...] = dataclasses.field(default_factory=tuple)
-    mlp_dims: tuple[StrictlyPositiveInt, ...] = dataclasses.field(default_factory=tuple)
+    conv_norm_name: str = ''
     n_heads: StrictlyPositiveInt = 1
     proj_dim: StrictlyPositiveInt = 1
-    dropout_rates: tuple[PositiveFloat, ...] = dataclasses.field(default_factory=tuple)
+    transformer_feedforward_dim: StrictlyPositiveInt = 1024
+    n_transformer_layers: PositiveInt = 0
+    transformer_dropout: float = 0.1
     act_name: str = ''
-    norm_name: str = ''
 
     def __post_init__(self) -> None:
         """Resolve activation class from name."""
         self.act_cls = get_activation_cls(self.act_name) if self.act_name else DEFAULT_ACT
-        self.norm_cls = get_norm_cls(self.norm_name) if self.norm_name else DEFAULT_NORM
+        self.norm_cls = get_norm_cls(self.conv_norm_name) if self.conv_norm_name else DEFAULT_NORM
         return
-
-    @model_validator(mode='after')
-    def _check_length_dropout(self) -> Self:
-        if len(self.mlp_dims) > len(self.dropout_rates):
-            msg = 'Number of hidden dimensions {} and dropouts {} not compatible.'
-            raise ValueError(msg.format(len(self.mlp_dims), len(self.dropout_rates)))
-
-        return self
 
 
 @dataclass
@@ -246,12 +238,24 @@ class ClassifierConfig(ArchitectureConfig):
         class_name (Classifiers): The name of the classifier class
         n_neighbors (StrictlyPositiveInt): The number of neighbors for edge convolution (counting the point itself)
         feature_dim (StrictlyPositiveInt): The dimension of the extracted features from the convolutional part
+        mlp_dims (tuple[StrictlyPositiveInt]): Hidden dimensions for the MLP part
+        dropout_rates (tuple[PositiveFloat]): Dropout rates for the MLP part
     """
 
     name: str
     class_name: Classifiers
     n_neighbors: StrictlyPositiveInt
     feature_dim: StrictlyPositiveInt
+    mlp_dims: tuple[StrictlyPositiveInt, ...] = dataclasses.field(default_factory=tuple)
+    dropout_rates: tuple[PositiveFloat, ...] = dataclasses.field(default_factory=tuple)
+
+    @model_validator(mode='after')
+    def _check_length_dropout(self) -> Self:
+        if len(self.mlp_dims) > len(self.dropout_rates):
+            msg = 'Number of hidden dimensions {} and dropouts {} not compatible.'
+            raise ValueError(msg.format(len(self.mlp_dims), len(self.dropout_rates)))
+
+        return self
 
 
 @dataclass
