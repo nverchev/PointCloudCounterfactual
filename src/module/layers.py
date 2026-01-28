@@ -175,7 +175,7 @@ class BaseLayer(nn.Module, metaclass=abc.ABCMeta):
             return functools.partial(nn.init.xavier_normal_, gain=nn.init.calculate_gain('tanh'))
 
         if isinstance(act, nn.ReLU):
-            return functools.partial(nn.init.kaiming_uniform_, nonlinearity='relu')
+            return functools.partial(nn.init.kaiming_normal_, nonlinearity='relu')
 
         if isinstance(act, nn.LeakyReLU):
             return functools.partial(nn.init.kaiming_normal_, a=act.negative_slope, nonlinearity='leaky_relu')
