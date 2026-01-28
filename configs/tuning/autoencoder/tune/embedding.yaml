@@ -12,5 +12,5 @@ params:
   autoencoder.objective.c_embedding:
     suggest: suggest_float
     settings:
-      low: 0.1
+      low: 1
       high: 10

@@ -2,6 +2,6 @@ class_name: Transformer
 n_transformer_layers: 2
 n_heads: 8
 proj_dim: 512
-transformer_feedforward_dim: 1024
+feedforward_dim: 1024
 transformer_dropout: 0.
 act_name: 'GELU'

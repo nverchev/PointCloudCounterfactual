@@ -5,15 +5,6 @@ n_trials: 300
 
 params:
 
-  w_autoencoder.model.w_decoder.mlp_dims:
-    suggest: suggest_list
-    settings:
-      min_length: 1
-      max_length: 5
-      suggest: suggest_categorical
-      settings:
-        choices: [256, 512, 1024]
-
 
   w_autoencoder.model.w_decoder.proj_dim:
     suggest: suggest_categorical
@@ -26,31 +17,18 @@ params:
     settings:
       choices: [4, 8, 16]
 
-  w_autoencoder.model.w_decoder.dropout_rates.0:
-    suggest: suggest_float
+  w_autoencoder.model.w_decoder.n_transformer_layers:
+    suggest: suggest_int
     settings:
-      low: 0.
-      high: 0.2
+      low: 3
+      high: 5
 
-  w_autoencoder.model.w_decoder.dropout_rates.1:
-    suggest: suggest_float
+  w_autoencoder.model.w_decoder.feedforward_dim:
+    suggest: suggest_categorical
     settings:
-      low: 0.
-      high: 0.2
+      choices: [256, 512, 1024]
 
-  w_autoencoder.model.w_decoder.dropout_rates.2:
-    suggest: suggest_float
-    settings:
-      low: 0.
-      high: 0.2
-
-  w_autoencoder.model.w_decoder.dropout_rates.3:
-    suggest: suggest_float
-    settings:
-      low: 0.
-      high: 0.2
-
-  w_autoencoder.model.w_decoder.dropout_rates.4:
+  w_autoencoder.model.w_decoder.transformer_dropout:
     suggest: suggest_float
     settings:
       low: 0.

@@ -2,7 +2,7 @@ class_name: Transformer
 n_neighbors: 25
 conv_dims: [ 64, 64, 128, 256]
 n_heads: 8
-transformer_feedforward_dim: 512
+feedforward_dim: 512
 n_transformer_layers: 3
 transformer_dropout: 0.0
 proj_dim: 256

@@ -93,7 +93,7 @@ class ArchitectureConfig:
     conv_norm_name: str = ''
     n_heads: StrictlyPositiveInt = 1
     proj_dim: StrictlyPositiveInt = 1
-    transformer_feedforward_dim: StrictlyPositiveInt = 1024
+    feedforward_dim: StrictlyPositiveInt = 1024
     n_transformer_layers: PositiveInt = 0
     transformer_dropout: float = 0.1
     act_name: str = ''

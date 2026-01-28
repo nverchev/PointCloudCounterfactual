@@ -13,11 +13,13 @@ params:
     settings:
       choices: [ 4, 8, 16 ]
 
-  w_autoencoder.model.conditional_w_encoder.mlp_dims:
-    suggest: suggest_list
+  w_autoencoder.model.conditional_w_encoder.n_transformer_layers:
+    suggest: suggest_int
     settings:
-      min_length: 1
-      max_length: 3
-      suggest: suggest_categorical
-      settings:
-        choices: [256, 512, 1024]
+      low: 1
+      high: 3
+
+  w_autoencoder.model.conditional_w_encoder.feedforward_dim:
+    suggest: suggest_categorical
+    settings:
+      choices: [256, 512, 1024]

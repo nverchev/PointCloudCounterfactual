@@ -31,7 +31,7 @@ class BaseWDecoder(nn.Module, metaclass=abc.ABCMeta):
         self.n_heads: int = cfg_w_decoder.n_heads
         self.conv_dims: tuple[int, ...] = cfg_w_decoder.conv_dims
         self.n_transformer_layers: int = cfg_w_decoder.n_transformer_layers
-        self.transformer_feedforward_dim: int = cfg_w_decoder.transformer_feedforward_dim
+        self.feedforward_dim: int = cfg_w_decoder.feedforward_dim
         self.transformer_dropout: float = cfg_w_decoder.transformer_dropout
         self.act_cls: ActClass = cfg_w_decoder.act_cls
         self.norm_cls: NormClass = cfg_w_decoder.norm_cls
@@ -76,7 +76,7 @@ class TransformerWDecoder(BaseWDecoder):
         self.transformer = TransformerDecoder(
             in_dim=self.proj_dim,
             n_heads=self.n_heads,
-            hidden_dim=self.transformer_feedforward_dim,
+            hidden_dim=self.feedforward_dim,
             dropout_rate=self.transformer_dropout,
             act_cls=self.act_cls,
             n_layers=self.n_transformer_layers,

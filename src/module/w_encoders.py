@@ -40,7 +40,7 @@ class BaseWEncoder(nn.Module, metaclass=abc.ABCMeta):
         self.n_heads: int = cfg_w_encoder.n_heads
         self.conv_dims: tuple[int, ...] = cfg_w_encoder.conv_dims
         self.n_transformer_layers: int = cfg_w_encoder.n_transformer_layers
-        self.transformer_feedforward_dim: int = cfg_w_encoder.transformer_feedforward_dim
+        self.feedforward_dim: int = cfg_w_encoder.feedforward_dim
         self.transformer_dropout: float = cfg_w_encoder.transformer_dropout
         self.act_cls: ActClass = cfg_w_encoder.act_cls
         self.norm_cls: NormClass = cfg_w_encoder.norm_cls
@@ -79,7 +79,7 @@ class TransformerWEncoder(BaseWEncoder):
         self.transformer = TransformerEncoder(
             in_dim=self.proj_dim,
             n_heads=self.n_heads,
-            feedforward_dim=self.transformer_feedforward_dim,
+            feedforward_dim=self.feedforward_dim,
             act_cls=self.act_cls,
             dropout_rate=self.transformer_dropout,
             n_layers=self.n_transformer_layers,

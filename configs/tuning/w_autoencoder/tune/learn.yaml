@@ -6,8 +6,8 @@ params:
   w_autoencoder.train.learn.learning_rate:
     suggest: suggest_float
     settings:
-      low: 1e-04
-      high: 1e-02
+      low: 0.5e-04
+      high: 0.5e-03
 
   w_autoencoder.train.learn.grad_op:
     suggest: suggest_categorical
@@ -23,6 +23,6 @@ params:
   w_autoencoder.train.learn.opt_settings.weight_decay:
     suggest: suggest_float
     settings:
-      low: 1e-06
-      high: 1e-02
+      low: 1e-05
+      high: 1e-03
       log: true

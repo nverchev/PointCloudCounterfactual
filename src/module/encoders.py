@@ -25,7 +25,7 @@ class BasePointEncoder(nn.Module, metaclass=abc.ABCMeta):
         self.n_heads: int = cfg_ae_model.encoder.n_heads
         self.proj_dim: int = cfg_ae_model.encoder.proj_dim
         self.n_transformer_layers: int = cfg_ae_model.encoder.n_transformer_layers
-        self.transformer_feedforward_dim: int = cfg_ae_model.encoder.transformer_feedforward_dim
+        self.feedforward_dim: int = cfg_ae_model.encoder.feedforward_dim
         self.transformer_dropout: float = cfg_ae_model.encoder.transformer_dropout
         self.n_codes: int = cfg_ae_model.n_codes
         self.act_cls: ActClass = cfg_ae_model.encoder.act_cls
@@ -117,7 +117,7 @@ class TransformerEncoder(BasePointEncoder):
         self.transformer_codes = TransformerDecoder(
             in_dim=self.proj_dim,
             n_heads=self.n_heads,
-            hidden_dim=self.transformer_feedforward_dim,
+            hidden_dim=self.feedforward_dim,
             dropout_rate=self.transformer_dropout,
             act_cls=self.act_cls,
             n_layers=self.n_transformer_layers,

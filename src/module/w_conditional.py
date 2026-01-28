@@ -44,7 +44,7 @@ class BaseWConditionalEncoder(nn.Module, metaclass=abc.ABCMeta):
         self.n_codes: int = cfg_ae_model.n_codes
         self.z2_dim: int = cfg_wae_model.z2_dim
         self.n_transformer_layers: int = cfg_posterior.n_transformer_layers
-        self.transformer_feedforward_dim: int = cfg_posterior.transformer_feedforward_dim
+        self.feedforward_dim: int = cfg_posterior.feedforward_dim
         self.transformer_dropout: float = cfg_posterior.transformer_dropout
         self.act_cls: ActClass = cfg_posterior.act_cls
         self.proj_dim: int = cfg_posterior.proj_dim
@@ -67,7 +67,7 @@ class TransformerWConditionalEncoder(BaseWConditionalEncoder):
         self.transformer = TransformerEncoder(
             in_dim=self.proj_dim,
             n_heads=self.n_heads,
-            feedforward_dim=self.transformer_feedforward_dim,
+            feedforward_dim=self.feedforward_dim,
             dropout_rate=self.transformer_dropout,
             act_cls=self.act_cls,
             n_layers=self.n_transformer_layers,

@@ -20,21 +20,28 @@ params:
     suggest: suggest_list
     settings:
       min_length: 1
-      max_length: 4
-      suggest: suggest_categorical
-      settings:
-        choices: [128, 256, 512]
-
-  autoencoder.model.decoder.mlp_dims:
-    suggest: suggest_list
-    settings:
-      min_length: 3
-      max_length: 5
+      max_length: 3
       suggest: suggest_categorical
       settings:
         choices: [256, 512, 1024]
+
+  autoencoder.model.decoder.proj_dim:
+    suggest: suggest_categorical
+    settings:
+      choices: [ 256, 512 ]
 
   autoencoder.model.decoder.n_heads:
     suggest: suggest_categorical
     settings:
       choices: [4, 8]
+
+  autoencoder.model.encoder.n_transformer_layers:
+    suggest: suggest_int
+    settings:
+      low: 1
+      high: 3
+
+  autoencoder.model.encoder.feedforward_dim:
+    suggest: suggest_categorical
+    settings:
+      choices: [256, 512, 1024]

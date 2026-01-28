@@ -24,7 +24,7 @@ class BasePointDecoder(nn.Module, metaclass=abc.ABCMeta):
         cfg_decoder = cfg_ae_model.decoder
         self.map_dims: tuple[int, ...] = cfg_decoder.map_dims
         self.conv_dims: tuple[int, ...] = cfg_decoder.conv_dims
-        self.transformer_feedforward_dim: int = cfg_decoder.transformer_feedforward_dim
+        self.feedforward_dim: int = cfg_decoder.feedforward_dim
         self.n_transformer_layers: int = cfg_decoder.n_transformer_layers
         self.transformer_dropout: float = cfg_decoder.transformer_dropout
         self.n_codes: int = cfg_ae_model.n_codes
@@ -66,14 +66,17 @@ class PCGen(BasePointDecoder):
         self.group_final = nn.ModuleList()
         for _ in range(self.n_components):
             block = PointsConvBlock(
-                [self.w_dim, *self.conv_dims], act_cls=self.act_cls, norm_cls=self.norm_cls, use_residual=True
+                [self.w_dim, *self.conv_dims],
+                act_cls=self.act_cls,
+                norm_cls=self.norm_cls,
+                use_residual=True,
             )
             self.group_conv.append(block)
             self.group_proj.append(PointsConvLayer(self.conv_dims[-1], self.proj_dim))
             transformer_decoder = TransformerDecoder(
                 in_dim=self.proj_dim,
                 n_heads=self.n_heads,
-                hidden_dim=self.transformer_feedforward_dim,
+                hidden_dim=self.feedforward_dim,
                 dropout_rate=self.transformer_dropout,
                 act_cls=self.act_cls,
                 n_layers=self.n_transformer_layers,
