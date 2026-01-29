@@ -50,7 +50,7 @@ class LinearWDecoder(BaseWDecoder):
         self.decode = nn.Sequential(
             PointsConvBlock(
                 [(self.z1_dim + self.z2_dim) * self.n_codes, *self.conv_dims],
-                n_groups_dense=self.n_codes,
+                n_groups_layer=self.n_codes,
                 act_cls=self.act_cls,
                 norm_cls=self.norm_cls,
             ),

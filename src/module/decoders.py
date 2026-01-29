@@ -56,23 +56,21 @@ class PCGen(BasePointDecoder):
         for in_dim, out_dim in dim_pairs:
             modules.append(PointsConvLayer(in_dim, out_dim, act_cls=torch.nn.ReLU))
 
-        modules.append(PointsConvLayer(self.map_dims[-1], self.w_dim, act_cls=nn.Tanh))
+        modules.append(PointsConvLayer(self.map_dims[-1], self.w_dim, act_cls=nn.Hardtanh))
         self.map_sample = nn.Sequential(*modules)
         self.memory_positional_encoding = nn.Parameter(torch.randn(1, self.n_codes, self.proj_dim))
         self.proj_w = LinearLayer(self.embedding_dim, self.proj_dim)
         self.group_conv = nn.ModuleList()
-        self.group_proj = nn.ModuleList()
         self.group_transformer = nn.ModuleList()
         self.group_final = nn.ModuleList()
         for _ in range(self.n_components):
             block = PointsConvBlock(
-                [self.w_dim, *self.conv_dims],
+                [self.w_dim, *self.conv_dims, self.proj_dim],
                 act_cls=self.act_cls,
                 norm_cls=self.norm_cls,
                 use_residual=True,
             )
             self.group_conv.append(block)
-            self.group_proj.append(PointsConvLayer(self.conv_dims[-1], self.proj_dim))
             transformer_decoder = TransformerDecoder(
                 in_dim=self.proj_dim,
                 n_heads=self.n_heads,
@@ -80,6 +78,7 @@ class PCGen(BasePointDecoder):
                 dropout_rate=self.transformer_dropout,
                 act_cls=self.act_cls,
                 n_layers=self.n_transformer_layers,
+                use_final_norm=True,
             )
             self.group_transformer.append(transformer_decoder)
             self.group_final.append(PointsConvLayer(self.proj_dim, OUT_CHAN, use_trunc_init=True))
@@ -107,7 +106,7 @@ class PCGen(BasePointDecoder):
 
         for group in range(self.n_components):
             x_group = self.group_conv[group](x)
-            x_group = self.group_proj[group](x_group)
+            # x_group = self.group_proj[group](x_group)
             group_atts.append(x_group)
             x_group = x_group.transpose(2, 1)
             x_group = self.group_transformer[group](x_group, memory=memory)

@@ -121,6 +121,7 @@ class TransformerEncoder(BasePointEncoder):
             dropout_rate=self.transformer_dropout,
             act_cls=self.act_cls,
             n_layers=self.n_transformer_layers,
+            use_final_norm=True,
         )
         self.compress = LinearLayer(self.proj_dim, self.embedding_dim)
         return

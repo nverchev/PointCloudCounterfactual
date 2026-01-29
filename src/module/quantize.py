@@ -22,9 +22,7 @@ class VectorQuantizer:
         batch, _ = x.size()
         x_flat = x.view(batch * self.n_codes, 1, self.embedding_dim)
         book_repeated = codebook.repeat(batch, 1, 1)
-
         dist = pykeops_square_distance(x_flat, book_repeated)
-
         idx_flat = dist.argmin(axis=2)
         idx = idx_flat.view(batch, self.n_codes)
         embeddings = self._get_embeddings(idx_flat, book_repeated)

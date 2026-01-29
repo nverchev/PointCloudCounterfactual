@@ -171,7 +171,7 @@ class BaseLayer(nn.Module, metaclass=abc.ABCMeta):
         if act is None:
             return functools.partial(nn.init.xavier_normal_, gain=1)
 
-        if isinstance(act, nn.Tanh):
+        if isinstance(act, nn.Hardtanh):
             return functools.partial(nn.init.xavier_normal_, gain=nn.init.calculate_gain('tanh'))
 
         if isinstance(act, nn.ReLU):
@@ -234,19 +234,23 @@ class BaseBlock(nn.Module, Generic[Layer], abc.ABC):
         dims: Sequence[int],
         act_cls: ActClass | None = None,
         norm_cls: NormClass | None = None,
-        n_groups_dense: int = 1,
+        n_groups_layer: int = 1,
         use_residual: bool = False,
+        use_final_norm: bool = False,
+        use_final_act: bool = False,
     ) -> None:
         super().__init__()
         self.dims: Sequence[int] = dims
         self.act_cls: ActClass | None = act_cls
         self.norm_cls: NormClass | None = norm_cls
-        self.n_groups_dense: int = n_groups_dense
+        self.n_groups_layer: int = n_groups_layer
         self.use_residual: bool = use_residual
         self.layers = nn.ModuleList()
         self.projections = nn.ModuleList()
-        for in_dim, out_dim in itertools.pairwise(dims):
-            self.layers.append(self.get_layer(in_dim, out_dim))
+        for i, (in_dim, out_dim) in enumerate(itertools.pairwise(dims)):
+            layer_act_cls = self.act_cls if use_final_act or len(dims) < i - 1 else None
+            layer_norm_cls = self.norm_cls if use_final_norm or len(dims) < i - 1 else None
+            self.layers.append(self.get_layer(in_dim, out_dim, layer_act_cls, layer_norm_cls, n_groups_layer))
             if use_residual:
                 if in_dim == out_dim:
                     self.projections.append(nn.Identity())
@@ -271,24 +275,32 @@ class BaseBlock(nn.Module, Generic[Layer], abc.ABC):
 
         return x
 
+    @classmethod
     @abc.abstractmethod
-    def get_layer(self, in_dim: int, out_dim: int) -> Layer:
+    def get_layer(
+        cls, in_dim: int, out_dim: int, act_cls: ActClass | None, norm_cls: NormClass | None, n_groups_layer: int
+    ) -> Layer:
         """Get the layer"""
 
+    @classmethod
     @abc.abstractmethod
-    def get_projection(self, in_dim: int, out_dim: int) -> nn.Module:
+    def get_projection(cls, in_dim: int, out_dim: int) -> nn.Module:
         """Get a projection layer"""
 
 
 class LinearBlock(BaseBlock[LinearLayer]):
     """A block of a neural network consisting of a sequence of linear layers."""
 
+    @classmethod
     @override
-    def get_layer(self, in_dim: int, out_dim: int) -> LinearLayer:
-        return LinearLayer(in_dim, out_dim, self.act_cls, self.norm_cls, self.n_groups_dense)
+    def get_layer(
+        cls, in_dim: int, out_dim: int, act_cls: ActClass | None, norm_cls: NormClass | None, n_groups_layer: int
+    ) -> LinearLayer:
+        return LinearLayer(in_dim, out_dim, act_cls, norm_cls, n_groups_layer)
 
+    @classmethod
     @override
-    def get_projection(self, in_dim: int, out_dim: int) -> nn.Module:
+    def get_projection(cls, in_dim: int, out_dim: int) -> nn.Module:
         projection = nn.Linear(in_dim, out_dim, bias=False)
         nn.init.eye_(projection.weight)
         return projection
@@ -297,28 +309,36 @@ class LinearBlock(BaseBlock[LinearLayer]):
 class PointsConvBlock(BaseBlock[PointsConvLayer]):
     """A block of a neural network consisting of a sequence of points convolution layers."""
 
+    @classmethod
     @override
-    def get_layer(self, in_dim: int, out_dim: int) -> PointsConvLayer:
-        return PointsConvLayer(in_dim, out_dim, self.act_cls, self.norm_cls, self.n_groups_dense)
+    def get_layer(
+        cls, in_dim: int, out_dim: int, act_cls: ActClass | None, norm_cls: NormClass | None, n_groups_layer: int
+    ) -> PointsConvLayer:
+        return PointsConvLayer(in_dim, out_dim, act_cls, norm_cls, n_groups_layer)
 
+    @classmethod
     @override
-    def get_projection(self, in_dim: int, out_dim: int) -> nn.Module:
+    def get_projection(cls, in_dim: int, out_dim: int) -> nn.Module:
         projection = nn.Conv1d(in_dim, out_dim, kernel_size=1, bias=False)
-        nn.init.eye_(projection.weight)
+        nn.init.eye_(projection.weight[:, :, 0])
         return projection
 
 
 class EdgeConvBlock(BaseBlock[EdgeConvLayer]):
     """A block of a neural network consisting of a sequence of edge convolution layers."""
 
+    @classmethod
     @override
-    def get_layer(self, in_dim: int, out_dim: int) -> EdgeConvLayer:
-        return EdgeConvLayer(in_dim, out_dim, self.act_cls, self.norm_cls, self.n_groups_dense)
+    def get_layer(
+        cls, in_dim: int, out_dim: int, act_cls: ActClass | None, norm_cls: NormClass | None, n_groups_layer: int
+    ) -> EdgeConvLayer:
+        return EdgeConvLayer(in_dim, out_dim, act_cls, norm_cls, n_groups_layer)
 
+    @classmethod
     @override
-    def get_projection(self, in_dim: int, out_dim: int) -> nn.Module:
+    def get_projection(cls, in_dim: int, out_dim: int) -> nn.Module:
         projection = nn.Conv2d(in_dim, out_dim, kernel_size=1, bias=False)
-        nn.init.eye_(projection.weight)
+        nn.init.eye_(projection.weight[:, :, 0, 0])
         return projection
 
 
@@ -582,7 +602,6 @@ class TransformerDecoder(nn.Module):
                 for _ in range(n_layers)
             ]
         )
-
         self.norm = nn.LayerNorm(self.out_dim) if use_final_norm else None
         return
 
