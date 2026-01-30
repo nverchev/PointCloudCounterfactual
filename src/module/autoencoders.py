@@ -1,7 +1,6 @@
 """Autoencoder architecture."""
 
 import abc
-import math
 
 from typing import Generic, TypeVar, override
 
@@ -93,9 +92,7 @@ class BaseVQVAE(BaseAutoencoder, abc.ABC, Generic[WA]):
         self.n_codes: int = cfg_ae_model.n_codes
         self.book_size: int = cfg_ae_model.book_size
         self.embedding_dim: int = cfg_ae_model.embedding_dim
-        self.codebook = nn.Parameter(
-            torch.randn(self.n_codes, self.book_size, self.embedding_dim) / math.sqrt(self.embedding_dim)
-        )
+        self.codebook = nn.Parameter(torch.randn(self.n_codes, self.book_size, self.embedding_dim))
         self.w_autoencoder: WA = self._init_w_autoencoder()
         for param in self.w_autoencoder.parameters():
             param.requires_grad = False  # separate training for W autoencoder

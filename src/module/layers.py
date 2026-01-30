@@ -226,7 +226,7 @@ class EdgeConvLayer(BaseLayer):
 Layer = TypeVar('Layer', bound=BaseLayer)
 
 
-class BaseBlock(nn.Module, Generic[Layer], abc.ABC):
+class BaseResBlock(nn.Module, Generic[Layer], abc.ABC):
     """A block of a neural network consisting of a sequence of layers."""
 
     def __init__(
@@ -235,43 +235,32 @@ class BaseBlock(nn.Module, Generic[Layer], abc.ABC):
         act_cls: ActClass | None = None,
         norm_cls: NormClass | None = None,
         n_groups_layer: int = 1,
-        use_residual: bool = False,
-        use_final_norm: bool = False,
-        use_final_act: bool = False,
     ) -> None:
         super().__init__()
         self.dims: Sequence[int] = dims
         self.act_cls: ActClass | None = act_cls
         self.norm_cls: NormClass | None = norm_cls
         self.n_groups_layer: int = n_groups_layer
-        self.use_residual: bool = use_residual
         self.layers = nn.ModuleList()
         self.projections = nn.ModuleList()
-        for i, (in_dim, out_dim) in enumerate(itertools.pairwise(dims)):
-            layer_act_cls = self.act_cls if use_final_act or len(dims) < i - 1 else None
-            layer_norm_cls = self.norm_cls if use_final_norm or len(dims) < i - 1 else None
-            self.layers.append(self.get_layer(in_dim, out_dim, layer_act_cls, layer_norm_cls, n_groups_layer))
-            if use_residual:
-                if in_dim == out_dim:
-                    self.projections.append(nn.Identity())
-                else:
-                    self.projections.append(self.get_projection(in_dim, out_dim))
+        for in_dim, out_dim in itertools.pairwise(dims):
+            self.layers.append(self.get_layer(in_dim, out_dim, act_cls, norm_cls, n_groups_layer))
+            if in_dim == out_dim:
+                self.projections.append(nn.Identity())
+            else:
+                self.projections.append(self.get_projection(in_dim, out_dim))
 
-        if self.use_residual:
-            with torch.no_grad():
-                for layer in self.layers:
-                    if isinstance(layer.module, Weighted):
-                        layer.module.weight.mul_(1 / math.sqrt(len(dims) - 1))
+        with torch.no_grad():
+            for layer in self.layers:
+                if isinstance(layer.module, Weighted):
+                    layer.module.weight.mul_(1 / math.sqrt(len(dims) - 1))
 
         return
 
     def forward(self, x: Tensor) -> Tensor:
         """Forward pass."""
         for i, layer in enumerate(self.layers):
-            if self.use_residual:
-                x = self.projections[i](x) + layer(x)
-            else:
-                x = layer(x)
+            x = self.projections[i](x) + layer(x)
 
         return x
 
@@ -288,7 +277,7 @@ class BaseBlock(nn.Module, Generic[Layer], abc.ABC):
         """Get a projection layer"""
 
 
-class LinearBlock(BaseBlock[LinearLayer]):
+class LinearResBlock(BaseResBlock[LinearLayer]):
     """A block of a neural network consisting of a sequence of linear layers."""
 
     @classmethod
@@ -306,7 +295,7 @@ class LinearBlock(BaseBlock[LinearLayer]):
         return projection
 
 
-class PointsConvBlock(BaseBlock[PointsConvLayer]):
+class PointsConvResBlock(BaseResBlock[PointsConvLayer]):
     """A block of a neural network consisting of a sequence of points convolution layers."""
 
     @classmethod
@@ -324,7 +313,7 @@ class PointsConvBlock(BaseBlock[PointsConvLayer]):
         return projection
 
 
-class EdgeConvBlock(BaseBlock[EdgeConvLayer]):
+class EdgeConvResBlock(BaseResBlock[EdgeConvLayer]):
     """A block of a neural network consisting of a sequence of edge convolution layers."""
 
     @classmethod

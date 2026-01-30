@@ -7,7 +7,7 @@ from torch import nn as nn
 
 from src.config import Experiment, ActClass, NormClass
 from src.config.options import WDecoders
-from src.module.layers import LinearLayer, PointsConvLayer, PointsConvBlock, TransformerDecoder
+from src.module.layers import LinearLayer, PointsConvLayer, PointsConvResBlock, TransformerDecoder
 
 
 class BaseWDecoder(nn.Module, metaclass=abc.ABCMeta):
@@ -48,7 +48,7 @@ class LinearWDecoder(BaseWDecoder):
     def __init__(self) -> None:
         super().__init__()
         self.decode = nn.Sequential(
-            PointsConvBlock(
+            PointsConvResBlock(
                 [(self.z1_dim + self.z2_dim) * self.n_codes, *self.conv_dims],
                 n_groups_layer=self.n_codes,
                 act_cls=self.act_cls,

@@ -11,7 +11,7 @@ from src.config import ActClass, NormClass
 from src.config.experiment import Experiment
 from src.config.options import Decoders
 from src.data import OUT_CHAN
-from src.module.layers import PointsConvLayer, LinearLayer, TransformerDecoder, PointsConvBlock
+from src.module.layers import PointsConvLayer, LinearLayer, TransformerDecoder, PointsConvResBlock
 from src.utils.neighbour_ops import graph_filtering
 
 
@@ -64,11 +64,10 @@ class PCGen(BasePointDecoder):
         self.group_transformer = nn.ModuleList()
         self.group_final = nn.ModuleList()
         for _ in range(self.n_components):
-            block = PointsConvBlock(
+            block = PointsConvResBlock(
                 [self.w_dim, *self.conv_dims, self.proj_dim],
                 act_cls=self.act_cls,
                 norm_cls=self.norm_cls,
-                use_residual=True,
             )
             self.group_conv.append(block)
             transformer_decoder = TransformerDecoder(

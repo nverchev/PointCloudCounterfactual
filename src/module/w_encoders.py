@@ -7,7 +7,7 @@ from torch import nn as nn
 
 from src.config import Experiment, ActClass, NormClass
 from src.config.options import WEncoders
-from src.module.layers import PointsConvLayer, LinearLayer, PointsConvBlock, TransformerEncoder
+from src.module.layers import PointsConvLayer, LinearLayer, PointsConvResBlock, TransformerEncoder
 
 
 class BaseWEncoder(nn.Module, metaclass=abc.ABCMeta):
@@ -57,7 +57,7 @@ class ConvolutionalWEncoder(BaseWEncoder):
     def __init__(self) -> None:
         super().__init__()
         self.encode = nn.Sequential(
-            PointsConvBlock([self.embedding_dim, *self.conv_dims], act_cls=self.act_cls, norm_cls=self.norm_cls),
+            PointsConvResBlock([self.embedding_dim, *self.conv_dims], act_cls=self.act_cls, norm_cls=self.norm_cls),
             PointsConvLayer(self.conv_dims[-1], 2 * self.z1_dim, use_trunc_init=True),
         )
         return
