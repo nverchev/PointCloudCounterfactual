@@ -44,6 +44,7 @@ class Weighted(Protocol):
     """Protocol for classes that have a weight attribute."""
 
     weight: torch.Tensor
+    bias: torch.Tensor | None
 
 
 class View(nn.Module):
@@ -120,7 +121,7 @@ class BaseLayer(nn.Module, metaclass=abc.ABCMeta):
         self.act = self.get_activation(act_cls)
         self.use_trunc_init: bool = use_trunc_init
         self.init_weight = self.get_init_weight(self.act, use_trunc_init)
-        self.init_bias = self.get_init_bias()
+        self.init_bias = self.get_init_bias(use_trunc_init)
         self.init_weight(cast(torch.Tensor, self.module.weight))
         if self.norm is None:
             self.init_bias(cast(torch.Tensor, self.module.bias))
@@ -186,9 +187,9 @@ class BaseLayer(nn.Module, metaclass=abc.ABCMeta):
         return functools.partial(nn.init.xavier_normal_, gain=1)
 
     @staticmethod
-    def get_init_bias() -> Callable[[torch.Tensor], torch.Tensor]:
+    def get_init_bias(use_trunc_init: bool) -> Callable[[torch.Tensor], torch.Tensor]:
         """Get initialization strategy for the bias according to the type of activation."""
-        return torch.nn.init.zeros_
+        return torch.nn.init.zeros_ if use_trunc_init else lambda x: x
 
     @staticmethod
     def get_norm_layer(norm_cls: NormClass | None, out_dim: int) -> nn.Module | None:
@@ -254,6 +255,8 @@ class BaseResBlock(nn.Module, Generic[Layer], abc.ABC):
             for layer in self.layers:
                 if isinstance(layer.module, Weighted):
                     layer.module.weight.mul_(1 / math.sqrt(len(dims) - 1))
+                    if layer.module.bias is not None:
+                        layer.module.bias.mul_(0)
 
         return
 
