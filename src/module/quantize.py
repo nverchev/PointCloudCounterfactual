@@ -1,6 +1,7 @@
 """Vector quantization utilities."""
 
 import torch
+import torch.distributed as dist
 
 from src.config import Experiment
 from src.utils.neighbour_ops import pykeops_square_distance
@@ -53,39 +54,37 @@ class VectorQuantizer:
 
     def update_codebook(self, codebook: torch.Tensor, idx: torch.Tensor, x: torch.Tensor) -> None:
         """Update the codebook using EMA without tracking counts."""
-        batch = idx.shape[0]
 
-        # Reshape x
+        # 1. Local Accumulation (Every rank does this)
+        batch = idx.shape[0]
         x_reshaped = x.view(batch, self.n_codes, self.embedding_dim)
 
-        # Create flat indices that account for n_codes dimension
-        # idx: [batch, n_codes] with values in [0, book_size)
-        # We need unique indices for each (code_idx, book_idx) pair
         code_offsets = torch.arange(self.n_codes, device=idx.device).view(1, self.n_codes) * self.book_size
-        idx_offset = idx + code_offsets  # [batch, n_codes]
+        idx_offset = idx + code_offsets
 
-        # Flatten
-        idx_flat = idx_offset.view(-1)  # [batch * n_codes]
-        x_flat = x_reshaped.view(-1, self.embedding_dim)  # [batch * n_codes, embedding_dim]
-
-        # Initialize accumulators for all codes
         total_size = self.n_codes * self.book_size
         embed_sum = torch.zeros(total_size, self.embedding_dim, device=codebook.device)
         counts = torch.zeros(total_size, device=codebook.device)
 
-        # Accumulate using scatter_add
-        embed_sum.scatter_add_(0, idx_flat.unsqueeze(1).expand(-1, self.embedding_dim), x_flat)
-        counts.scatter_add_(0, idx_flat, torch.ones_like(idx_flat, dtype=counts.dtype))
+        embed_sum.scatter_add_(
+            0, idx_offset.view(-1, 1).expand(-1, self.embedding_dim), x_reshaped.view(-1, self.embedding_dim)
+        )
+        counts.scatter_add_(0, idx_offset.view(-1), torch.ones(idx_offset.numel(), device=idx.device))
 
-        # Reshape back to [n_codes, book_size, embedding_dim]
+        # 2. Global Sync (The only communication step)
+        if dist.is_initialized():
+            # Sum all centers and counts across all GPUs
+            dist.all_reduce(embed_sum, op=dist.ReduceOp.SUM)
+            dist.all_reduce(counts, op=dist.ReduceOp.SUM)
+
+        # 3. Local EMA update (Every rank does this identical math)
         embed_sum = embed_sum.view(self.n_codes, self.book_size, self.embedding_dim)
         counts = counts.view(self.n_codes, self.book_size)
 
-        # Compute new centers
         mask = counts > 0
-        new_centers = codebook.clone()
-        new_centers[mask] = embed_sum[mask] / counts[mask].unsqueeze(1)
+        # Every rank now has the SAME new_centers because the sums are global
+        new_centers_slice = embed_sum[mask] / counts[mask].unsqueeze(1)
 
-        # EMA update: only update codes that were used
-        codebook[mask] = self.momentum * codebook[mask] + (1 - self.momentum) * new_centers[mask]
+        codebook[mask] = self.momentum * codebook[mask] + (1 - self.momentum) * new_centers_slice
+
         return
