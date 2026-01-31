@@ -1,7 +1,7 @@
 defaults:
-  - w_encoder: transformer_w_encoder
-  - w_decoder: transformer_w_decoder
-  - conditional_w_encoder: transformer_conditional_w_encoder
+  - w_encoder: transformer
+  - w_decoder: transformer
+  - conditional_w_encoder: transformer
   - _self_
 
 name: WAutoEncoder
