@@ -7,5 +7,5 @@ defaults:
   - data: default_data
   - _self_
 
-variation: ema_vqvae
+variation: development
 final: false
