@@ -88,7 +88,7 @@ class BaseVQVAE(BaseAutoencoder, abc.ABC, Generic[WA]):
         self.n_codes: int = cfg_ae_model.n_codes
         self.book_size: int = cfg_ae_model.book_size
         self.embedding_dim: int = cfg_ae_model.embedding_dim
-        codebook = nn.Parameter(torch.randn(self.n_codes, self.book_size, self.embedding_dim), requires_grad=False)
+        codebook = nn.functional.normalize(torch.randn(self.n_codes, self.book_size, self.embedding_dim), dim=1)
         self.register_buffer('codebook', codebook)
         self.w_autoencoder: WA = self._init_w_autoencoder()
         for param in self.w_autoencoder.parameters():

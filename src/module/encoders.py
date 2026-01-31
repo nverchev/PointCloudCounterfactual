@@ -146,6 +146,7 @@ class TransformerEncoder(BasePointEncoder):
         memory = self.proj_input(x)
         x = self.transformer_codes(queries, memory)
         x = self.compress(x)
+        x = torch.nn.functional.normalize(x, dim=-1)
         return x.view(batch, self.w_dim)
 
 

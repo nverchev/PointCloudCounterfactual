@@ -2,9 +2,10 @@
 
 import torch
 import torch.distributed as dist
+import torch.nn as nn
 
 from src.config import Experiment
-from src.utils.neighbour_ops import pykeops_square_distance
+from src.utils.neighbour_ops import pykeops_cosine_similarity
 
 
 class VectorQuantizer:
@@ -24,11 +25,11 @@ class VectorQuantizer:
         batch, _ = x.size()
         x_flat = x.view(batch * self.n_codes, 1, self.embedding_dim)
         book_repeated = codebook.repeat(batch, 1, 1)
-        dist = pykeops_square_distance(x_flat, book_repeated)
-        idx_flat = dist.argmin(axis=2)
+        cos = pykeops_cosine_similarity(x_flat, book_repeated)
+        idx_flat = cos.argmax(axis=2)
         idx = idx_flat.view(batch, self.n_codes)
         embeddings = self._get_embeddings(idx_flat, book_repeated)
-        dist_sum = dist.sum(1).view(batch, self.n_codes, self.book_size)
+        dist_sum = cos.sum(1).view(batch, self.n_codes, self.book_size)
         return embeddings, idx, dist_sum
 
     def _get_embeddings(self, idx_flat: torch.Tensor, book_repeated: torch.Tensor) -> torch.Tensor:

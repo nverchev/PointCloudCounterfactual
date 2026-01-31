@@ -72,21 +72,23 @@ def get_recon_loss() -> LossBase[Outputs, Targets]:
     cfg = Experiment.get_config()
     cfg_autoencoder = cfg.autoencoder
     recon_loss = cfg_autoencoder.objective.recon_loss
-    chamfer_loss = get_chamfer_loss()
     if recon_loss == ReconLosses.ChamferEMD and torch.cuda.is_available() and not cfg.user.cpu:
         return get_emd_loss() + get_chamfer_loss()
 
-    return chamfer_loss
+    return get_chamfer_loss()
 
 
 def get_embed_loss() -> LossBase[Outputs, Targets]:
     """Calculate mean squared error between quantized (w_q) and encoded (w_e) embeddings."""
     cfg_ae = Experiment.get_config().autoencoder
     c_embed = cfg_ae.objective.c_embedding
-    mse_loss = nn.MSELoss(reduction='none')
+    n_codes = cfg_ae.model.n_codes
+    embedding_dim = cfg_ae.model.embedding_dim
 
     def _embed_loss(out: Outputs, _not_used: Targets) -> torch.Tensor:
-        return mse_loss(out.word_approx, out.word_quantised).mean(dim=1)
+        embed_quant = out.word_quantised.view(-1, n_codes, embedding_dim)
+        embed_approx = out.word_approx.view(-1, n_codes, embedding_dim)
+        return 1 - (embed_approx * embed_quant).sum(2).mean(dim=1)
 
     return c_embed * Loss(_embed_loss, name='Embed. Loss')
 

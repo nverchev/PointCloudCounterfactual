@@ -1,5 +1,7 @@
 """Point cloud operations for nearest neighbor computations and graph feature extraction."""
 
+from typing import cast
+
 import pykeops  # type: ignore
 import torch
 
@@ -22,6 +24,14 @@ def pykeops_square_distance(t1: torch.Tensor, t2: torch.Tensor) -> LazyTensor:
     t2_lazy = LazyTensor(t2[:, None, :, :])
     dist = ((t1_lazy - t2_lazy) ** 2).sum(-1)
     return dist
+
+
+def pykeops_cosine_similarity(t1: torch.Tensor, t2: torch.Tensor) -> LazyTensor:
+    """Compute the squared distance between two point clouds using PyKeOps backend."""
+    t1_lazy = LazyTensor(t1[:, :, None, :])
+    t2_lazy = LazyTensor(t2[:, None, :, :])
+    sim = cast(LazyTensor, (t1_lazy * t2_lazy)).sum(-1)
+    return sim
 
 
 def torch_square_distance(t1: torch.Tensor, t2: torch.Tensor) -> torch.Tensor:
