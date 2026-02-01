@@ -185,6 +185,7 @@ class AutoEncoderConfig:
         embedding_dim (StrictlyPositiveInt): The length of the code embedding
         n_codes (StrictlyPositiveInt): The number of codes
         vq_noise (PositiveFloat): Quantity of noise to add when redistributing the codes
+        codebook_momentum (PositiveFloat): Momentum parameter for the codebook update
         w_dim (StrictlyPositiveInt): The codeword length
     """
 
@@ -196,6 +197,7 @@ class AutoEncoderConfig:
     embedding_dim: StrictlyPositiveInt
     n_codes: StrictlyPositiveInt
     vq_noise: PositiveFloat
+    codebook_momentum: PositiveFloat
 
     def __post_init__(self) -> None:
         """Calculate the word dimension."""

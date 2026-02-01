@@ -16,7 +16,7 @@ class VectorQuantizer:
         self.n_codes: int = cfg_ae_model.n_codes
         self.embedding_dim: int = cfg_ae_model.embedding_dim
         self.book_size: int = cfg_ae_model.book_size
-        self.momentum = 0.9
+        self.momentum = cfg_ae_model.codebook_momentum
         return
 
     def quantize(self, x: torch.Tensor, codebook: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:

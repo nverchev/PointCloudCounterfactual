@@ -9,6 +9,12 @@ params:
       low: 0.1
       high: 10
 
+  autoencoder.model.codebook_momentum:
+    suggest: suggest_float
+    settings:
+      low: 0.9
+      high: 0.99
+
   autoencoder.objective.c_embedding:
     suggest: suggest_float
     settings:
