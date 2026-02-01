@@ -53,24 +53,28 @@ class DiscreteSpaceOptimizer:
         """Optimize codebook usage by reassigning unused entries."""
         self.model_runner(store_outputs=True)
         if dist.is_initialized() and dist.get_rank() != 0:
-            return
+            dist.broadcast(self.module.codebook.data, 0)
 
-        zeros = torch.zeros(self.n_codes, self.book_size)
-        codebook_usage = sum((out.one_hot_idx.sum(0) for out in self.model_runner.outputs_list), zeros)
-        unused_mask = codebook_usage == 0
-        usage_pct = (~unused_mask).float().mean() * 100
-        logging.info('Codebook usage: %.2f%%', usage_pct)
-        for code in range(self.n_codes):
-            usage_freq = codebook_usage[code].float()
-            prob = (usage_freq / usage_freq.sum()).cpu().numpy()
-            dead_indices = torch.where(unused_mask[code])[0]
-            # Re-allocating dead embeddings
-            for code_idx in dead_indices:
-                sampled_idx = np.random.choice(self.book_size, p=prob)
-                template = self.module.codebook.data[code, sampled_idx]
-                codebook_std = self.module.codebook.data[code].std()
-                noise = torch.randn_like(template) * codebook_std * self.vq_noise
-                self.module.codebook.data[code, code_idx] = template + noise
+        with torch.no_grad():
+            zeros = torch.zeros(self.n_codes, self.book_size)
+            codebook_usage = sum((out.one_hot_idx.sum(0) for out in self.model_runner.outputs_list), zeros)
+            unused_mask = codebook_usage == 0
+            usage_pct = (~unused_mask).float().mean() * 100
+            logging.info('Codebook usage: %.2f%%', usage_pct)
+            for code in range(self.n_codes):
+                usage_freq = codebook_usage[code].float()
+                prob = (usage_freq / usage_freq.sum()).cpu().numpy()
+                dead_indices = torch.where(unused_mask[code])[0]
+                # Re-allocating dead embeddings
+                for code_idx in dead_indices:
+                    sampled_idx = np.random.choice(self.book_size, p=prob)
+                    template = self.module.codebook.data[code, sampled_idx]
+                    codebook_std = self.module.codebook.data[code].std()
+                    noise = torch.randn_like(template) * codebook_std * self.vq_noise
+                    self.module.codebook.data[code, code_idx] = template + noise
+
+        if dist.is_initialized():
+            dist.broadcast(self.module.codebook.data, 0)
 
         return
 
