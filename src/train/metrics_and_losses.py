@@ -48,7 +48,7 @@ def torch_chamfer(t1: torch.Tensor, t2: torch.Tensor) -> torch.Tensor:
 
 def get_emd_loss() -> LossBase[Outputs, Targets]:
     """Calculate earthmover's distance between two point clouds using PyTorch backend."""
-    criterion = samples_loss.SamplesLoss(loss='sinkhorn', p=2, blur=0.2, debias=False, scaling=0.4)
+    criterion = samples_loss.SamplesLoss(loss='sinkhorn', p=2, blur=0.001, debias=False, scaling=0.4)
 
     def _emd(out: Outputs, targets: Targets) -> torch.Tensor:
         return criterion(out.recon, targets.ref_cloud)
