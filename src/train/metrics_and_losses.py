@@ -48,7 +48,7 @@ def torch_chamfer(t1: torch.Tensor, t2: torch.Tensor) -> torch.Tensor:
 
 def get_emd_loss() -> LossBase[Outputs, Targets]:
     """Calculate earthmover's distance between two point clouds using PyTorch backend."""
-    criterion = samples_loss.SamplesLoss(loss='sinkhorn', p=2, blur=0.001, debias=False, scaling=0.4)
+    criterion = samples_loss.SamplesLoss(loss='sinkhorn', p=2, blur=0.0005, debias=False, scaling=0.4)
 
     def _emd(out: Outputs, targets: Targets) -> torch.Tensor:
         return criterion(out.recon, targets.ref_cloud)
@@ -74,7 +74,7 @@ def get_recon_loss() -> LossBase[Outputs, Targets]:
     recon_loss = cfg_autoencoder.objective.recon_loss
     chamfer_loss = get_chamfer_loss()
     if recon_loss == ReconLosses.ChamferEMD and torch.cuda.is_available() and not cfg.user.cpu:
-        return get_emd_loss()
+        return get_emd_loss() + get_chamfer_loss()
 
     return chamfer_loss
 
