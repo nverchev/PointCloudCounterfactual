@@ -54,7 +54,7 @@ class DiscreteSpaceOptimizer:
         self.model_runner(store_outputs=True)
 
         with torch.no_grad():
-            if not dist.is_initialized() or dist.get_rank() != 0:
+            if not dist.is_initialized() or dist.get_rank() == 0:
                 zeros = torch.zeros(self.n_codes, self.book_size)
                 codebook_usage = sum((out.one_hot_idx.sum(0) for out in self.model_runner.outputs_list), zeros)
                 unused_mask = codebook_usage == 0
