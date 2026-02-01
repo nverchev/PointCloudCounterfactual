@@ -77,12 +77,15 @@ def tune(tune_cfg: DictConfig):
     """Set up the study and launch the optimization."""
     set_tuning_logging()
     pathlib.Path(tune_cfg.db_location).mkdir(exist_ok=True)
-    pruner = optuna.pruners.MedianPruner(
-        n_startup_trials=tune_cfg.tune.n_startup_trials,
-        n_warmup_steps=tune_cfg.tune.n_warmup_steps,
-        interval_steps=tune_cfg.tune.interval_steps,
-        n_min_trials=tune_cfg.tune.n_min_trials,
-    )
+    if tune_cfg.tune.use_pruner:
+        pruner = optuna.pruners.MedianPruner(
+            n_startup_trials=tune_cfg.tune.n_startup_trials,
+            n_warmup_steps=tune_cfg.tune.n_warmup_steps,
+            interval_steps=tune_cfg.tune.interval_steps,
+            n_min_trials=tune_cfg.tune.n_min_trials,
+        )
+    else:
+        pruner = optuna.pruners.NopPruner()
     sampler = optuna.samplers.GPSampler(warn_independent_sampling=False)
     study_name = get_study_name(tune_cfg.tune.study_name, tune_cfg.overrides)
     study = optuna.create_study(
