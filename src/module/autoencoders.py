@@ -85,6 +85,7 @@ class BaseVQVAE(BaseAutoencoder, abc.ABC, Generic[WA]):
 
     _null_tensor = torch.empty(0)
     _zero_tensor = torch.tensor(0.0)
+    codebook: torch.Tensor
 
     def __init__(self):
         super().__init__()
@@ -92,7 +93,8 @@ class BaseVQVAE(BaseAutoencoder, abc.ABC, Generic[WA]):
         self.n_codes: int = cfg_ae_model.n_codes
         self.book_size: int = cfg_ae_model.book_size
         self.embedding_dim: int = cfg_ae_model.embedding_dim
-        self.codebook = nn.Parameter(torch.randn(self.n_codes, self.book_size, self.embedding_dim), requires_grad=False)
+        codebook = nn.Parameter(torch.randn(self.n_codes, self.book_size, self.embedding_dim), requires_grad=False)
+        self.register_buffer('codebook', codebook)
         self.w_autoencoder: WA = self._init_w_autoencoder()
         for param in self.w_autoencoder.parameters():
             param.requires_grad = False  # separate training for W autoencoder

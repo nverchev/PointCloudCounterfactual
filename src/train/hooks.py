@@ -73,8 +73,8 @@ class DiscreteSpaceOptimizer:
                     noise = torch.randn_like(template) * codebook_std * self.vq_noise
                     self.module.codebook.data[code, code_idx] = template + noise
 
-        if dist.is_initialized():
-            dist.broadcast(self.module.codebook.data, 0)
+            if dist.is_initialized():
+                dist.broadcast(self.module.codebook.data, 0)
 
         return
 
