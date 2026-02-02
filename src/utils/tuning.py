@@ -3,6 +3,7 @@
 import numpy as np
 import optuna
 import yaml
+from omegaconf import DictConfig, OmegaConf
 from optuna import visualization
 
 from src.config import VERSION, ConfigPath
@@ -44,6 +45,30 @@ def impute_failed_trial(trial: optuna.Trial) -> float:
     return worst_fn(past_final_values)
 
 
+def get_study_name(tuning_scheme: str, overrides: list[str]) -> str:
+    """Get the study name from the configuration."""
+    version = f'v{VERSION}'
+    with (ConfigPath.CONFIGS.get_path() / 'defaults').with_suffix('.yaml').open() as f:
+        loaded_cfg = yaml.safe_load(f)
+        variation = loaded_cfg['variation']
+
+    override_iter = map(_remove_base_specification, overrides)
+    override_iter = map(_remove_configuration_dir, override_iter)
+    return '_'.join([version, variation, *override_iter, tuning_scheme])
+
+
+def log_study_settings(study: optuna.Study, tune_cfg: DictConfig) -> None:
+    """Log the study settings."""
+    cfg_dict = OmegaConf.to_container(tune_cfg, resolve=True)
+    if not isinstance(cfg_dict, dict):
+        raise ValueError('The tuning configuration must be a dictionary.')
+
+    for key, value in cfg_dict.items():
+        study.set_user_attr(str(key), value)
+
+    return
+
+
 def visualize_study(study: optuna.Study, renderer: str) -> None:
     """Visualize the optimization study."""
     visualization.plot_optimization_history(study).show(renderer=renderer)
@@ -54,12 +79,9 @@ def visualize_study(study: optuna.Study, renderer: str) -> None:
     return
 
 
-def get_study_name(tuning_scheme: str, overrides: list[str]) -> str:
-    """Get the study name from the configuration."""
-    version = f'v{VERSION}'
-    with (ConfigPath.CONFIGS.get_path() / 'defaults').with_suffix('.yaml').open() as f:
-        loaded_cfg = yaml.safe_load(f)
-        variation = loaded_cfg['variation']
+def _remove_base_specification(override: str) -> str:
+    return override.rsplit('.', maxsplit=1)[-1]
 
-    overrides_repr = (override.rsplit('.', maxsplit=1)[-1].rsplit('/', maxsplit=1)[-1] for override in overrides)
-    return '_'.join([version, variation, *overrides_repr, tuning_scheme])
+
+def _remove_configuration_dir(override: str) -> str:
+    return override.rsplit('/', maxsplit=1)[-1]

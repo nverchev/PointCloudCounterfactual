@@ -7,8 +7,8 @@ params:
   autoencoder.train.learn.learning_rate:
     suggest: suggest_float
     settings:
-      low: 0.5e-04
-      high: 0.5e-03
+      low: 5e-04
+      high: 5e-03
 
   autoencoder.train.learn.scheduler.warmup_steps:
     suggest: suggest_int

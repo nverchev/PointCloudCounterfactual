@@ -15,7 +15,7 @@ from drytorch.contrib.optuna import get_final_value, suggest_overrides
 from drytorch.core.exceptions import ConvergenceError
 
 from src.config import ConfigPath, Experiment, get_config_all, set_tuning_logging
-from src.utils.tuning import impute_failed_trial, impute_pruned_trial, get_study_name
+from src.utils.tuning import impute_failed_trial, impute_pruned_trial, get_study_name, log_study_settings
 
 from train_autoencoder import train_autoencoder
 
@@ -26,8 +26,9 @@ def set_objective(tune_cfg: DictConfig) -> Callable[[optuna.Trial], float]:
     def objective(trial: optuna.Trial) -> float:
         """Set up the experiment and launches the training cycle."""
         overrides = suggest_overrides(tune_cfg, trial)
-        cfg = get_config_all(overrides)
-        exp = Experiment(cfg, name=cfg.name, par_dir=cfg.user.path.version_dir, tags=cfg.tags)
+        trial_cfg = get_config_all(overrides)
+        trial_cfg.autoencoder.train.n_epochs = tune_cfg.n_epochs
+        exp = Experiment(trial_cfg, name=trial_cfg.name, par_dir=trial_cfg.user.path.version_dir, tags=trial_cfg.tags)
         with exp.create_run(record=False):
             try:
                 train_autoencoder(trial=trial)
@@ -66,6 +67,7 @@ def main(tune_cfg: DictConfig):
     study = optuna.create_study(
         study_name=study_name, storage=tune_cfg.storage, sampler=sampler, pruner=pruner, load_if_exists=True
     )
+    log_study_settings(study, tune_cfg)
     study.optimize(set_objective(tune_cfg), n_trials=tune_cfg.tune.n_trials)
     plot_param_importances(study).show(renderer=tune_cfg.renderer)
     return

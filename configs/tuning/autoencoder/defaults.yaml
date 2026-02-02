@@ -4,5 +4,5 @@ defaults:
   - tune: learn
 
 db_name: autoencoder_optimization
-overrides:
-  - autoencoder.train.n_epochs=100
+overrides: []
+n_epochs: 100

@@ -18,7 +18,7 @@ from drytorch.core.register import register_model, unregister_model
 
 from src.module import CounterfactualVQVAE, get_classifier
 from src.config import ConfigPath, Experiment, get_config_all, set_tuning_logging
-from src.utils.tuning import impute_failed_trial, impute_pruned_trial, get_study_name
+from src.utils.tuning import impute_failed_trial, impute_pruned_trial, get_study_name, log_study_settings
 
 from train_w_autoencoder import train_w_autoencoder
 
@@ -43,6 +43,7 @@ def set_objective(tune_cfg: DictConfig) -> Callable[[optuna.Trial], float]:
     def _objective(trial: optuna.Trial) -> float:
         overrides = suggest_overrides(tune_cfg, trial)
         trial_cfg = get_config_all(overrides)
+        trial_cfg.w_autoencoder.train.n_epochs = tune_cfg.n_epochs
         trial_exp = Experiment(trial_cfg, name='Trial', par_dir=trial_cfg.user.path.version_dir, tags=overrides)
 
         # uses overridden settings for the architecture of the w_autoencoder
@@ -91,6 +92,7 @@ def tune(tune_cfg: DictConfig):
     study = optuna.create_study(
         study_name=study_name, storage=tune_cfg.storage, sampler=sampler, pruner=pruner, load_if_exists=True
     )
+    log_study_settings(study, tune_cfg)
     study.optimize(set_objective(tune_cfg), n_trials=tune_cfg.tune.n_trials)
     plot_param_importances(study).show(renderer=tune_cfg.renderer)
     return
