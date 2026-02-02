@@ -30,9 +30,6 @@ def train_w_autoencoder(
     cfg_user = cfg.user
     module = vqvae.w_autoencoder
     w_encoder_model = ModelEpoch(module, name=cfg_w_ae.model.name)
-    if not cfg_user.load_checkpoint:
-        module.recursive_reset_parameters()
-
     module.update_codebook(vqvae.codebook.detach().clone())
     for param in module.parameters():
         param.requires_grad = True

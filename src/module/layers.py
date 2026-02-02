@@ -25,14 +25,6 @@ type NormClass = Callable[[int], nn.Module]
 
 
 @runtime_checkable
-class CanReset(Protocol):
-    """Protocol for classes that can be reset to their initial state."""
-
-    def reset_parameters(self) -> None:
-        """Reset parameters of the layer."""
-
-
-@runtime_checkable
 class HasInplace(Protocol):
     """Protocol for classes that have an inplace option."""
 
@@ -227,6 +219,28 @@ class EdgeConvLayer(BaseLayer):
 Layer = TypeVar('Layer', bound=BaseLayer)
 
 
+class ProjectionLayer(nn.Module):
+    """A layer that projects the input to a different dimension."""
+
+    def __init__(self, in_dim: int, out_dim: int) -> None:
+        """Initialize the projection layer."""
+        super().__init__()
+        self.in_dim = in_dim
+        self.out_dim = out_dim
+        return
+
+    def forward(self, x: Tensor) -> Tensor:
+        """Forward pass."""
+        if self.in_dim > self.out_dim:
+            return torch.cat([t.mean(1, keepdim=True) for t in torch.chunk(x, self.out_dim, dim=1)], dim=1)
+
+        if self.in_dim == self.out_dim:
+            return x
+
+        factor = self.in_dim / self.out_dim
+        return x.repeat_interleave(self.out_dim // self.in_dim + 1, 1)[:, : self.out_dim, ...] * factor
+
+
 class BaseResBlock(nn.Module, Generic[Layer], abc.ABC):
     """A block of a neural network consisting of a sequence of layers."""
 
@@ -293,8 +307,7 @@ class LinearResBlock(BaseResBlock[LinearLayer]):
     @classmethod
     @override
     def get_projection(cls, in_dim: int, out_dim: int) -> nn.Module:
-        projection = nn.Linear(in_dim, out_dim, bias=False)
-        nn.init.eye_(projection.weight)
+        projection = ProjectionLayer(in_dim, out_dim)
         return projection
 
 
@@ -311,8 +324,7 @@ class PointsConvResBlock(BaseResBlock[PointsConvLayer]):
     @classmethod
     @override
     def get_projection(cls, in_dim: int, out_dim: int) -> nn.Module:
-        projection = nn.Conv1d(in_dim, out_dim, kernel_size=1, bias=False)
-        nn.init.eye_(projection.weight[:, :, 0])
+        projection = ProjectionLayer(in_dim, out_dim)
         return projection
 
 
@@ -329,8 +341,7 @@ class EdgeConvResBlock(BaseResBlock[EdgeConvLayer]):
     @classmethod
     @override
     def get_projection(cls, in_dim: int, out_dim: int) -> nn.Module:
-        projection = nn.Conv2d(in_dim, out_dim, kernel_size=1, bias=False)
-        nn.init.eye_(projection.weight[:, :, 0, 0])
+        projection = ProjectionLayer(in_dim, out_dim)
         return projection
 
 
@@ -705,13 +716,3 @@ def frozen_forward(network: nn.Module, x: torch.Tensor) -> Any:
         p.requires_grad_(req)
 
     return output
-
-
-def reset_child_params(module: nn.Module) -> None:
-    """Reset all parameters of a module and its children."""
-    for layer in module.children():
-        if isinstance(layer, CanReset):
-            layer.reset_parameters()
-
-        reset_child_params(layer)
-        return

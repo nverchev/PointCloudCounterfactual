@@ -14,7 +14,7 @@ from src.module.decoders import get_decoder
 from src.module.encoders import get_encoder
 from src.module.quantize import VectorQuantizer
 from src.module.w_autoencoders import BaseWAutoEncoder, WAutoEncoder, CounterfactualWAutoEncoder
-from src.module.layers import TransferGrad, reset_child_params
+from src.module.layers import TransferGrad
 
 WA = TypeVar('WA', bound=BaseWAutoEncoder, covariant=True)
 
@@ -37,11 +37,6 @@ class AbstractAutoEncoder(nn.Module, abc.ABC):
     @abc.abstractmethod
     def forward(self, inputs: Inputs) -> Outputs:
         """Forward pass."""
-
-    def recursive_reset_parameters(self) -> None:
-        """Reset all parameters."""
-        reset_child_params(self)
-        return
 
 
 class Oracle(AbstractAutoEncoder):

@@ -14,7 +14,7 @@ from src.data.structures import Outputs, WInputs
 from src.module.w_decoders import get_w_decoder
 from src.module.w_conditional import ConditionalPrior, get_conditional_w_encoder
 from src.module.w_encoders import get_w_encoder
-from src.module.layers import reset_child_params, TemperatureScaledSoftmax
+from src.module.layers import TemperatureScaledSoftmax
 from src.module.quantize import VectorQuantizer
 
 
@@ -100,14 +100,6 @@ class BaseWAutoEncoder(nn.Module, metaclass=abc.ABCMeta):
         self, z1_bias: torch.Tensor, batch_size: int = 1, probs: torch.Tensor | None = None
     ) -> Outputs:
         """Generate discrete latent space samples from the continuous prior distribution."""
-
-    def recursive_reset_parameters(self):
-        """Reset all parameters."""
-        if self.pseudo_manager:
-            self.pseudo_manager.initialize_inputs()
-
-        reset_child_params(self)
-        return
 
     def update_codebook(self, codebook: torch.Tensor) -> None:
         """Update codebook tensor."""
