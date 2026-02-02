@@ -231,14 +231,19 @@ class ProjectionLayer(nn.Module):
 
     def forward(self, x: Tensor) -> Tensor:
         """Forward pass."""
-        if self.in_dim > self.out_dim:
-            return torch.cat([t.mean(1, keepdim=True) for t in torch.chunk(x, self.out_dim, dim=1)], dim=1)
+        if x.shape[1] != self.in_dim:
+            raise ValueError(f'Input dimension {x.shape[1]} does not match expected dimension {self.in_dim}')
 
         if self.in_dim == self.out_dim:
             return x
 
-        factor = self.in_dim / self.out_dim
-        return x.repeat_interleave(self.out_dim // self.in_dim + 1, 1)[:, : self.out_dim, ...] * factor
+        if self.in_dim > self.out_dim:
+            out = torch.cat([t.sum(1, keepdim=True) for t in torch.chunk(x, self.out_dim, dim=1)], dim=1)
+        else:
+            out = x.repeat_interleave(self.out_dim // self.in_dim + 1, 1)[:, : self.out_dim, ...]
+
+        var_adjust = math.sqrt(self.in_dim / self.out_dim)
+        return out * var_adjust
 
 
 class BaseResBlock(nn.Module, Generic[Layer], abc.ABC):
@@ -286,12 +291,12 @@ class BaseResBlock(nn.Module, Generic[Layer], abc.ABC):
     def get_layer(
         cls, in_dim: int, out_dim: int, act_cls: ActClass | None, norm_cls: NormClass | None, n_groups_layer: int
     ) -> Layer:
-        """Get the layer"""
+        """Get the layer instance."""
 
     @classmethod
-    @abc.abstractmethod
     def get_projection(cls, in_dim: int, out_dim: int) -> nn.Module:
         """Get a projection layer"""
+        return ProjectionLayer(in_dim, out_dim)
 
 
 class LinearResBlock(BaseResBlock[LinearLayer]):
@@ -304,12 +309,6 @@ class LinearResBlock(BaseResBlock[LinearLayer]):
     ) -> LinearLayer:
         return LinearLayer(in_dim, out_dim, act_cls, norm_cls, n_groups_layer)
 
-    @classmethod
-    @override
-    def get_projection(cls, in_dim: int, out_dim: int) -> nn.Module:
-        projection = ProjectionLayer(in_dim, out_dim)
-        return projection
-
 
 class PointsConvResBlock(BaseResBlock[PointsConvLayer]):
     """A block of a neural network consisting of a sequence of points convolution layers."""
@@ -321,12 +320,6 @@ class PointsConvResBlock(BaseResBlock[PointsConvLayer]):
     ) -> PointsConvLayer:
         return PointsConvLayer(in_dim, out_dim, act_cls, norm_cls, n_groups_layer)
 
-    @classmethod
-    @override
-    def get_projection(cls, in_dim: int, out_dim: int) -> nn.Module:
-        projection = ProjectionLayer(in_dim, out_dim)
-        return projection
-
 
 class EdgeConvResBlock(BaseResBlock[EdgeConvLayer]):
     """A block of a neural network consisting of a sequence of edge convolution layers."""
@@ -337,12 +330,6 @@ class EdgeConvResBlock(BaseResBlock[EdgeConvLayer]):
         cls, in_dim: int, out_dim: int, act_cls: ActClass | None, norm_cls: NormClass | None, n_groups_layer: int
     ) -> EdgeConvLayer:
         return EdgeConvLayer(in_dim, out_dim, act_cls, norm_cls, n_groups_layer)
-
-    @classmethod
-    @override
-    def get_projection(cls, in_dim: int, out_dim: int) -> nn.Module:
-        projection = ProjectionLayer(in_dim, out_dim)
-        return projection
 
 
 class TransformerEncoderLayer(nn.Module):
