@@ -77,7 +77,7 @@ class TransformerWEncoder(BaseWEncoder):
         self.input_proj = LinearLayer(self.embedding_dim, self.proj_dim)
         self.positional_encoding = nn.Parameter(torch.randn(1, self.n_codes, self.proj_dim))
         self.transformer = TransformerEncoder(
-            in_dim=self.proj_dim,
+            embedding_dim=self.proj_dim,
             n_heads=self.n_heads,
             feedforward_dim=self.feedforward_dim,
             act_cls=self.act_cls,

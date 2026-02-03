@@ -115,7 +115,7 @@ class TransformerEncoder(BasePointEncoder):
         self.proj_codes = LinearLayer(self.embedding_dim, self.proj_dim, act_cls=self.act_cls)
         self.proj_input = LinearLayer(IN_CHAN, self.proj_dim, act_cls=self.act_cls)
         self.transformer_codes = TransformerDecoder(
-            in_dim=self.proj_dim,
+            embedding_dim=self.proj_dim,
             n_heads=self.n_heads,
             hidden_dim=self.feedforward_dim,
             dropout_rate=self.transformer_dropout,

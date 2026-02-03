@@ -74,7 +74,7 @@ class TransformerWDecoder(BaseWDecoder):
         self.positional_embedding = nn.Parameter(torch.randn(1, self.n_codes, self.proj_dim))
         self.memory_positional_embedding = nn.Parameter(torch.randn(1, self.n_codes, self.proj_dim))
         self.transformer = TransformerDecoder(
-            in_dim=self.proj_dim,
+            embedding_dim=self.proj_dim,
             n_heads=self.n_heads,
             hidden_dim=self.feedforward_dim,
             dropout_rate=self.transformer_dropout,

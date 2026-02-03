@@ -238,7 +238,7 @@ class ProjectionLayer(nn.Module):
             return x
 
         if self.in_dim > self.out_dim:
-            out = torch.cat([t.sum(1, keepdim=True) for t in torch.chunk(x, self.out_dim, dim=1)], dim=1)
+            out = torch.cat([t.mean(1, keepdim=True) for t in torch.chunk(x, self.out_dim, dim=1)], dim=1)
         else:
             out = x.repeat_interleave(self.out_dim // self.in_dim + 1, 1)[:, : self.out_dim, ...]
 
@@ -336,40 +336,31 @@ class TransformerEncoderLayer(nn.Module):
     """Transformer encoder layer.
 
     Args:
-        in_dim: input embedding dimension
+        embedding_dim: input embedding dimension
         n_heads: Number of attention heads
         hidden_dim: Dimension of the hidden layer in the feedforward network
         act_cls: Activation class for feedforward network
         dropout_rate: Dropout probability
-        out_dim: The number of output embeddings. Defaults to in_dim
-        use_residual: Whether to use residual connections
     """
 
     def __init__(
         self,
-        in_dim: int,
+        embedding_dim: int,
         n_heads: int,
         hidden_dim: int,
         act_cls: ActClass,
         dropout_rate: float,
-        out_dim: int | None = None,
-        use_residual: bool = True,
     ) -> None:
         super().__init__()
-        self.in_dim = in_dim
-        self.out_dim = out_dim if out_dim is not None else in_dim
+        self.embedding_dim = embedding_dim
         self.n_heads = n_heads
         self.dim_feedforward = hidden_dim
         self.dropout_p = dropout_rate
-        self.use_residual = use_residual
-        if self.out_dim != self.in_dim and self.use_residual:
-            raise ValueError('Output dimension must be equal to input dimension if residual connections are used')
-
-        self.self_attn = nn.MultiheadAttention(in_dim, n_heads, dropout=dropout_rate, batch_first=True)
-        self.linear1 = LinearLayer(in_dim, hidden_dim, act_cls=act_cls, use_trunc_init=True)
-        self.linear2 = LinearLayer(hidden_dim, self.out_dim, use_trunc_init=True)
-        self.norm1 = nn.LayerNorm(in_dim)
-        self.norm2 = nn.LayerNorm(self.out_dim)
+        self.self_attn = nn.MultiheadAttention(embedding_dim, n_heads, dropout=dropout_rate, batch_first=True)
+        self.linear1 = LinearLayer(embedding_dim, hidden_dim, act_cls=act_cls, use_trunc_init=True)
+        self.linear2 = LinearLayer(hidden_dim, self.embedding_dim, use_trunc_init=True)
+        self.norm1 = nn.LayerNorm(embedding_dim)
+        self.norm2 = nn.LayerNorm(self.embedding_dim)
         self.dropout1 = nn.Dropout(dropout_rate)
         self.dropout2 = nn.Dropout(dropout_rate)
         return
@@ -381,15 +372,16 @@ class TransformerEncoderLayer(nn.Module):
         src_key_padding_mask: torch.Tensor | None = None,
     ) -> torch.Tensor:
         """Forward pass."""
-        x = self.norm1(x)
-        y = self.self_attn(x, x, x, attn_mask=src_mask, key_padding_mask=src_key_padding_mask, need_weights=False)[0]
+        # Self-attention block
+        y = self.norm1(x)
+        y = self.self_attn(y, y, y, attn_mask=src_mask, key_padding_mask=src_key_padding_mask, need_weights=False)[0]
         y = self.dropout1(y)
         y = x + y
+
+        # Feedforward block
         z = self.norm2(y)
         z = self.linear2(self.dropout2(self.linear1(z)))
-        if self.use_residual:
-            z = y + z
-
+        z = y + z
         return z
 
 
@@ -397,43 +389,34 @@ class TransformerDecoderLayer(nn.Module):
     """Transformer decoder layer.
 
     Args:
-        in_dim: input embedding dimension
+        embedding_dim: input embedding dimension
         n_heads: Number of attention heads
         hidden_dim: Dimension of the hidden layer in the feedforward network
         act_cls: Activation class for feedforward network
         dropout_rate: Dropout probability
-        out_dim: The number of output embeddings. Defaults to in_dim
-        use_residual: Whether to use residual connections
     """
 
     def __init__(
         self,
-        in_dim: int,
+        embedding_dim: int,
         n_heads: int,
         hidden_dim: int,
         act_cls: ActClass,
         dropout_rate: float,
-        out_dim: int | None = None,
-        use_residual: bool = True,
     ) -> None:
         super().__init__()
-        self.in_dim = in_dim
-        self.out_dim = out_dim if out_dim is not None else in_dim
+        self.embedding_dim = embedding_dim
         self.n_heads = n_heads
         self.dim_feedforward = hidden_dim
         self.dropout_p = dropout_rate
-        self.use_residual = use_residual
-        if self.out_dim != self.in_dim and self.use_residual:
-            raise ValueError('Output dimension must be equal to input dimension if residual connections are used')
-
-        self.self_attn = nn.MultiheadAttention(in_dim, n_heads, dropout=dropout_rate, batch_first=True)
-        self.cross_attn = nn.MultiheadAttention(in_dim, n_heads, dropout=dropout_rate, batch_first=True)
-        self.linear1 = LinearLayer(in_dim, hidden_dim, act_cls=act_cls, use_trunc_init=True)
-        self.linear2 = LinearLayer(hidden_dim, self.out_dim, use_trunc_init=True)
-        self.memory_norm = nn.LayerNorm(in_dim)
-        self.norm1 = nn.LayerNorm(in_dim)
-        self.norm2 = nn.LayerNorm(in_dim)
-        self.norm3 = nn.LayerNorm(self.out_dim)
+        self.self_attn = nn.MultiheadAttention(embedding_dim, n_heads, dropout=dropout_rate, batch_first=True)
+        self.cross_attn = nn.MultiheadAttention(embedding_dim, n_heads, dropout=dropout_rate, batch_first=True)
+        self.linear1 = LinearLayer(embedding_dim, hidden_dim, act_cls=act_cls, use_trunc_init=True)
+        self.linear2 = LinearLayer(hidden_dim, self.embedding_dim, use_trunc_init=True)
+        self.memory_norm = nn.LayerNorm(embedding_dim)
+        self.norm1 = nn.LayerNorm(embedding_dim)
+        self.norm2 = nn.LayerNorm(embedding_dim)
+        self.norm3 = nn.LayerNorm(self.embedding_dim)
         self.dropout1 = nn.Dropout(dropout_rate)
         self.dropout2 = nn.Dropout(dropout_rate)
         self.dropout3 = nn.Dropout(dropout_rate)
@@ -448,42 +431,26 @@ class TransformerDecoderLayer(nn.Module):
         tgt_key_padding_mask: torch.Tensor | None = None,
         memory_key_padding_mask: torch.Tensor | None = None,
     ) -> torch.Tensor:
-        """Forward pass.
-
-        Args:
-            x: Target input tensor of shape (batch, tgt_seq_len, in_dim)
-            memory: Encoder output tensor of shape (batch, src_seq_len, in_dim)
-            tgt_mask: Attention mask for the target sequence (typically causal mask)
-            memory_mask: Attention mask for the encoder output
-            tgt_key_padding_mask: Padding mask for the target sequence
-            memory_key_padding_mask: Padding mask for the encoder output
-
-        Returns:
-            Output tensor of shape (batch, tgt_seq_len, out_dim)
-        """
+        """Forward pass"""
         # Self-attention block
-        x = self.norm1(x)
-        y = self.self_attn(x, x, x, attn_mask=tgt_mask, key_padding_mask=tgt_key_padding_mask, need_weights=False)[0]
+        y = self.norm1(x)
+        y = self.self_attn(y, y, y, attn_mask=tgt_mask, key_padding_mask=tgt_key_padding_mask, need_weights=False)[0]
         y = self.dropout1(y)
-        if self.use_residual:
-            y = x + y
+        y = x + y
 
         # Cross-attention block
         memory = self.memory_norm(memory)
-        y = self.norm2(y)
+        z = self.norm2(y)
         z = self.cross_attn(
-            y, memory, memory, attn_mask=memory_mask, key_padding_mask=memory_key_padding_mask, need_weights=False
+            z, memory, memory, attn_mask=memory_mask, key_padding_mask=memory_key_padding_mask, need_weights=False
         )[0]
         z = self.dropout2(z)
-        if self.use_residual:
-            z = y + z
+        z = y + z
 
         # Feedforward block
-        z = self.norm3(z)
-        w = self.linear2(self.dropout3(self.linear1(z)))
-        if self.use_residual:
-            w = z + w
-
+        w = self.norm3(z)
+        w = self.linear2(self.dropout3(self.linear1(w)))
+        w = z + w
         return w
 
 
@@ -491,46 +458,39 @@ class TransformerEncoder(nn.Module):
     """Stack of transformer encoder layers.
 
     Args:
-        in_dim: Input embedding dimension
+        embedding_dim: Input embedding dimension
         n_heads: Number of attention heads
         feedforward_dim: Dimension of the hidden layer in the feedforward network
         act_cls: Activation class for feedforward network
         dropout_rate: Dropout probability
         n_layers: Number of encoder layers to stack
-        out_dim: The number of output embeddings. Defaults to in_dim
-        use_residual: Whether to use residual connections
         use_final_norm: Whether to apply normalization after all layers
     """
 
     def __init__(
         self,
-        in_dim: int,
+        embedding_dim: int,
         n_heads: int,
         feedforward_dim: int,
         act_cls: ActClass,
         dropout_rate: float,
         n_layers: int,
-        out_dim: int | None = None,
-        use_residual: bool = True,
         use_final_norm: bool = False,
     ) -> None:
         super().__init__()
-        self.out_dim = out_dim if out_dim is not None else in_dim
         self.layers = nn.ModuleList(
             [
                 TransformerEncoderLayer(
-                    in_dim=in_dim,
+                    embedding_dim=embedding_dim,
                     n_heads=n_heads,
                     hidden_dim=feedforward_dim,
                     act_cls=act_cls,
                     dropout_rate=dropout_rate,
-                    out_dim=self.out_dim,
-                    use_residual=use_residual,
                 )
                 for _ in range(n_layers)
             ]
         )
-        self.norm = nn.LayerNorm(self.out_dim) if use_final_norm else None
+        self.norm = nn.LayerNorm(embedding_dim) if use_final_norm else None
         return
 
     def forward(
@@ -553,46 +513,39 @@ class TransformerDecoder(nn.Module):
     """Stack of transformer decoder layers.
 
     Args:
-        in_dim: Input embedding dimension
+        embedding_dim: Input embedding dimension
         n_heads: Number of attention heads
         hidden_dim: Dimension of the hidden layer in the feedforward network
         act_cls: Activation class for feedforward network
         dropout_rate: Dropout probability
         n_layers: Number of decoder layers to stack
-        out_dim: The number of output embeddings. Defaults to in_dim.
-        use_residual: Whether to use residual connections
         use_final_norm: Whether to apply normalization after all layers
     """
 
     def __init__(
         self,
-        in_dim: int,
+        embedding_dim: int,
         n_heads: int,
         hidden_dim: int,
         act_cls: ActClass,
         dropout_rate: float,
         n_layers: int,
-        out_dim: int | None = None,
-        use_residual: bool = True,
         use_final_norm: bool = False,
     ) -> None:
         super().__init__()
-        self.out_dim = out_dim if out_dim is not None else in_dim
         self.layers = nn.ModuleList(
             [
                 TransformerDecoderLayer(
-                    in_dim=in_dim,
+                    embedding_dim=embedding_dim,
                     n_heads=n_heads,
                     hidden_dim=hidden_dim,
                     act_cls=act_cls,
                     dropout_rate=dropout_rate,
-                    out_dim=self.out_dim,
-                    use_residual=use_residual,
                 )
                 for _ in range(n_layers)
             ]
         )
-        self.norm = nn.LayerNorm(self.out_dim) if use_final_norm else None
+        self.norm = nn.LayerNorm(embedding_dim) if use_final_norm else None
         return
 
     def forward(
