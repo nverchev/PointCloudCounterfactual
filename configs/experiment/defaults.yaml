@@ -1,11 +1,12 @@
 defaults:
   - all_config
-  - autoencoder: autoencoder_exp
   - classifier: classifier_exp
-  - user: user_settings
+  - autoencoder: autoencoder_exp
+  - diffusion: diffusion_exp
   - w_autoencoder: w_autoencoder_exp
   - data: default_data
+  - user: user_settings
   - _self_
 
-variation: development
+variation: diffusion
 final: false

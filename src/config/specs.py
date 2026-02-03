@@ -26,6 +26,8 @@ from src.config.options import (
     ReconLosses,
     WConditionalEncoders,
     Classifiers,
+    Diffusion,
+    DiffusionSchedulers,
 )
 
 PositiveInt = Annotated[int, Field(ge=0)]
@@ -203,6 +205,29 @@ class AutoEncoderConfig:
         """Calculate the word dimension."""
         self.w_dim = self.embedding_dim * self.n_codes
         return
+
+
+@dataclass
+class DiffusionConfig:
+    """Configuration for the diffusion model.
+
+    Attributes:
+        class_name (Diffusion): The type of model head
+        decoder (Decoders): The network used for the diffusion process
+        beta_start (PositiveFloat): The starting beta value
+        beta_end (PositiveFloat): The ending beta value
+        n_timesteps (StrictlyPositiveInt): The number of timesteps
+        schedule_type (str): The type of schedule (linear, cosine)
+        name (str): The name of the model
+    """
+
+    class_name: Diffusion
+    decoder: DecoderConfig
+    beta_start: PositiveFloat
+    beta_end: PositiveFloat
+    n_timesteps: StrictlyPositiveInt
+    schedule_type: DiffusionSchedulers
+    name: str
 
 
 @dataclass
@@ -557,6 +582,26 @@ class AutoEncoderExperimentConfig(ExperimentConfig):
 
 
 @dataclass
+class DiffusionExperimentConfig(ExperimentConfig):
+    """Specification for the autoencoder experimental part.
+
+    Attributes:
+        name (str): The name of the experiment part
+        train (TrainingConfig): Training options
+        model (AutoEncoderConfig): The autoencoder architecture configuration
+        objective (ObjectiveAEConfig): The autoencoder objective (loss and metrics) configuration
+        diagnose_every (StrictlyPositiveInt): The number of points between diagnostics (rearranging the discrete space)
+        n_training_output_points (StrictlyPositiveInt): The number of output points during training (0: same as input)
+
+    """
+
+    model: DiffusionConfig
+    objective: ObjectiveAEConfig
+    diagnose_every: StrictlyPositiveInt
+    n_training_output_points: StrictlyPositiveInt
+
+
+@dataclass
 class WAutoEncoderExperimentConfig(ExperimentConfig):
     """Specification for the w-autoencoder experimental part.
 
@@ -585,13 +630,14 @@ class AllConfig:
         data (DataConfig): Data pre-processing configuration
     """
 
-    variation: str
-    final: bool
     classifier: ClassifierExperimentConfig
     autoencoder: AutoEncoderExperimentConfig
+    diffusion: DiffusionExperimentConfig
     w_autoencoder: WAutoEncoderExperimentConfig
     user: UserSettings
     data: DataConfig
+    variation: str
+    final: bool
     tags: list[str] = dataclasses.field(default_factory=list)
     version = f'v{VERSION}'
 

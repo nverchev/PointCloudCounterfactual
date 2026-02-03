@@ -262,3 +262,13 @@ def get_autoencoder_loss() -> LossBase[Outputs, Targets]:
         return get_recon_loss() + get_embed_loss()
 
     return get_recon_loss()
+
+
+def get_diffusion_loss() -> LossBase[Outputs, Targets]:
+    """Get diffusion loss (MSE between predicted and actual noise)."""
+    mse = nn.MSELoss(reduction='none')
+
+    def _mse(out: Outputs, _: Targets) -> torch.Tensor:
+        return mse(out.pred_epsilon, out.epsilon)
+
+    return Loss(_mse, name='MSE')

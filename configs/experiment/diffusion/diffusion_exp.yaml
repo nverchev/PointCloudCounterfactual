@@ -1,0 +1,9 @@
+defaults:
+  - model: diffusion
+  - objective: chamfer_emd
+  - train: default_train
+  - _self_
+
+name: diffusion
+diagnose_every: 10
+n_training_output_points: ${data.n_input_points}

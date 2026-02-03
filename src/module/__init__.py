@@ -7,14 +7,17 @@ from src.module.classifier import get_classifier
 from src.module.w_autoencoders import CounterfactualWAutoEncoder
 from src.module.w_decoders import get_w_decoder
 from src.module.w_encoders import get_w_encoder
+from src.module.diffusion import get_diffusion_module, DiffusionModel
 
 __all__ = [
     'BaseVQVAE',
     'CounterfactualVQVAE',
     'CounterfactualWAutoEncoder',
+    'DiffusionModel',
     'get_autoencoder',
     'get_classifier',
     'get_decoder',
+    'get_diffusion_module',
     'get_encoder',
     'get_w_decoder',
     'get_w_encoder',

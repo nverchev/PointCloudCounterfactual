@@ -1,0 +1,12 @@
+class_name: PCGen
+sample_dim: 3  # has to be fixed to 3 for diffusion to work
+n_components: 1
+n_heads: 8
+map_dims: [ 64 ]
+proj_dim: 256
+conv_dims: [ 1024 ]
+feedforward_dim: 1024
+n_transformer_layers: 5
+transformer_dropout: 0.0
+tau: 5
+filter: False

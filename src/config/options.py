@@ -52,6 +52,12 @@ class AutoEncoders(enum.StrEnum):
     CounterfactualVQVAE = enum.auto()
 
 
+class Diffusion(enum.StrEnum):
+    """Diffusion classes."""
+
+    Diffusion = enum.auto()
+
+
 class Classifiers(enum.StrEnum):
     """Classifier classes."""
 
@@ -83,6 +89,13 @@ class Schedulers(enum.StrEnum):
     Constant = enum.auto()
     Cosine = enum.auto()
     Exponential = enum.auto()
+
+
+class DiffusionSchedulers(enum.StrEnum):
+    """Diffusion scheduler names."""
+
+    Linear = enum.auto()
+    Cosine = enum.auto()
 
 
 class ReconLosses(enum.StrEnum):
