@@ -6,6 +6,7 @@ import itertools
 import math
 import pdb
 import sys
+import warnings
 
 from collections.abc import Callable
 from typing import Any, Protocol, cast, override, runtime_checkable, TypeVar, Generic
@@ -29,6 +30,22 @@ class HasInplace(Protocol):
     """Protocol for classes that have an inplace option."""
 
     inplace: bool
+
+
+@runtime_checkable
+class HasResetParamPublic(Protocol):
+    """Protocol for classes that support resetting the parameters."""
+
+    def reset_parameters(self) -> None:
+        """Reset the parameters of the module."""
+
+
+@runtime_checkable
+class HasResetParamPrivate(Protocol):
+    """Protocol for classes that support resetting the parameters."""
+
+    def _reset_parameters(self) -> None:
+        """Reset the parameters of the module."""
 
 
 @runtime_checkable
@@ -78,19 +95,19 @@ class BaseLayer(nn.Module, metaclass=abc.ABCMeta):
         out_dim: The number of output features
         act_cls: An optional callable for the output activation of the output
         norm_cls: An optional callable for normalization on the output (before the activation)
-        n_groups_dense: The number of groups for the dense layer. Default is 1.
-        use_trunc_init: Whether to initialize the weights of the dense layer very close to zero.
+        n_groups_layer: The number of groups for the layer. Default is 1.
+        use_trunc_init: Whether to initialize the weights of the layer very close to zero.
 
     Attributes:
         in_dim (int): The number of input features
         out_dim (int): The number of output features
-        n_groups_dense (int): The number of groups for the dense layer
+        n_groups_layer (int): The number of groups for the layer
         use_bias (bool): A boolean value indicating whether the bias term is in the layer (and no normalization)
         module (nn.Module): The wrapped layer of the neural network
         norm (nn.Module): A boolean value indicating whether to add grouped normalization on the output
         act (Optional[nn.Module]): The activation function applied to the output
-        init_weight (Callable[[torch.Tensor], torch.Tensor]): The initialization function for the dense layer's weights
-        init_bias (Callable[[torch.Tensor], torch.Tensor]): The initialization function for the dense layer's bias
+        init_weight_fn (Callable[[torch.Tensor], torch.Tensor]): The initialization function for the layer's weights
+        init_bias_fn (Callable[[torch.Tensor], torch.Tensor]): The initialization function for the layer's bias
 
     """
 
@@ -100,30 +117,37 @@ class BaseLayer(nn.Module, metaclass=abc.ABCMeta):
         out_dim: int,
         act_cls: ActClass | None = None,
         norm_cls: NormClass | None = None,
-        n_groups_dense: int = 1,
+        n_groups_layer: int = 1,
         use_trunc_init: bool = False,
     ) -> None:
         super().__init__()
         self.in_dim: int = in_dim
         self.out_dim: int = out_dim
-        self.n_groups_dense: int = n_groups_dense
+        self.n_groups_layer: int = n_groups_layer
         self.use_bias: bool = True if norm_cls is None else False
         self.module = self.get_module()
         self.norm = self.get_norm_layer(norm_cls, out_dim)
         self.act = self.get_activation(act_cls)
         self.use_trunc_init: bool = use_trunc_init
-        self.init_weight = self.get_init_weight(self.act, use_trunc_init)
-        self.init_bias = self.get_init_bias(use_trunc_init)
-        self.init_weight(cast(torch.Tensor, self.module.weight))
-        if self.norm is None:
-            self.init_bias(cast(torch.Tensor, self.module.bias))
-        else:
-            self.init_bias(cast(torch.Tensor, self.norm.bias))
+        self.init_weight_fn = self.get_init_weight(self.act, use_trunc_init)
+        self.init_bias_fn = self.get_init_bias(use_trunc_init)
+        self.reset_parameters()
 
         if DEBUG_MODE:
             self.register_forward_hook(debug_check)
             self.register_full_backward_hook(debug_check)
 
+        return
+
+    def reset_parameters(self) -> None:
+        """(Re)-Initialize the weights and bias of the layer."""
+        self.init_weight_fn(cast(torch.Tensor, self.module.weight))
+        if self.norm is None:
+            self.init_bias_fn(cast(torch.Tensor, self.module.bias))
+            return
+
+        _reset_parameters_or_warn(self.norm)
+        self.init_bias_fn(cast(torch.Tensor, self.norm.bias))
         return
 
     @abc.abstractmethod
@@ -196,7 +220,7 @@ class BaseLayer(nn.Module, metaclass=abc.ABCMeta):
 class LinearLayer(BaseLayer):
     @override
     def get_module(self) -> nn.Module:
-        if self.n_groups_dense > 1:
+        if self.n_groups_layer > 1:
             raise NotImplementedError('nn.Linear has no option for groups')
 
         return nn.Linear(self.in_dim, self.out_dim, bias=self.use_bias)
@@ -206,14 +230,14 @@ class LinearLayer(BaseLayer):
 class PointsConvLayer(BaseLayer):
     @override
     def get_module(self) -> nn.Module:
-        return nn.Conv1d(self.in_dim, self.out_dim, kernel_size=1, bias=self.use_bias, groups=self.n_groups_dense)
+        return nn.Conv1d(self.in_dim, self.out_dim, kernel_size=1, bias=self.use_bias, groups=self.n_groups_layer)
 
 
 # Input (Batch, Points, Features, Features)
 class EdgeConvLayer(BaseLayer):
     @override
     def get_module(self) -> nn.Module:
-        return nn.Conv2d(self.in_dim, self.out_dim, kernel_size=1, bias=self.use_bias, groups=self.n_groups_dense)
+        return nn.Conv2d(self.in_dim, self.out_dim, kernel_size=1, bias=self.use_bias, groups=self.n_groups_layer)
 
 
 Layer = TypeVar('Layer', bound=BaseLayer)
@@ -270,13 +294,7 @@ class BaseResBlock(nn.Module, Generic[Layer], abc.ABC):
             else:
                 self.projections.append(self.get_projection(in_dim, out_dim))
 
-        with torch.no_grad():
-            for layer in self.layers:
-                if isinstance(layer.module, Weighted):
-                    layer.module.weight.mul_(1 / math.sqrt(len(dims) - 1))
-                    if layer.module.bias is not None:
-                        layer.module.bias.mul_(0)
-
+        self._adjust_variance_init()
         return
 
     def forward(self, x: Tensor) -> Tensor:
@@ -285,6 +303,14 @@ class BaseResBlock(nn.Module, Generic[Layer], abc.ABC):
             x = self.projections[i](x) + layer(x)
 
         return x
+
+    def reset_parameters(self) -> None:
+        """(Re)-Initialize the weights and bias of the layer."""
+        for layer in self.layers:
+            _reset_parameters_or_warn(layer)
+
+        self._adjust_variance_init()
+        return
 
     @classmethod
     @abc.abstractmethod
@@ -297,6 +323,16 @@ class BaseResBlock(nn.Module, Generic[Layer], abc.ABC):
     def get_projection(cls, in_dim: int, out_dim: int) -> nn.Module:
         """Get a projection layer"""
         return ProjectionLayer(in_dim, out_dim)
+
+    def _adjust_variance_init(self) -> None:
+        with torch.no_grad():
+            for layer in self.layers:
+                if isinstance(layer.module, Weighted):
+                    layer.module.weight.mul_(1 / math.sqrt(len(self.dims) - 1))
+                    if layer.module.bias is not None:
+                        layer.module.bias.mul_(0)
+
+        return
 
 
 class LinearResBlock(BaseResBlock[LinearLayer]):
@@ -365,6 +401,15 @@ class TransformerEncoderLayer(nn.Module):
         self.dropout2 = nn.Dropout(dropout_rate)
         return
 
+    def reset_parameters(self) -> None:
+        """Reset all learnable parameters."""
+        _reset_parameters_or_warn(self.self_attn)
+        self.linear1.reset_parameters()
+        self.linear2.reset_parameters()
+        _reset_parameters_or_warn(self.norm1)
+        _reset_parameters_or_warn(self.norm2)
+        return
+
     def forward(
         self,
         x: torch.Tensor,
@@ -420,6 +465,18 @@ class TransformerDecoderLayer(nn.Module):
         self.dropout1 = nn.Dropout(dropout_rate)
         self.dropout2 = nn.Dropout(dropout_rate)
         self.dropout3 = nn.Dropout(dropout_rate)
+        return
+
+    def reset_parameters(self) -> None:
+        """Reset all learnable parameters."""
+        _reset_parameters_or_warn(self.self_attn)
+        _reset_parameters_or_warn(self.cross_attn)
+        self.linear1.reset_parameters()
+        self.linear2.reset_parameters()
+        _reset_parameters_or_warn(self.memory_norm)
+        _reset_parameters_or_warn(self.norm1)
+        _reset_parameters_or_warn(self.norm2)
+        _reset_parameters_or_warn(self.norm3)
         return
 
     def forward(
@@ -493,6 +550,16 @@ class TransformerEncoder(nn.Module):
         self.norm = nn.LayerNorm(embedding_dim) if use_final_norm else None
         return
 
+    def reset_parameters(self) -> None:
+        """Reset all learnable parameters."""
+        for layer in self.layers:
+            _reset_parameters_or_warn(layer)
+
+        if self.norm is not None:
+            _reset_parameters_or_warn(self.norm)
+
+        return
+
     def forward(
         self,
         x: torch.Tensor,
@@ -546,6 +613,16 @@ class TransformerDecoder(nn.Module):
             ]
         )
         self.norm = nn.LayerNorm(embedding_dim) if use_final_norm else None
+        return
+
+    def reset_parameters(self) -> None:
+        """Reset all learnable parameters."""
+        for layer in self.layers:
+            _reset_parameters_or_warn(layer)
+
+        if self.norm is not None:
+            _reset_parameters_or_warn(self.norm)
+
         return
 
     def forward(
@@ -656,3 +733,16 @@ def frozen_forward(network: nn.Module, x: torch.Tensor) -> Any:
         p.requires_grad_(req)
 
     return output
+
+
+def _reset_parameters_or_warn(module: nn.Module) -> None:
+    if isinstance(module, HasResetParamPublic):
+        module.reset_parameters()
+        return
+
+    if isinstance(module, HasResetParamPrivate):
+        module._reset_parameters()
+        return
+
+    warnings.warn(f'Module {module.__class__.__name__} does not implement reset_parameters().', stacklevel=3)
+    return

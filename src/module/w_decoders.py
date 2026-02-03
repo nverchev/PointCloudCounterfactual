@@ -54,7 +54,7 @@ class LinearWDecoder(BaseWDecoder):
                 act_cls=self.act_cls,
                 norm_cls=self.norm_cls,
             ),
-            PointsConvLayer(self.conv_dims[-1], self.w_dim, n_groups_dense=self.n_codes),
+            PointsConvLayer(self.conv_dims[-1], self.w_dim, n_groups_layer=self.n_codes),
         )
         return
 
