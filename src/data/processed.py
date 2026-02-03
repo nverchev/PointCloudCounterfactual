@@ -43,7 +43,9 @@ class ProcessedDataset(Generic[VQ], abc.ABC, metaclass=AbstractSingleton):
 
     def _get_data(self, index_list: list[int]) -> Generator[tuple[Inputs, torch.Tensor]]:
         """Common data loading logic."""
-        batch_data = [self.dataset[i] for i in index_list]
+        with torch.inference_mode():
+            batch_data = [self.dataset[i] for i in index_list]
+
         batched_cloud = torch.stack([data[0].cloud for data in batch_data]).to(self.device)
         batched_labels = torch.cat([data[1].label.unsqueeze(0) for data in batch_data]).to(self.device)
         for i in range(0, len(index_list), self.max_batch):
