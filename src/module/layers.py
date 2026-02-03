@@ -746,3 +746,34 @@ def _reset_parameters_or_warn(module: nn.Module) -> None:
 
     warnings.warn(f'Module {module.__class__.__name__} does not implement reset_parameters().', stacklevel=3)
     return
+
+
+def reset_parameters_recursive(module: nn.Module, warn: bool = False) -> None:
+    """Recursively reset parameters for all submodules.
+
+    Args:
+        module: The module to reset parameters for, along with all its submodules
+        warn: Whether to warn about modules without reset methods
+    """
+    if isinstance(module, HasResetParamPublic):
+        module.reset_parameters()
+        return
+
+    if isinstance(module, HasResetParamPrivate):
+        module._reset_parameters()
+        return
+
+    # Check if this is a leaf module (has parameters but no children)
+    has_params = any(True for _ in module.parameters(recurse=False))
+    has_children = any(True for _ in module.children())
+    if has_params and not has_children and warn:
+        warnings.warn(
+            f'Leaf module {module.__class__.__name__} has parameters but does not implement reset_parameters().',
+            stacklevel=2,
+        )
+
+    # Recurse into children
+    for child in module.children():
+        reset_parameters_recursive(child, warn=warn)
+
+    return
