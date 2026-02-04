@@ -51,20 +51,20 @@ class ShapenetFlowSplit(PointCloudDataset):
             if self.resample:
                 index_pool = np.arange(np_cloud.shape[0])
                 sampled_indices = np.random.choice(index_pool, size=self.input_points, replace=self.replace)
-                np_cloud = np_cloud[sampled_indices]
+                np_input_cloud = np_cloud[sampled_indices]
             else:
-                np_cloud = np_cloud[: self.input_points]
+                np_input_cloud = np_cloud[: self.input_points]
 
-            np_cloud = normalise(np_cloud)[0]
-            cloud = torch.from_numpy(np_cloud)
-            cloud = self.jitter(cloud)
+            np_input_cloud = normalise(np_input_cloud)[0]
+            input_cloud = torch.from_numpy(np_input_cloud)
+            input_cloud = self.jitter(input_cloud)
             ref_cloud = torch.from_numpy(normalise(np_cloud[: self.input_points])[0])
-            cloud, ref_cloud, *_ = self.augment([cloud, ref_cloud])
+            input_cloud, ref_cloud, *_ = self.augment([input_cloud, ref_cloud])
 
         else:
-            ref_cloud = cloud = torch.from_numpy(np_cloud[: self.input_points])
+            ref_cloud = input_cloud = torch.from_numpy(np_cloud[: self.input_points])
 
-        return Inputs(cloud=cloud), Targets(ref_cloud=ref_cloud, label=label)
+        return Inputs(cloud=input_cloud), Targets(ref_cloud=ref_cloud, label=label)
 
 
 class ShapeNetFlowDataset(SplitCreator):
