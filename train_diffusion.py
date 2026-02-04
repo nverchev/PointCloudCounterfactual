@@ -89,7 +89,7 @@ def setup_and_train(cfg: AllConfig) -> None:
     for tracker in trackers:
         exp.trackers.subscribe(tracker)
 
-    with exp.create_run(resume=True):
+    with exp.create_run(resume=False):
         train_diffusion()
 
     return

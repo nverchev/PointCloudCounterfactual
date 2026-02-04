@@ -50,8 +50,8 @@ class DiffusionModel(nn.Module):
     def _get_beta_schedule(self):
         if self.schedule_type == DiffusionSchedulers.Linear:
             return torch.linspace(self.beta_start, self.beta_end, self.n_timesteps)
+
         elif self.schedule_type == DiffusionSchedulers.Cosine:
-            # Cosine schedule as proposed in https://arxiv.org/abs/2102.09672
             s = 0.008
             steps = self.n_timesteps + 1
             x = torch.linspace(0, self.n_timesteps, steps)
@@ -59,18 +59,11 @@ class DiffusionModel(nn.Module):
             alphas_cumprod = alphas_cumprod / alphas_cumprod[0]
             betas = 1 - (alphas_cumprod[1:] / alphas_cumprod[:-1])
             return torch.clip(betas, 0.0001, 0.9999)
-        else:
-            raise ValueError(f'Unknown schedule type: {self.schedule_type}')
+
+        raise ValueError(f'Unknown schedule type: {self.schedule_type}')
 
     def forward(self, inputs: Inputs) -> Outputs:
-        """Forward pass for training (noise prediction).
-
-        Args:
-            inputs: Input point cloud data.
-
-        Returns:
-            Outputs object containing predicted noise and actual noise.
-        """
+        """Forward pass for training (noise prediction)."""
         x_0 = inputs.cloud  # [B, N, 3]
         device = x_0.device
         batch_size = x_0.shape[0]
@@ -81,31 +74,23 @@ class DiffusionModel(nn.Module):
         # Sample noise
         epsilon = torch.randn_like(x_0)
 
-        # Get noisy image
-        sqrt_alphas_cum_prod_t = self.sqrt_alphas_cum_prod[t].view(batch_size, 1, 1)
-        sqrt_one_minus_alphas_cum_prod_t = self.sqrt_one_minus_alphas_cum_prod[t].view(batch_size, 1, 1)
+        # Noise schedule terms
+        sqrt_alpha_bar_t = self.sqrt_alphas_cum_prod[t].view(batch_size, 1, 1)
+        sqrt_one_minus_alpha_bar_t = self.sqrt_one_minus_alphas_cum_prod[t].view(batch_size, 1, 1)
 
-        x_t = sqrt_alphas_cum_prod_t * x_0 + sqrt_one_minus_alphas_cum_prod_t * epsilon
+        # Forward diffusion
+        x_t = sqrt_alpha_bar_t * x_0 + sqrt_one_minus_alpha_bar_t * epsilon
 
-        # Predict noise
-        # Normalize t to [0, 1] or similar for network embedding if needed
-        # In this simple implementation, passing raw t (or index)
-        # Note: network expects float t usually or int t.
-        # My MLP implementation expects float tensor for time embedding injection if it was continuous,
-        # but I used `t_embed = t.view...`. Wait, I should normalize t for the network.
-        # Let's pass normalized t:
-        t_float = t.float() / self.n_timesteps
+        # Normalized timestep for network
+        t_float = t.float()
 
+        # Network prediction (keep ε for now)
         pred_epsilon = self.network(x_t, t_float, self.n_output_points)
 
-        # Prepare outputs
-        data = Outputs()
-        data.pred_epsilon = pred_epsilon
-        data.epsilon = epsilon
-        # Set dummy recon just in case some logger tries to access it
-        data.recon = x_t
-
-        return data
+        out = Outputs()
+        out.v = sqrt_alpha_bar_t * epsilon - sqrt_one_minus_alpha_bar_t * x_0
+        out.pred_v = sqrt_alpha_bar_t * pred_epsilon - sqrt_one_minus_alpha_bar_t * x_0
+        return out
 
     @torch.no_grad()
     def sample(self, n_samples: int, n_points: int, device: torch.device) -> torch.Tensor:
@@ -114,7 +99,7 @@ class DiffusionModel(nn.Module):
 
         for i in reversed(range(self.n_timesteps)):
             t = torch.full((n_samples,), i, device=device, dtype=torch.long)
-            t_float = t.float() / self.n_timesteps
+            t_float = t.float()
 
             pred_epsilon = self.network(x, t_float, self.n_output_points)
 
@@ -135,5 +120,5 @@ class DiffusionModel(nn.Module):
 
 
 def get_diffusion_module() -> DiffusionModel:
-    """Get diffusion model according to the configuration."""
+    """Get the diffusion model according to the configuration."""
     return DiffusionModel()

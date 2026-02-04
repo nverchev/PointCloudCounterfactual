@@ -65,7 +65,7 @@ class PCGen(BasePointDecoder):
         self.group_final = nn.ModuleList()
         for _ in range(self.n_components):
             block = PointsConvResBlock(
-                [self.sample_dim, *self.conv_dims, self.proj_dim],
+                [self.w_dim, *self.conv_dims, self.proj_dim],
                 act_cls=self.act_cls,
                 norm_cls=self.norm_cls,
             )
@@ -105,7 +105,6 @@ class PCGen(BasePointDecoder):
 
         for group in range(self.n_components):
             x_group = self.group_conv[group](x)
-            # x_group = self.group_proj[group](x_group)
             group_atts.append(x_group)
             x_group = x_group.transpose(2, 1)
             x_group = self.group_transformer[group](x_group, memory=memory)
@@ -141,8 +140,8 @@ class PCGen(BasePointDecoder):
         x = self._initialize_sampling(batch, n_output_points, device, initial_sampling)
 
         # Map and join with latent code
-        # x = self.map_sample(x)
-        # x = self._join_operation(x, w)
+        x = self.map_sample(x)
+        x = self._join_operation(x, w)
 
         # Process component groups
         memory = self.proj_w(w.view(batch, self.n_codes, self.embedding_dim)) + self.memory_positional_encoding
