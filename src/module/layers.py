@@ -374,7 +374,7 @@ class TransformerEncoderLayer(nn.Module):
     Args:
         embedding_dim: input embedding dimension
         n_heads: Number of attention heads
-        hidden_dim: Dimension of the hidden layer in the feedforward network
+        feedforward_dim: Dimension of the hidden layer in the feedforward network
         act_cls: Activation class for feedforward network
         dropout_rate: Dropout probability
     """
@@ -383,18 +383,18 @@ class TransformerEncoderLayer(nn.Module):
         self,
         embedding_dim: int,
         n_heads: int,
-        hidden_dim: int,
+        feedforward_dim: int,
         act_cls: ActClass,
         dropout_rate: float,
     ) -> None:
         super().__init__()
         self.embedding_dim = embedding_dim
         self.n_heads = n_heads
-        self.dim_feedforward = hidden_dim
+        self.dim_feedforward = feedforward_dim
         self.dropout_p = dropout_rate
         self.self_attn = nn.MultiheadAttention(embedding_dim, n_heads, dropout=dropout_rate, batch_first=True)
-        self.linear1 = LinearLayer(embedding_dim, hidden_dim, act_cls=act_cls, use_trunc_init=True)
-        self.linear2 = LinearLayer(hidden_dim, self.embedding_dim, use_trunc_init=True)
+        self.linear1 = LinearLayer(embedding_dim, feedforward_dim, act_cls=act_cls, use_trunc_init=True)
+        self.linear2 = LinearLayer(feedforward_dim, self.embedding_dim, use_trunc_init=True)
         self.norm1 = nn.LayerNorm(embedding_dim)
         self.norm2 = nn.LayerNorm(self.embedding_dim)
         self.dropout1 = nn.Dropout(dropout_rate)
@@ -436,7 +436,7 @@ class TransformerDecoderLayer(nn.Module):
     Args:
         embedding_dim: input embedding dimension
         n_heads: Number of attention heads
-        hidden_dim: Dimension of the hidden layer in the feedforward network
+        feedforward_dim: Dimension of the hidden layer in the feedforward network
         act_cls: Activation class for feedforward network
         dropout_rate: Dropout probability
     """
@@ -445,19 +445,19 @@ class TransformerDecoderLayer(nn.Module):
         self,
         embedding_dim: int,
         n_heads: int,
-        hidden_dim: int,
+        feedforward_dim: int,
         act_cls: ActClass,
         dropout_rate: float,
     ) -> None:
         super().__init__()
         self.embedding_dim = embedding_dim
         self.n_heads = n_heads
-        self.dim_feedforward = hidden_dim
+        self.dim_feedforward = feedforward_dim
         self.dropout_p = dropout_rate
         self.self_attn = nn.MultiheadAttention(embedding_dim, n_heads, dropout=dropout_rate, batch_first=True)
         self.cross_attn = nn.MultiheadAttention(embedding_dim, n_heads, dropout=dropout_rate, batch_first=True)
-        self.linear1 = LinearLayer(embedding_dim, hidden_dim, act_cls=act_cls, use_trunc_init=True)
-        self.linear2 = LinearLayer(hidden_dim, self.embedding_dim, use_trunc_init=True)
+        self.linear1 = LinearLayer(embedding_dim, feedforward_dim, act_cls=act_cls, use_trunc_init=True)
+        self.linear2 = LinearLayer(feedforward_dim, self.embedding_dim, use_trunc_init=True)
         self.memory_norm = nn.LayerNorm(embedding_dim)
         self.norm1 = nn.LayerNorm(embedding_dim)
         self.norm2 = nn.LayerNorm(embedding_dim)
@@ -540,7 +540,7 @@ class TransformerEncoder(nn.Module):
                 TransformerEncoderLayer(
                     embedding_dim=embedding_dim,
                     n_heads=n_heads,
-                    hidden_dim=feedforward_dim,
+                    feedforward_dim=feedforward_dim,
                     act_cls=act_cls,
                     dropout_rate=dropout_rate,
                 )
@@ -582,7 +582,7 @@ class TransformerDecoder(nn.Module):
     Args:
         embedding_dim: Input embedding dimension
         n_heads: Number of attention heads
-        hidden_dim: Dimension of the hidden layer in the feedforward network
+        feedforward_dim: Dimension of the hidden layer in the feedforward network
         act_cls: Activation class for feedforward network
         dropout_rate: Dropout probability
         n_layers: Number of decoder layers to stack
@@ -593,7 +593,7 @@ class TransformerDecoder(nn.Module):
         self,
         embedding_dim: int,
         n_heads: int,
-        hidden_dim: int,
+        feedforward_dim: int,
         act_cls: ActClass,
         dropout_rate: float,
         n_layers: int,
@@ -605,7 +605,7 @@ class TransformerDecoder(nn.Module):
                 TransformerDecoderLayer(
                     embedding_dim=embedding_dim,
                     n_heads=n_heads,
-                    hidden_dim=hidden_dim,
+                    feedforward_dim=feedforward_dim,
                     act_cls=act_cls,
                     dropout_rate=dropout_rate,
                 )

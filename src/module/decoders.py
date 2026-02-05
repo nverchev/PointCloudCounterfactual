@@ -73,7 +73,7 @@ class PCGen(BasePointDecoder):
             transformer_decoder = TransformerDecoder(
                 embedding_dim=self.proj_dim,
                 n_heads=self.n_heads,
-                hidden_dim=self.feedforward_dim,
+                feedforward_dim=self.feedforward_dim,
                 dropout_rate=self.transformer_dropout,
                 act_cls=self.act_cls,
                 n_layers=self.n_transformer_layers,
