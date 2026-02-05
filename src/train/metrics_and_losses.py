@@ -264,14 +264,12 @@ def get_autoencoder_loss() -> LossBase[Outputs, Targets]:
     return get_recon_loss()
 
 
-def get_diffusion_loss() -> LossBase[Outputs, Targets]:
-    """Diffusion loss using velocity (v-prediction)."""
+def get_diffusion_loss():
     mse = nn.MSELoss(reduction='none')
 
-    def _v_mse(out: Outputs, _: Targets) -> torch.Tensor:
-        loss = mse(out.pred_v, out.v)
-        # reduce over non-batch dimensions
+    def _epsilon_mse(out: Outputs, _: Targets) -> torch.Tensor:
+        loss = mse(out.pred_epsilon, out.epsilon)
         loss = loss.mean(dim=tuple(range(1, loss.ndim)))
         return loss
 
-    return Loss(_v_mse, name='v-MSE')
+    return Loss(_epsilon_mse, name='epsilon-MSE')

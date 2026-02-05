@@ -11,7 +11,7 @@ from src.data import get_datasets
 from src.module import get_diffusion_module
 from src.config import AllConfig, Experiment, get_trackers, hydra_main
 from src.train import get_diffusion_loss, get_learning_schema
-from src.train.metrics_and_losses import get_emd_loss, get_recon_loss
+from src.train.metrics_and_losses import get_recon_loss
 from src.utils.parallel import DistributedWorker
 
 
@@ -39,7 +39,7 @@ def train_diffusion(trial: Trial | None = None) -> None:
     learning_schema = get_learning_schema(cfg.diffusion)
     loss = get_diffusion_loss()
     trainer = Trainer(model, loader=train_loader, loss=loss, learning_schema=learning_schema)
-    test_all_metrics = Test(model, loader=test_loader, metric=loss | get_emd_loss())
+    test = Test(model, loader=test_loader, metric=loss)
     if cfg_user.load_checkpoint:
         trainer.load_checkpoint(cfg_user.load_checkpoint)
 
@@ -78,7 +78,7 @@ def train_diffusion(trial: Trial | None = None) -> None:
     if trial is None:
         trainer.save_checkpoint()
 
-    test_all_metrics()
+    test()
     return
 
 

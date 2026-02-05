@@ -42,6 +42,97 @@ class SinusoidalPositionalEmbedding(nn.Module):
         return embeddings
 
 
+class PointNetDiffusionWithGlobal(nn.Module):
+    """PointNet-style diffusion with global context (more powerful baseline)."""
+
+    def __init__(self):
+        super().__init__()
+        Experiment.get_config()
+
+        self.time_dim = 128
+        self.hidden_dim = 256
+
+        self.act_cls = nn.ReLU
+
+        # Time embedding
+        self.time_embed = nn.Sequential(
+            SinusoidalPositionalEmbedding(self.time_dim),
+            LinearLayer(self.time_dim, self.hidden_dim, act_cls=self.act_cls),
+            self.act_cls(),
+            LinearLayer(self.hidden_dim, self.hidden_dim),
+        )
+
+        # Point-wise encoder
+        self.point_encoder = nn.Sequential(
+            LinearLayer(3, 64, act_cls=self.act_cls),
+            self.act_cls(),
+            LinearLayer(64, 128, act_cls=self.act_cls),
+            self.act_cls(),
+            LinearLayer(128, self.hidden_dim),
+        )
+
+        # Global feature aggregation
+        self.global_pool = nn.Sequential(
+            LinearLayer(self.hidden_dim, self.hidden_dim, act_cls=self.act_cls),
+            self.act_cls(),
+        )
+
+        # Combine local, global, and time features
+        self.feature_combine = nn.Sequential(
+            LinearLayer(self.hidden_dim * 3, self.hidden_dim, act_cls=self.act_cls),
+            self.act_cls(),
+            LinearLayer(self.hidden_dim, self.hidden_dim, act_cls=self.act_cls),
+            self.act_cls(),
+        )
+
+        # Output head
+        self.output_head = nn.Sequential(
+            LinearLayer(self.hidden_dim, 128, act_cls=self.act_cls),
+            self.act_cls(),
+            LinearLayer(128, 64, act_cls=self.act_cls),
+            self.act_cls(),
+            LinearLayer(64, 3),
+        )
+
+    def forward(self, x: torch.Tensor, t: torch.Tensor, n_output_points: int) -> torch.Tensor:
+        """Forward pass with global context.
+
+        Args:
+            x: Noisy point cloud [B, N, 3]
+            t: Timesteps [B]
+            n_output_points: Number of output points
+
+        Returns:
+            Predicted noise/velocity [B, N, 3]
+        """
+        _batch_size, n_points, _ = x.shape
+
+        # Time embedding [B, hidden_dim]
+        t_emb = self.time_embed(t)
+
+        # Local point features [B, N, hidden_dim]
+        point_features = self.point_encoder(x)
+
+        # Global context via max pooling [B, hidden_dim]
+        global_features = self.global_pool(point_features)
+        global_features = torch.max(global_features, dim=1)[0]
+
+        # Broadcast time and global features [B, N, hidden_dim]
+        t_emb_expanded = t_emb.unsqueeze(1).expand(-1, n_points, -1)
+        global_expanded = global_features.unsqueeze(1).expand(-1, n_points, -1)
+
+        # Concatenate [B, N, hidden_dim * 3]
+        combined = torch.cat([point_features, global_expanded, t_emb_expanded], dim=-1)
+
+        # Process [B, N, hidden_dim]
+        features = self.feature_combine(combined)
+
+        # Output [B, N, 3]
+        output = self.output_head(features)
+
+        return output
+
+
 class PCGenDiffusion(nn.Module):
     """PointNet-like diffusion network."""
 
@@ -71,4 +162,4 @@ class PCGenDiffusion(nn.Module):
 
 def get_diffusion_network() -> nn.Module:
     """Get diffusion network according to the configuration."""
-    return PCGenDiffusion()
+    return PointNetDiffusionWithGlobal()
