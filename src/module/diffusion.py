@@ -70,7 +70,6 @@ class DiffusionModel(nn.Module):
 
         # Sample random timesteps (or fix for debugging)
         t = torch.randint(0, self.n_timesteps, (batch_size,), device=device).long()
-        # t = torch.ones(batch_size, device=device).long() * (self.n_timesteps // 2)  # Fixed for debug
 
         # Sample noise
         epsilon = torch.randn_like(x_0)

@@ -59,6 +59,7 @@ class PCGen(BasePointDecoder):
         modules.append(PointsConvLayer(self.map_dims[-1], self.w_dim, act_cls=nn.Hardtanh))
         self.map_sample = nn.Sequential(*modules)
         self.memory_positional_encoding = nn.Parameter(torch.randn(1, self.n_codes, self.proj_dim))
+        self.proj_sample = PointsConvLayer(self.sample_dim, self.proj_dim)
         self.proj_w = LinearLayer(self.embedding_dim, self.proj_dim)
         self.group_conv = nn.ModuleList()
         self.group_transformer = nn.ModuleList()
@@ -97,7 +98,7 @@ class PCGen(BasePointDecoder):
         return torch.randn(batch, self.sample_dim, n_output_points, device=device)
 
     def _process_component_groups(
-        self, x: torch.Tensor, memory: torch.Tensor
+        self, x: torch.Tensor, memory: torch.Tensor, sample: torch.Tensor
     ) -> tuple[torch.Tensor, list[torch.Tensor]]:
         """Process all component groups and return outputs and attention features."""
         xs_list = []
@@ -107,8 +108,10 @@ class PCGen(BasePointDecoder):
             x_group = self.group_conv[group](x)
             group_atts.append(x_group)
             x_group = x_group.transpose(2, 1)
-            x_group = self.group_transformer[group](x_group, memory=memory)
+            sample = sample.transpose(2, 1)
+            x_group = self.group_transformer[group](x_group, memory=sample)
             x_group = x_group.transpose(2, 1)
+            sample = sample.transpose(2, 1)
             x_group = self.group_final[group](x_group)
             xs_list.append(x_group)
 
@@ -137,15 +140,15 @@ class PCGen(BasePointDecoder):
         device = w.device
 
         # Initialize sampling points
-        x = self._initialize_sampling(batch, n_output_points, device, initial_sampling)
+        s = self._initialize_sampling(batch, n_output_points, device, initial_sampling)
 
         # Map and join with latent code
-        x = self.map_sample(x)
+        x = self.map_sample(s)
         x = self._join_operation(x, w)
 
         # Process component groups
         memory = self.proj_w(w.view(batch, self.n_codes, self.embedding_dim)) + self.memory_positional_encoding
-        xs, group_atts = self._process_component_groups(x, memory)
+        xs, group_atts = self._process_component_groups(x, memory, self.proj_sample(s))
 
         # Mix components with attention
         x = self._apply_attention_mixing(xs, group_atts)
