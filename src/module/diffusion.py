@@ -63,12 +63,12 @@ class DiffusionModel(nn.Module):
         raise ValueError(f'Unknown schedule type: {self.schedule_type}')
 
     def forward(self, inputs: Inputs) -> Outputs:
-        """Forward pass for training (epsilon prediction)."""
+        """Forward pass for training (velocity prediction)."""
         x_0 = inputs.cloud  # [B, N, 3]
         device = x_0.device
         batch_size = x_0.shape[0]
 
-        # Sample random timesteps (or fix for debugging)
+        # Sample timesteps
         t = torch.randint(0, self.n_timesteps, (batch_size,), device=device).long()
 
         # Sample noise
@@ -82,26 +82,36 @@ class DiffusionModel(nn.Module):
         x_t = sqrt_alpha_bar_t * x_0 + sqrt_one_minus_alpha_bar_t * epsilon
 
         # Normalized timestep
-        t_normalized = t.float() / self.n_timesteps
+        t_float = t.float() / self.n_timesteps
 
-        # Network prediction
-        pred_epsilon = self.network(x_t, t_normalized, self.n_output_points)
+        # Network prediction - OUTPUTS VELOCITY DIRECTLY
+        pred_v = self.network(x_t, t_float, self.n_output_points)
+
+        # Compute true velocity
+        v = sqrt_alpha_bar_t * epsilon - sqrt_one_minus_alpha_bar_t * x_0
 
         out = Outputs()
-        out.epsilon = epsilon
-        out.pred_epsilon = pred_epsilon
+        out.v = v
+        out.pred_v = pred_v
         return out
 
     @torch.no_grad()
     def sample(self, n_samples: int, n_points: int, device: torch.device) -> torch.Tensor:
-        """Sample using DDPM (epsilon prediction)."""
+        """Sample from the model."""
         x = torch.randn(n_samples, n_points, 3, device=device)
 
         for i in reversed(range(self.n_timesteps)):
             t = torch.full((n_samples,), i, device=device, dtype=torch.long)
-            t_normalized = t.float() / self.n_timesteps
+            t_float = t.float() / self.n_timesteps
 
-            pred_epsilon = self.network(x, t_normalized, n_points)
+            # Network outputs velocity directly
+            pred_v = self.network(x, t_float, self.n_output_points)
+
+            # Convert velocity to epsilon
+            sqrt_alpha_bar_t = self.sqrt_alphas_cum_prod[i]
+            sqrt_one_minus_alpha_bar_t = self.sqrt_one_minus_alphas_cum_prod[i]
+
+            pred_epsilon = sqrt_alpha_bar_t * pred_v + sqrt_one_minus_alpha_bar_t * x
 
             alpha = self.alphas[i]
             alpha_cum_prod = self.alphas_cum_prod[i]
@@ -113,7 +123,7 @@ class DiffusionModel(nn.Module):
                 noise = torch.zeros_like(x)
 
             x = (1 / torch.sqrt(alpha)) * (
-                x - ((1 - alpha) / torch.sqrt(1 - alpha_cum_prod)) * pred_epsilon
+                x - ((1 - alpha) / (torch.sqrt(1 - alpha_cum_prod))) * pred_epsilon
             ) + torch.sqrt(beta) * noise
 
         return x
