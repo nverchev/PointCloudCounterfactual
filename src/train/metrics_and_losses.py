@@ -268,8 +268,8 @@ def get_diffusion_loss():
     mse = nn.MSELoss(reduction='none')
 
     def _epsilon_mse(out: Outputs, _: Targets) -> torch.Tensor:
-        loss = mse(out.pred_epsilon, out.epsilon)
+        loss = mse(out.pred_v, out.v)
         loss = loss.mean(dim=tuple(range(1, loss.ndim)))
         return loss
 
-    return Loss(_epsilon_mse, name='epsilon-MSE')
+    return Loss(_epsilon_mse, name='v-MSE')

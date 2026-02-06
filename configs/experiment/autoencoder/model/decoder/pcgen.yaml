@@ -6,7 +6,7 @@ map_dims: [ 64 ]
 proj_dim: 256
 conv_dims: [ 1024 ]
 feedforward_dim: 1024
-n_transformer_layers: 10
+n_transformer_layers: 5
 transformer_dropout: 0.0
 tau: 5
 filter: False
