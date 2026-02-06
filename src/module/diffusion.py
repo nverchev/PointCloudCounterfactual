@@ -119,6 +119,105 @@ class DiffusionModel(nn.Module):
         return x
 
 
+class DiffusionAutoencoder(DiffusionModel):
+    """Diffusion Autoencoder Model."""
+
+    def __init__(self):
+        super().__init__()
+        from src.module.encoders import get_encoder
+
+        self.encoder = get_encoder()
+
+    def forward(self, inputs: Inputs) -> Outputs:
+        """Forward pass for training (noise prediction)."""
+        x_0 = inputs.cloud  # [B, N, 3]
+        device = x_0.device
+        batch_size = x_0.shape[0]
+
+        # Get latent representation
+        z = self.encoder(x_0)
+
+        # Sample timesteps
+        t = torch.randint(0, self.n_timesteps, (batch_size,), device=device).long()
+
+        # Sample noise
+        epsilon = torch.randn_like(x_0)
+
+        # Noise schedule terms
+        sqrt_alpha_bar_t = self.sqrt_alphas_cum_prod[t].view(batch_size, 1, 1)
+        sqrt_one_minus_alpha_bar_t = self.sqrt_one_minus_alphas_cum_prod[t].view(batch_size, 1, 1)
+
+        # Forward diffusion
+        x_t = sqrt_alpha_bar_t * x_0 + sqrt_one_minus_alpha_bar_t * epsilon
+
+        # Normalized timestep for network
+        t_float = t.float()
+
+        # Network prediction (keep ε for now) conditioned on z
+        pred_epsilon = self.network(x_t, t_float, self.n_output_points, w=z)
+
+        out = Outputs()
+        out.v = sqrt_alpha_bar_t * epsilon - sqrt_one_minus_alpha_bar_t * x_0
+        out.pred_v = sqrt_alpha_bar_t * pred_epsilon - sqrt_one_minus_alpha_bar_t * x_0
+        return out
+
+    def encode(self, inputs: Inputs) -> torch.Tensor:
+        """Encode input to latent representation."""
+        return self.encoder(inputs.cloud)
+
+    def decode(self, z: torch.Tensor, n_points: int, device: torch.device) -> torch.Tensor:
+        """Decode latent representation to point cloud."""
+        return self.sample(len(z), n_points, device, z=z)
+
+    @torch.no_grad()
+    def sample(
+        self, n_samples: int, n_points: int, device: torch.device, z: torch.Tensor | None = None
+    ) -> torch.Tensor:
+        """Sample from the model."""
+        assert z is not None, 'Latent vector z is required for DiffusionAutoencoder sampling'
+        x = torch.randn(n_samples, n_points, 3, device=device)
+
+        for i in reversed(range(self.n_timesteps)):
+            t = torch.full((n_samples,), i, device=device, dtype=torch.long)
+            t_float = t.float()
+
+            # Network output treated as velocity (pred_v) per user request
+            pred_v = self.network(x, t_float, self.n_output_points, w=z)
+
+            # Get schedule terms for current timestep
+            sqrt_alpha_bar_t = self.sqrt_alphas_cum_prod[i]
+            sqrt_one_minus_alpha_bar_t = self.sqrt_one_minus_alphas_cum_prod[i]
+
+            # Convert velocity to epsilon for standard update rule
+            # derived from: epsilon = sqrt(1-alpha_bar) * x + sqrt(alpha_bar) * v ??
+            # User formula: (sqrt_alpha_bar * v + sqrt_1_minus * x) / sqrt_1_minus
+            # This matches identity: epsilon = x + (sqrt_alpha_bar / sqrt_1_minus) * v
+            pred_epsilon = (sqrt_alpha_bar_t * pred_v + sqrt_one_minus_alpha_bar_t * x) / sqrt_one_minus_alpha_bar_t
+
+            alpha = self.alphas[i]
+            alpha_cum_prod = self.alphas_cum_prod[i]
+            beta = self.betas[i]
+
+            if i > 0:
+                noise = torch.randn_like(x)
+            else:
+                noise = torch.zeros_like(x)
+
+            x = (1 / torch.sqrt(alpha)) * (
+                x - ((1 - alpha) / (torch.sqrt(1 - alpha_cum_prod))) * pred_epsilon
+            ) + torch.sqrt(beta) * noise
+
+            # Dynamic thresholding to prevent explosion
+            x = x.clamp(-3.0, 3.0)
+
+        return x
+
+
 def get_diffusion_module() -> DiffusionModel:
     """Get the diffusion model according to the configuration."""
+    from src.config.options import Diffusion
+
+    cfg = Experiment.get_config()
+    if cfg.diffusion.model.class_name == Diffusion.DiffusionAutoencoder:
+        return DiffusionAutoencoder()
     return DiffusionModel()

@@ -56,6 +56,7 @@ class Diffusion(enum.StrEnum):
     """Diffusion classes."""
 
     Diffusion = enum.auto()
+    DiffusionAutoencoder = enum.auto()
 
 
 class Classifiers(enum.StrEnum):

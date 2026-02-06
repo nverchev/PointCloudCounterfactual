@@ -69,6 +69,30 @@ class PCGenDiffusion(nn.Module):
         return out.contiguous()
 
 
+class ConditionedPCGenDiffusion(PCGenDiffusion):
+    """PointNet-like diffusion network conditioned on a latent vector."""
+
+    def forward(
+        self, x: torch.Tensor, t: torch.Tensor, n_output_points: int, w: torch.Tensor | None = None
+    ) -> torch.Tensor:
+        """Forward pass.
+
+        Args:
+            x: Input point cloud.
+            t: Timestep.
+            n_output_points: Number of output points.
+            w: Latent vector.
+        """
+        assert w is not None, 'Latent vector w must be provided for conditioned diffusion.'
+        w_t = self.time_embed(t)
+        return self.pcgen(w_t + w, n_output_points, x.transpose(2, 1)).transpose(2, 1).contiguous()
+
+
 def get_diffusion_network() -> nn.Module:
     """Get diffusion network according to the configuration."""
+    from src.config.options import Diffusion
+
+    cfg = Experiment.get_config()
+    if cfg.diffusion.model.class_name == Diffusion.DiffusionAutoencoder:
+        return ConditionedPCGenDiffusion()
     return PCGenDiffusion()

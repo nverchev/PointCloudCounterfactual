@@ -8,5 +8,5 @@ defaults:
   - user: user_settings
   - _self_
 
-variation: diffusion
+variation: diffusion_autoencoder
 final: false
