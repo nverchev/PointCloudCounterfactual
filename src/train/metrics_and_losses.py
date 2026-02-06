@@ -245,6 +245,16 @@ def get_f1() -> Metric[torch.Tensor, Targets]:
     return Metric(_f1, name='F1_Score', higher_is_better=True)
 
 
+def get_diffusion_mse() -> Loss[Outputs, Targets]:
+    """Get MSE metric for diffusion."""
+    mse = nn.MSELoss(reduction='none')
+
+    def _mse(out: Outputs, _: Targets) -> torch.Tensor:
+        return mse(out.pred_v, out.v)
+
+    return Loss(_mse, name='v-MSE')
+
+
 def get_classification_loss() -> LossBase[torch.Tensor, Targets]:
     """Get combined classification loss and metrics."""
     return get_cross_entropy_loss() | get_accuracy() | get_macro_accuracy()
@@ -265,11 +275,5 @@ def get_autoencoder_loss() -> LossBase[Outputs, Targets]:
 
 
 def get_diffusion_loss():
-    mse = nn.MSELoss(reduction='none')
-
-    def _epsilon_mse(out: Outputs, _: Targets) -> torch.Tensor:
-        loss = mse(out.pred_v, out.v)
-        loss = loss.mean(dim=tuple(range(1, loss.ndim)))
-        return loss
-
-    return Loss(_epsilon_mse, name='v-MSE')
+    """Get diffusion loss."""
+    return get_diffusion_mse()
