@@ -15,16 +15,15 @@ def generate_random_samples() -> None:
     cfg = Experiment.get_config()
     cfg_diff = cfg.diffusion
     cfg_user = cfg.user
-    cfg_generate = cfg_user.generate
     save_dir = cfg.user.path.version_dir / 'images' / cfg.name / 'generated'
     module = DiffusionModel().eval()
 
     model = Model(module, name=cfg_diff.model.name, device=cfg_user.device)
     model.load_state()
-    clouds = module.sample(n_samples=cfg_generate.batch_size, n_points=2048, device=model.device)
+    clouds = module.sample(n_samples=1, n_points=2048, device=model.device)
     cloud: torch.Tensor
     for i, cloud in enumerate(clouds):
-        np_cloud = cloud.cpu().numpy()
+        np_cloud = cloud.cpu().numpy().squeeze()
         render_cloud((np_cloud,), title=str(i), interactive=cfg_user.plot.interactive, save_dir=save_dir)
 
     return

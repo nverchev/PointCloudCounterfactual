@@ -6,6 +6,6 @@ defaults:
 class_name: Diffusion
 beta_start: 0.0001
 beta_end: 0.02
-n_timesteps: 1000
+n_timesteps: 100
 schedule_type: Cosine
 name: Diffusion

@@ -245,12 +245,24 @@ def get_f1() -> Metric[torch.Tensor, Targets]:
     return Metric(_f1, name='F1_Score', higher_is_better=True)
 
 
-def get_diffusion_mse() -> Loss[Outputs, Targets]:
+#
+# def get_flow_matching_loss() -> Loss[Outputs, Targets]:
+#     """Get MSE metric for diffusion."""
+#     criterion = geomloss.SamplesLoss(loss="sinkhorn", p=2, blur=0.005)
+#
+#     def _sinkhorn(out: Outputs, _: Targets) -> torch.Tensor:
+#
+#         return criterion(out.next_pred, out.next_gt)
+#
+#     return Loss(_sinkhorn, name='v-Sinkhorn')
+
+
+def get_flow_matching_loss() -> Loss[Outputs, Targets]:
     """Get MSE metric for diffusion."""
-    mse = nn.MSELoss(reduction='none')
+    mse = torch.nn.MSELoss(reduction='none')
 
     def _mse(out: Outputs, _: Targets) -> torch.Tensor:
-        return mse(out.pred_v, out.v)
+        return mse(out.v_pred, out.v).mean(dim=(1, 2))
 
     return Loss(_mse, name='v-MSE')
 
@@ -276,4 +288,4 @@ def get_autoencoder_loss() -> LossBase[Outputs, Targets]:
 
 def get_diffusion_loss():
     """Get diffusion loss."""
-    return get_diffusion_mse()
+    return get_flow_matching_loss()
