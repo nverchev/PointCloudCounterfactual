@@ -82,6 +82,9 @@ class Outputs:
     probs: torch.Tensor
     v_pred: torch.Tensor
     v: torch.Tensor
+    prob_noise: torch.Tensor
+    prob_noise_fake: torch.Tensor
+    prob_noise_real: torch.Tensor
 
     def update(self, other: Self) -> None:
         """Update the state with another instance's one."""

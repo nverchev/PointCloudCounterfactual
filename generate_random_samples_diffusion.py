@@ -4,6 +4,7 @@ import torch
 
 from drytorch import Model
 
+from src.data import get_dataset, Partitions
 from src.module import DiffusionModel
 from src.config import AllConfig, Experiment, hydra_main
 from src.utils.visualization import render_cloud
@@ -17,9 +18,17 @@ def generate_random_samples() -> None:
     cfg_user = cfg.user
     save_dir = cfg.user.path.version_dir / 'images' / cfg.name / 'generated'
     module = DiffusionModel().eval()
-
     model = Model(module, name=cfg_diff.model.name, device=cfg_user.device)
     model.load_state()
+
+    dataset = get_dataset(Partitions.train)
+    sample = dataset[12][0].cloud.to('cuda:0')
+    sample = sample.unsqueeze(0)
+    std = sample.std(dim=(1, 2), keepdim=True)
+    sample.div_(std)
+
+    noisy_sample = module.encoder(sample)
+    module.x_T = noisy_sample
     clouds = module.sample(n_samples=1, n_points=2048, device=model.device)
     cloud: torch.Tensor
     for i, cloud in enumerate(clouds):

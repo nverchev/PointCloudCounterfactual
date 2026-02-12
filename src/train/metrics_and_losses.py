@@ -267,6 +267,19 @@ def get_flow_matching_loss() -> Loss[Outputs, Targets]:
     return Loss(_mse, name='v-MSE')
 
 
+def get_flow_adversarial() -> LossBase[Outputs, Targets]:
+    def _gaussian(out: Outputs, _: Targets) -> torch.Tensor:
+        return -torch.log(out.prob_noise + 1.0e-8)
+
+    def _real(out: Outputs, _: Targets) -> torch.Tensor:
+        return -torch.log(out.prob_noise_real + 1.0e-8)
+
+    def _fake(out: Outputs, _: Targets) -> torch.Tensor:
+        return -torch.log(1 - out.prob_noise_fake + 1.0e-8)
+
+    return Loss(_gaussian, name='Gaussian') + Loss(_real, name='Real') + 10 * Loss(_fake, name='Fake')
+
+
 def get_classification_loss() -> LossBase[torch.Tensor, Targets]:
     """Get combined classification loss and metrics."""
     return get_cross_entropy_loss() | get_accuracy() | get_macro_accuracy()

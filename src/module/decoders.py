@@ -109,7 +109,7 @@ class PCGen(BasePointDecoder):
             group_atts.append(x_group)
             x_group = x_group.transpose(2, 1)
             sample = sample.transpose(2, 1)
-            x_group = self.group_transformer[group](x_group, memory=sample)
+            x_group = self.group_transformer[group](sample, memory=x_group)
             x_group = x_group.transpose(2, 1)
             sample = sample.transpose(2, 1)
             x_group = self.group_final[group](x_group)
