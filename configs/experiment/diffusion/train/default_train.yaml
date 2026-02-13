@@ -3,6 +3,6 @@ defaults:
   - early_stopping: default_early_stopping
   - _self_
 
-batch_size : 8
+batch_size : 32
 n_epochs: 3000
 _n_subprocesses: ${user.n_subprocesses}
