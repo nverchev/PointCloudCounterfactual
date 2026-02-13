@@ -8,5 +8,5 @@ defaults:
   - user: user_settings
   - _self_
 
-variation: flow_matching_airplane
+variation: flow_matching_car
 final: true
