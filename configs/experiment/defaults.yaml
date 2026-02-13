@@ -8,5 +8,5 @@ defaults:
   - user: user_settings
   - _self_
 
-variation: flow_matching
-final: false
+variation: flow_matching_airplane
+final: true
