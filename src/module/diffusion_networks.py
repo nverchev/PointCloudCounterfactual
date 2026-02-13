@@ -7,7 +7,6 @@ import torch.nn as nn
 
 from src.config import Experiment, ActClass
 from src.module.decoders import PCGen
-from src.module.layers import LinearLayer
 
 
 class SinusoidalPositionalEmbedding(nn.Module):
@@ -129,18 +128,15 @@ class PCGenDiffusion(nn.Module):
         self.act_cls: ActClass = self.pcgen.act_cls
 
         # Time embedding
-        self.time_embed = nn.Sequential(
-            LinearLayer(1, 1024, act_cls=self.act_cls),
-            LinearLayer(1024, self.w_dim),
-        )
+        self.time_embed = SinusoidalPositionalEmbedding(self.w_dim)
 
     def forward(self, x: torch.Tensor, t: torch.Tensor, n_output_points: int) -> torch.Tensor:
         """Forward pass."""
-        w = self.time_embed(t.unsqueeze(1))
+        w = self.time_embed(t)
         out = self.pcgen(w, n_output_points, x.transpose(2, 1)).transpose(2, 1)
         return out.contiguous()
 
 
 def get_diffusion_network() -> nn.Module:
     """Get diffusion network according to the configuration."""
-    return MLPDiffusionWithGlobal()
+    return PCGenDiffusion()
