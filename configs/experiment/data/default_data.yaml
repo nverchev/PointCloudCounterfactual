@@ -8,5 +8,5 @@ translate: false
 rotate: false
 jitter_sigma: 0.0
 jitter_clip: 0.0
-resample: True
+resample: true
 sample_with_replacement: false
