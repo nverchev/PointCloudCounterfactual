@@ -143,9 +143,8 @@ def get_bijective_assignment(x, y, group_size=256):
     final_indices_shuffled = torch.zeros((B, N), dtype=torch.long, device=device)
 
     for g in range(num_groups):
-        x_g = x_groups[:, g, :, :]  # [B, group_size, D]
-        y_g = y_groups[:, g, :, :]  # [B, group_size, D]
-
+        x_g = x_groups[:, g, :, :].contiguous()
+        y_g = y_groups[:, g, :, :].contiguous()
         # Compute cost-adjusted matrix for the sub-group
         L = geomloss.SamplesLoss(loss='sinkhorn', p=2, blur=0.001, potentials=True)
         f, g_pot = L(x_g, y_g)
