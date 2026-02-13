@@ -2,7 +2,6 @@
 
 from typing import Any
 
-import geomloss
 import torch
 import torch.nn as nn
 from scipy.optimize import linear_sum_assignment
@@ -123,14 +122,17 @@ def get_bijective_assignment(x, y, group_size=256):
     B, N, _ = x.shape
     device = x.device
 
-    perm_x = torch.randperm(N, device=device)
-    perm_y = torch.randperm(N, device=device)
+    # 1. Spatial Sorting (e.g., sort by X-coordinate or sum of coordinates)
+    # This ensures groups are spatially localized
+    perm_x = x.sum(dim=-1).argsort(dim=1)
+    perm_y = y.sum(dim=-1).argsort(dim=1)
 
-    x_shuffled = x[:, perm_x, :]
-    y_shuffled = y[:, perm_y, :]
+    # Use batch_idx to handle the sorting across the batch dimension
+    batch_idx = torch.arange(B, device=device).unsqueeze(1)
+    x_shuffled = x[batch_idx, perm_x]
+    y_shuffled = y[batch_idx, perm_y]
 
     num_groups = N // group_size
-    # Placeholder for global y-indices aligned to x_shuffled
     actual_y_indices_aligned = torch.zeros((B, N), dtype=torch.long, device=device)
 
     for g in range(num_groups):
@@ -139,23 +141,18 @@ def get_bijective_assignment(x, y, group_size=256):
         x_g = x_shuffled[:, start:end, :].contiguous()
         y_g = y_shuffled[:, start:end, :].contiguous()
 
-        L = geomloss.SamplesLoss(loss='sinkhorn', p=2, blur=0.001, potentials=True)
-        f, g_pot = L(x_g, y_g)
-
+        # Use simple LSA for speed (or Sinkhorn if you prefer)
         dist = torch.cdist(x_g, y_g) ** 2
-        cost_matrix = dist - f.unsqueeze(2) - g_pot.unsqueeze(1)
-        cost_np = cost_matrix.detach().cpu().numpy()
+        cost_np = dist.detach().cpu().numpy()
 
         for b in range(B):
             _, col_ind = linear_sum_assignment(cost_np[b])
-            # Map local index (col_ind) to the global perm_y index for this group
-            # perm_y[start:end] contains the N global indices used for this group
-            local_to_global_y = perm_y[start:end][torch.from_numpy(col_ind).to(device)]
-            actual_y_indices_aligned[b, start:end] = local_to_global_y
+            # Map local to global using the specific batch's perm_y
+            actual_y_indices_aligned[b, start:end] = perm_y[b, start:end][torch.from_numpy(col_ind).to(device)]
 
-    # Unshuffle to match original x order
-    inv_perm_x = torch.argsort(perm_x)
-    return actual_y_indices_aligned[:, inv_perm_x]
+    # 3. Unshuffle
+    inv_perm_x = torch.argsort(perm_x, dim=1)
+    return actual_y_indices_aligned.gather(1, inv_perm_x)
 
 
 def get_diffusion_module() -> DiffusionModel:
