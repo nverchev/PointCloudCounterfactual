@@ -118,34 +118,27 @@ class DiffusionModel(nn.Module):
         return x_list
 
 
+@torch.no_grad()
 def get_bijective_assignment(x, y, group_size=256):
-    """
-    Returns indices 'idx' such that y[idx] is a UNIQUE OT-match for x.
-    Uses Sub-batch LSA for speed and stochastic robustness.
-    """
-    B, N, D = x.shape
+    B, N, _ = x.shape
     device = x.device
 
-    # 1. Shuffle both clouds to ensure random group pairings each epoch
     perm_x = torch.randperm(N, device=device)
     perm_y = torch.randperm(N, device=device)
 
     x_shuffled = x[:, perm_x, :]
     y_shuffled = y[:, perm_y, :]
 
-    # 2. Reshape into sub-groups: [B, Num_Groups, Group_Size, D]
     num_groups = N // group_size
-    x_groups = x_shuffled.view(B, num_groups, group_size, D)
-    y_groups = y_shuffled.view(B, num_groups, group_size, D)
-
-    # Final indices placeholder
-    # We will map the local shuffled index back to the original y index
-    final_indices_shuffled = torch.zeros((B, N), dtype=torch.long, device=device)
+    # Placeholder for global y-indices aligned to x_shuffled
+    actual_y_indices_aligned = torch.zeros((B, N), dtype=torch.long, device=device)
 
     for g in range(num_groups):
-        x_g = x_groups[:, g, :, :].contiguous()
-        y_g = y_groups[:, g, :, :].contiguous()
-        # Compute cost-adjusted matrix for the sub-group
+        start, end = g * group_size, (g + 1) * group_size
+
+        x_g = x_shuffled[:, start:end, :].contiguous()
+        y_g = y_shuffled[:, start:end, :].contiguous()
+
         L = geomloss.SamplesLoss(loss='sinkhorn', p=2, blur=0.001, potentials=True)
         f, g_pot = L(x_g, y_g)
 
@@ -153,28 +146,16 @@ def get_bijective_assignment(x, y, group_size=256):
         cost_matrix = dist - f.unsqueeze(2) - g_pot.unsqueeze(1)
         cost_np = cost_matrix.detach().cpu().numpy()
 
-        group_indices = []
         for b in range(B):
             _, col_ind = linear_sum_assignment(cost_np[b])
-            group_indices.append(torch.from_numpy(col_ind))
-
-        # col_ind maps local x_g to local y_g
-        # We store these in the shuffled index buffer
-        final_indices_shuffled[:, g * group_size : (g + 1) * group_size] = torch.stack(group_indices).to(device)
-
-    # 3. Unshuffle the indices
-    # 'final_indices_shuffled' tells us which local y_shuffled point matches which local x_shuffled
-    # We need to map this back to original y indices and then unshuffle by perm_x
-
-    # Map local y_shuffled indices to original y indices
-    actual_y_indices = perm_y[final_indices_shuffled]
+            # Map local index (col_ind) to the global perm_y index for this group
+            # perm_y[start:end] contains the N global indices used for this group
+            local_to_global_y = perm_y[start:end][torch.from_numpy(col_ind).to(device)]
+            actual_y_indices_aligned[b, start:end] = local_to_global_y
 
     # Unshuffle to match original x order
-    # Create an inverse permutation for x
     inv_perm_x = torch.argsort(perm_x)
-    final_indices = actual_y_indices[:, inv_perm_x]
-
-    return final_indices
+    return actual_y_indices_aligned[:, inv_perm_x]
 
 
 def get_diffusion_module() -> DiffusionModel:
