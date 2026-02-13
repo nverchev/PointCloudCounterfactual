@@ -9,4 +9,4 @@ defaults:
   - _self_
 
 variation: flow_matching_model_transport_lin_sum
-final: false
+final: true
