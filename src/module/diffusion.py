@@ -56,7 +56,7 @@ class DiffusionModel(nn.Module):
 
         device = x_0.device
         batch_size, n_points = x_0.shape[:2]
-        indices = get_hard_assignment(noise, x_0)
+        indices = get_bijective_auction_keops(noise, x_0)
         batch_idx = torch.arange(batch_size, device=device).view(-1, 1).expand(batch_size, n_points)
         x0_aligned = x_0[batch_idx, indices]
 
@@ -118,31 +118,51 @@ class DiffusionModel(nn.Module):
         return x_list
 
 
-def get_hard_assignment(x, y):
+@torch.no_grad()
+def get_bijective_auction_keops(x, y, iterations=5, eps=1e-3):
     """
-    Returns indices 'idx' such that y[idx] is the OT-match for x.
+    GPU-accelerated Auction Algorithm using PyKeOps.
+    Returns indices for a bijective (one-to-one) mapping.
     """
-    # 1. Use geomloss to get dual potentials (Sinkhorn)
-    # p=2 is Wasserstein-2 (L2 distance)
-    L = geomloss.SamplesLoss(loss='sinkhorn', p=2, blur=0.001, potentials=True)
-    _, g = L(x, y)  # f and g are the dual potentials
 
-    # 2. Reconstruct the 'cost-adjusted' distance
-    # The optimal match for x_i is the y_j that minimizes C_ij - g_j
-    # C_ij is |x_i - y_j|^2
-    x_i = LazyTensor(x.unsqueeze(2))  # [B, N, 1, 3]
-    y_j = LazyTensor(y.unsqueeze(1))  # [B, 1, M, 3]
-    g_j = LazyTensor(g.unsqueeze(1).unsqueeze(-1))  # [B, 1, M, 1]
+    # Initialize prices using Sinkhorn potentials for a "warm start"
+    # If you don't have potentials, initialize with zeros
+    L = geomloss.SamplesLoss(loss='sinkhorn', p=2, blur=0.005, potentials=True)
+    _, g = L(x, y)
+    price = -g  # [B, N]
 
-    # 3. Reconstruct the cost-adjusted distance: |x_i - y_j|^2 - g_j
-    # Note: pykeops_square_distance is ((x_i - y_j)**2).sum(-1)
-    C_minus_g = ((x_i - y_j) ** 2).sum(-1) - g_j
+    # Create LazyTensors for O(N) memory complexity
+    x_i = LazyTensor(x.unsqueeze(2))  # [B, N, 1, D]
+    y_j = LazyTensor(y.unsqueeze(1))  # [B, 1, N, D]
 
-    # 4. Perform the reduction (argmin) on the LazyTensor
-    # dim=2 corresponds to the M dimension (y points)
-    idx = C_minus_g.argmin(dim=2).view(x.shape[0], x.shape[1])
+    for _ in range(iterations):
+        # 1. Compute Value = -(dist^2 + price)
+        # We compute this lazily to avoid the N x N matrix
+        p_j = LazyTensor(price.unsqueeze(1).unsqueeze(-1))  # [B, 1, N, 1]
 
-    return idx
+        # Symbolic distance: |x_i - y_j|^2
+        dist_sq = ((x_i - y_j) ** 2).sum(-1)
+
+        # Value to be maximized
+        value = -(dist_sq + p_j)
+
+        # 2. Get top-2 values and indices
+        # Kmin/Kmax on LazyTensors is extremely efficient
+        v_top2, idx_top2 = value.Kmin_argKmin(K=2, dim=2)
+        # Note: Since we use -dist, Kmin on 'dist' is Kmax on 'value'
+
+        v1, v2 = -v_top2[:, :, 0], -v_top2[:, :, 1]
+        best_y_idx = idx_top2[:, :, 0]
+
+        # 3. Calculate bid increments
+        # The margin by which the best choice beats the second best
+        bid_increment = (v2 - v1) + eps
+
+        # 4. Update prices
+        # We use 'max' reduction to handle multiple points bidding on the same target
+        price.scatter_reduce_(1, best_y_idx, bid_increment, reduce='amax', include_self=False)
+
+    return best_y_idx
 
 
 def get_diffusion_module() -> DiffusionModel:
