@@ -1,4 +1,4 @@
 name: ShapenetFlow
 n_classes: 2
 settings:
-  select_classes: [airplane]
+  select_classes: [chair]
