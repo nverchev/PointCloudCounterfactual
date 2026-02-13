@@ -1,5 +1,5 @@
 function: Cosine
-restart_interval: 1000
+restart_interval: 3000
 restart_fraction: 1
 warmup_steps: 10
 settings:

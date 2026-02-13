@@ -8,7 +8,7 @@ import torch.nn as nn
 from pykeops.torch import LazyTensor
 
 from src.data.structures import Inputs, Outputs
-from src.module.diffusion_networks import get_diffusion_network, Encoder, MLPDDiscriminator
+from src.module.diffusion_networks import get_diffusion_network
 from src.config import Experiment
 
 
@@ -39,8 +39,7 @@ class DiffusionModel(nn.Module):
         self.n_timesteps: int = cfg_diff.model.n_timesteps
         self.n_training_points_training: int = cfg_diff.n_training_output_points
         self.n_inference_output_points: int = cfg_diff.objective.n_inference_output_points
-        self.encoder = Encoder()
-        self.discriminator = MLPDDiscriminator()
+        return
 
     @property
     def n_output_points(self) -> int:

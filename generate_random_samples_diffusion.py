@@ -27,8 +27,6 @@ def generate_random_samples() -> None:
     std = sample.std(dim=(1, 2), keepdim=True)
     sample.div_(std)
 
-    noisy_sample = module.encoder(sample)
-    module.x_T = noisy_sample
     clouds = module.sample(n_samples=1, n_points=2048, device=model.device)
     cloud: torch.Tensor
     for i, cloud in enumerate(clouds):
