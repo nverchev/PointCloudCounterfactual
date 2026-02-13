@@ -8,5 +8,5 @@ defaults:
   - user: user_settings
   - _self_
 
-variation: flow_matching_model_transport_lin_sum
+variation: flow_matching_model_transport_lin_sum_car
 final: true
