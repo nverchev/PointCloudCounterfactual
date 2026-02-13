@@ -17,6 +17,8 @@ dependencies = [
     "torch>=2.7.0",
     "torcheval>=0.0.7",
     "torchmetrics>=1.0.3",
+    "scypy",
+    "geomloss",
 ]
 
 [project.optional-dependencies]
