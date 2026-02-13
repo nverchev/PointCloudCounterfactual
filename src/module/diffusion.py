@@ -1,32 +1,11 @@
 """Flow Matching Model."""
 
-from typing import Any
-
-import geomloss
 import torch
 import torch.nn as nn
-from pykeops.torch import LazyTensor
 
 from src.data.structures import Inputs, Outputs
 from src.module.diffusion_networks import get_diffusion_network
 from src.config import Experiment
-
-
-def frozen_forward(network: nn.Module, x: torch.Tensor) -> Any:
-    """Temporarily disable gradients for all parameters."""
-    was_requires_grad: list[bool] = []
-    for p in network.parameters():
-        was_requires_grad.append(p.requires_grad)
-        p.requires_grad_(False)
-
-    # Run the network
-    output = network(x)
-
-    # Restore original requires_grad flags
-    for p, req in zip(network.parameters(), was_requires_grad, strict=True):
-        p.requires_grad_(req)
-
-    return output
 
 
 class DiffusionModel(nn.Module):
@@ -55,10 +34,7 @@ class DiffusionModel(nn.Module):
         out = Outputs()
 
         device = x_0.device
-        batch_size, n_points = x_0.shape[:2]
-        indices = get_hard_assignment(noise, x_0)
-        batch_idx = torch.arange(batch_size, device=device).view(-1, 1).expand(batch_size, n_points)
-        x0_aligned = x_0[batch_idx, indices]
+        batch_size = x_0.shape[0]
 
         # 1. Sample t in [0, 1] and reshape for broadcasting [B, 1, 1]
         t = torch.rand(batch_size, device=device)
@@ -66,7 +42,7 @@ class DiffusionModel(nn.Module):
 
         # 3. Linear Interpolation (The Probability Path)
         # x_t = (1 - t)*x_0 + t*x_1
-        x_t = (1.0 - t_view) * x0_aligned + t_view * noise
+        x_t = (1.0 - t_view) * x_0 + t_view * noise
 
         # 4. Network Prediction
         # Passes t (the scalar per batch) to the network
@@ -75,7 +51,7 @@ class DiffusionModel(nn.Module):
         # Where the points move according to the model
         out.v_pred = v_pred
         # Where the points move according to the ground truth flow
-        out.v = noise - x0_aligned
+        out.v = noise - x_0
         return out
 
     @torch.no_grad()
@@ -116,33 +92,6 @@ class DiffusionModel(nn.Module):
             x.div_(max_norms + 1e-8)
 
         return x_list
-
-
-def get_hard_assignment(x, y):
-    """
-    Returns indices 'idx' such that y[idx] is the OT-match for x.
-    """
-    # 1. Use geomloss to get dual potentials (Sinkhorn)
-    # p=2 is Wasserstein-2 (L2 distance)
-    L = geomloss.SamplesLoss(loss='sinkhorn', p=2, blur=0.001, potentials=True)
-    _, g = L(x, y)  # f and g are the dual potentials
-
-    # 2. Reconstruct the 'cost-adjusted' distance
-    # The optimal match for x_i is the y_j that minimizes C_ij - g_j
-    # C_ij is |x_i - y_j|^2
-    x_i = LazyTensor(x.unsqueeze(2))  # [B, N, 1, 3]
-    y_j = LazyTensor(y.unsqueeze(1))  # [B, 1, M, 3]
-    g_j = LazyTensor(g.unsqueeze(1).unsqueeze(-1))  # [B, 1, M, 1]
-
-    # 3. Reconstruct the cost-adjusted distance: |x_i - y_j|^2 - g_j
-    # Note: pykeops_square_distance is ((x_i - y_j)**2).sum(-1)
-    C_minus_g = ((x_i - y_j) ** 2).sum(-1) - g_j
-
-    # 4. Perform the reduction (argmin) on the LazyTensor
-    # dim=2 corresponds to the M dimension (y points)
-    idx = C_minus_g.argmin(dim=2).view(x.shape[0], x.shape[1])
-
-    return idx
 
 
 def get_diffusion_module() -> DiffusionModel:
