@@ -341,7 +341,6 @@ class CounterfactualVAE(BaseVAE):
     ) -> Outputs:
         """Generate counterfactual samples."""
         # Encode
-        # Encode
         out = Outputs()
         features = self.encoder(inputs.cloud)
         out = self.encode_z1(features)
