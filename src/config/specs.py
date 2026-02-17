@@ -17,14 +17,14 @@ from src.config.options import (
     Datasets,
     Encoders,
     Decoders,
-    WEncoders,
-    WDecoders,
+    LatentEncoders,
+    LatentDecoders,
     AutoEncoders,
     GradOp,
     ClipCriterion,
     Schedulers,
     ReconLosses,
-    WConditionalEncoders,
+    ConditionalLatentEncoders,
     Classifiers,
 )
 
@@ -92,7 +92,7 @@ class ArchitectureConfig:
     conv_dims: tuple[StrictlyPositiveInt, ...] = dataclasses.field(default_factory=tuple)
     conv_norm_name: str = ''
     n_heads: StrictlyPositiveInt = 1
-    proj_dim: StrictlyPositiveInt = 1
+    proj_dim: StrictlyPositiveInt = 256
     feedforward_dim: StrictlyPositiveInt = 1024
     n_transformer_layers: PositiveInt = 0
     transformer_dropout: float = 0.1
@@ -140,36 +140,36 @@ class DecoderConfig(ArchitectureConfig):
 
 
 @dataclass
-class WEncoderConfig(ArchitectureConfig):
-    """Specification for the W-Autoencoder's encoder.
+class LatentEncoderConfig(ArchitectureConfig):
+    """Specification for the Latent-Autoencoder's encoder.
 
     Attributes:
-        class_name (WEncoders): The name of the w-encoder class
+        class_name (LatentEncoders): The name of the latent-encoder class
     """
 
-    class_name: WEncoders
+    class_name: LatentEncoders
 
 
 @dataclass
-class WDecoderConfig(ArchitectureConfig):
-    """Specification for the W-Autoencoder's decoder.
+class LatentDecoderConfig(ArchitectureConfig):
+    """Specification for the Latent-Autoencoder's decoder.
 
     Attributes:
-        class_name (WDecoders): The name of the w-decoder class
+        class_name (LatentDecoders): The name of the w-decoder class
     """
 
-    class_name: WDecoders
+    class_name: LatentDecoders
 
 
 @dataclass
-class WConditionalEncoder(ArchitectureConfig):
+class ConditionalLatentEncoderConfig(ArchitectureConfig):
     """Specification for the encoding of z2 given the classifier probabilities.
 
     Attributes:
-        class_name (WConditionalEncoders): The name of the encoder class
+        class_name (ConditionalLatentEncoders): The name of the encoder class
     """
 
-    class_name: WConditionalEncoders
+    class_name: ConditionalLatentEncoders
 
 
 @dataclass
@@ -181,39 +181,9 @@ class AutoEncoderConfig:
         class_name (AutoEncoders): The name of the autoencoder class
         encoder (EncoderConfig): The encoder configuration
         decoder (DecoderConfig): The decoder configuration
-        book_size (StrictlyPositiveInt): The size of the dictionary for VQ-VAE
-        embedding_dim (StrictlyPositiveInt): The length of the code embedding
-        n_codes (StrictlyPositiveInt): The number of codes
-        vq_noise (PositiveFloat): Quantity of noise to add when redistributing the codes
-        codebook_momentum (PositiveFloat): Momentum parameter for the codebook update
-        w_dim (StrictlyPositiveInt): The codeword length
-    """
-
-    name: str
-    class_name: AutoEncoders
-    encoder: EncoderConfig
-    decoder: DecoderConfig
-    book_size: StrictlyPositiveInt
-    embedding_dim: StrictlyPositiveInt
-    n_codes: StrictlyPositiveInt
-    vq_noise: PositiveFloat
-    codebook_momentum: PositiveFloat
-
-    def __post_init__(self) -> None:
-        """Calculate the word dimension."""
-        self.w_dim = self.embedding_dim * self.n_codes
-        return
-
-
-@dataclass
-class WAutoEncoderConfig:
-    """Specification for the autoencoder.
-
-    Attributes:
-        name: name foe the w-autoencoder model
-        w_decoder (WDecoderConfig): Configuration for the word decoder
-        w_encoder (WEncoderConfig): Configuration for the word encoder
-        conditional_w_encoder (WConditionalEncoder): Configuration for the conditional w-encoder
+        w_decoder (WDecoderConfig): Configuration for the latent features decoder
+        w_encoder (WEncoderConfig): Configuration for the latent features encoder
+        conditional_w_encoder (WConditionalEncoder): Configuration for the conditional latent features encoder
         z1_dim (StrictlyPositiveInt): The continuous latent space dimension
         z2_dim (StrictlyPositiveInt): The continuous latent space dimension for counterfactual manipulation
         n_pseudo_inputs (PositiveInt): The number of pseudo-inputs for the VAMP loss (0 for no pseudo inputs)
@@ -221,13 +191,18 @@ class WAutoEncoderConfig:
     """
 
     name: str
-    w_decoder: WDecoderConfig
-    w_encoder: WEncoderConfig
-    conditional_w_encoder: WConditionalEncoder
+    class_name: AutoEncoders
+    encoder: EncoderConfig
+    decoder: DecoderConfig
+    latent_decoder: LatentDecoderConfig
+    latent_encoder: LatentEncoderConfig
+    conditional_latent_encoder: ConditionalLatentEncoderConfig
     z1_dim: StrictlyPositiveInt
     z2_dim: StrictlyPositiveInt
-    cf_temperature: float
-    n_pseudo_inputs: PositiveInt
+    n_codes: StrictlyPositiveInt = 1
+    n_pseudo_inputs: PositiveInt = 0
+    cf_temperature: float = 1.0
+    proj_dim: StrictlyPositiveInt = 256
 
 
 @dataclass
@@ -363,24 +338,16 @@ class ObjectiveAEConfig:
         n_inference_output_points (StrictlyPositiveInt): The number of inference points for evaluation
         recon_loss (ReconLosses): The denomination of the reconstruction loss
         c_embedding (PositiveFloat): The coefficient for the embedding loss
+        c_kld1 (PositiveFloat): The Kullback-Leibler Divergence coefficient for the first latent variable
+        c_kld2 (PositiveFloat): The Kullback-Leibler Divergence coefficient for the second latent variable
     """
 
     n_inference_output_points: StrictlyPositiveInt
     recon_loss: ReconLosses
     c_embedding: PositiveFloat
-
-
-@dataclass
-class ObjectiveWAEConfig:
-    """Specification for the W-Autoencoder's loss and metrics.
-
-    Attributes:
-        c_kld1 (PositiveFloat): The Kullback-Leibler Divergence coefficient for the first latent variable
-        c_kld2 (PositiveFloat): The Kullback-Leibler Divergence coefficient for the second latent variable
-    """
-
     c_kld1: PositiveFloat
     c_kld2: PositiveFloat
+    kld_restart_interval: StrictlyPositiveInt
 
 
 @dataclass
@@ -557,21 +524,6 @@ class AutoEncoderExperimentConfig(ExperimentConfig):
 
 
 @dataclass
-class WAutoEncoderExperimentConfig(ExperimentConfig):
-    """Specification for the w-autoencoder experimental part.
-
-    Attributes:
-        name (str): The name of the experiment part
-        train (TrainingConfig): Training options
-        objective (ObjectiveWAEConfig): The W-autoencoder objective (loss and metrics) configuration
-        model (WAutoEncoderConfig): The W-autoencoder architecture configuration
-    """
-
-    model: WAutoEncoderConfig
-    objective: ObjectiveWAEConfig
-
-
-@dataclass
 class AllConfig:
     """Root specification for all experiment settings.
 
@@ -580,7 +532,6 @@ class AllConfig:
         final (bool): If True, it uses the validation dataset for training and the test dataset for testing
         classifier (ClassifierExperimentConfig): The configuration for training the classifier
         autoencoder (AutoEncoderExperimentConfig): The configuration for training the autoencoder
-        w_autoencoder (WAutoEncoderExperimentConfig): The configuration for training the W-autoencoder
         user (UserSettings): User-specific settings
         data (DataConfig): Data pre-processing configuration
     """
@@ -589,7 +540,6 @@ class AllConfig:
     final: bool
     classifier: ClassifierExperimentConfig
     autoencoder: AutoEncoderExperimentConfig
-    w_autoencoder: WAutoEncoderExperimentConfig
     user: UserSettings
     data: DataConfig
     tags: list[str] = dataclasses.field(default_factory=list)

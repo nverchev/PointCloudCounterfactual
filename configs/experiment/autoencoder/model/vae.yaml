@@ -1,0 +1,16 @@
+defaults:
+  - encoder: transformer
+  - decoder: pcgen
+  - latent_encoder: latent_encoder
+  - latent_decoder: latent_decoder
+  - conditional_latent_encoder: conditional_latent_encoder
+  - _self_
+
+name: VAE
+class_name: CounterfactualVAE
+z1_dim: 16
+z2_dim: 16
+n_codes: 256
+n_pseudo_inputs: 0
+cf_temperature: 1.0
+proj_dim: 256

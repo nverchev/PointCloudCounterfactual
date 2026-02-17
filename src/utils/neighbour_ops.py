@@ -50,6 +50,14 @@ def torch_knn(x: torch.Tensor, k: int) -> torch.Tensor:
     return d_ij.topk(k=k, largest=False)[1]
 
 
+def pykeops_1nn(x: torch.Tensor) -> torch.Tensor:
+    """Find the k nearest neighbors using PyKeOps backend."""
+    x = x.transpose(2, 1).contiguous()
+    d_ij = pykeops_square_distance(x, x)
+    indices = d_ij.argKmin(1, dim=2)
+    return indices
+
+
 def pykeops_knn(x: torch.Tensor, k: int) -> torch.Tensor:
     """Find the k nearest neighbors using PyKeOps backend."""
     x = x.transpose(2, 1).contiguous()

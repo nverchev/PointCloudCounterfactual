@@ -1,7 +1,6 @@
-"""Classes with Dataset that have been preprocessed for use with VQVAE models."""
+"""Classes with Dataset that have been preprocessed for use with VAE models."""
 
 import abc
-import itertools
 
 from abc import abstractmethod
 from collections.abc import Generator, Sized
@@ -14,23 +13,22 @@ from torch.utils.data import Dataset
 from drytorch import Model
 
 from src.config import Experiment
-from src.module.autoencoders import BaseVQVAE, CounterfactualVQVAE, VQVAE
-from src.module.w_autoencoders import BaseWAutoEncoder
-from src.data.structures import Inputs, Outputs, Targets, WInputs, WTargets
+from src.module.autoencoders import VAE, CounterfactualVAE, BaseVAE
+from src.data.structures import Inputs, Outputs, Targets
 from src.data.protocols import AbstractSingleton
 
-VQ = TypeVar('VQ', bound=BaseVQVAE[BaseWAutoEncoder])
+V = TypeVar('V', bound=BaseVAE)
 
 
-class ProcessedDataset(Generic[VQ], abc.ABC, metaclass=AbstractSingleton):
-    """Base dataset for VQVAE models with common functionality."""
+class ProcessedDataset(Generic[V], abc.ABC, metaclass=AbstractSingleton):
+    """Base dataset for VAE models with common functionality."""
 
     max_batch: int = 64
     dataset: Dataset[tuple[Inputs, Targets]]
     dataset_len: int
-    autoencoder: VQ
+    autoencoder: V
 
-    def __init__(self, dataset: Dataset[tuple[Inputs, Targets]], autoencoder: VQ) -> None:
+    def __init__(self, dataset: Dataset[tuple[Inputs, Targets]], autoencoder: V) -> None:
         self.dataset = dataset
         assert isinstance(dataset, Sized)
         self.dataset_len = len(dataset)
@@ -48,9 +46,15 @@ class ProcessedDataset(Generic[VQ], abc.ABC, metaclass=AbstractSingleton):
 
         batched_cloud = torch.stack([data[0].cloud for data in batch_data]).to(self.device)
         batched_labels = torch.cat([data[1].label.unsqueeze(0) for data in batch_data]).to(self.device)
+
+        # Also batch logits if they exist in Inputs, though ClassifiedDataset handles them usually
+        # But this base method recreates Inputs from cloud stack
+
         for i in range(0, len(index_list), self.max_batch):
             batch_slice = slice(i, i + self.max_batch)
             cloud_batch = batched_cloud[batch_slice]
+
+            # Create fresh Inputs batch
             batch_inputs = Inputs(cloud=cloud_batch)
             batch_labels = batched_labels[batch_slice]
             yield batch_inputs, batch_labels
@@ -60,99 +64,48 @@ class ProcessedDataset(Generic[VQ], abc.ABC, metaclass=AbstractSingleton):
         """Subclasses must implement this method."""
 
 
-class ClassifierMixin:
-    """Mixin for datasets that need classifier functionality."""
-
-    @torch.inference_mode()
-    def _run_classifier(self, classifier: Model[Inputs, torch.Tensor], batch_inputs: Inputs) -> torch.Tensor:
-        """Run classifier on batch inputs."""
-        classifier.module.eval()
-        return classifier(batch_inputs)
-
-
-class WDatasetEncoder(ProcessedDataset[VQ], Dataset[tuple[WInputs, WTargets]]):
-    """Dataset for training inner autoencoder with discrete codes."""
-
-    @override
-    def __getitems__(self, index_list: list[int]) -> list[tuple[WInputs, WTargets]]:
-        self.autoencoder = self.autoencoder.train(not torch.is_inference_mode_enabled())
-        batch_data: list[tuple[WInputs, WTargets]] = []
-        for batch_inputs, _ in self._get_data(index_list):
-            batch_encoded = self._encode(batch_inputs)
-            batch_word_approx = batch_encoded.word_approx
-            batch_word_quantised = batch_encoded.word_quantised
-            batch_one_hot_idx = batch_encoded.one_hot_idx
-            for w_a, w_q, one_hot_idx in zip(batch_word_approx, batch_word_quantised, batch_one_hot_idx, strict=True):
-                batch_data.append((WInputs(w_a), WTargets(word_quantized=w_q, one_hot_idx=one_hot_idx)))
-
-        return batch_data
-
-    @torch.inference_mode()
-    def _encode(self, inputs: Inputs) -> Outputs:
-        """Encode and quantization using autoencoder."""
-        out = self.autoencoder.encode(inputs)
-        out.word_quantised, out.idx, _ = self.autoencoder.quantizer.quantize(out.word_approx, self.autoencoder.codebook)
-        out.one_hot_idx = self.autoencoder.quantizer.create_one_hot(out.idx)
-        return out
-
-
-class WDatasetWithLogits(WDatasetEncoder[CounterfactualVQVAE], ClassifierMixin):
-    """W Dataset with classifier logits for conditional training."""
+class ClassifiedDataset(ProcessedDataset[V], Dataset[tuple[Inputs, Targets]]):
+    """Dataset that evaluates inputs with a classifier and attaches logits."""
 
     classifier: Model[Inputs, torch.Tensor]
 
     def __init__(
         self,
         dataset: Dataset[tuple[Inputs, Targets]],
-        autoencoder: CounterfactualVQVAE,
+        autoencoder: V,  # Kept for API consistency if needed, or could be Optional
         classifier: Model[Inputs, torch.Tensor],
     ) -> None:
         super().__init__(dataset=dataset, autoencoder=autoencoder)
         self.classifier = classifier
         return
 
+    @torch.inference_mode()
+    def _run_classifier(self, batch_inputs: Inputs) -> torch.Tensor:
+        """Run classifier on batch inputs."""
+        self.classifier.module.eval()
+        return self.classifier(batch_inputs)
+
     @override
-    def __getitems__(self, index_list: list[int]) -> list[tuple[WInputs, WTargets]]:
-        self.autoencoder = self.autoencoder.train(not torch.is_inference_mode_enabled())
-        batch_data: list[tuple[WInputs, WTargets]] = []
-        for batch_inputs, _ in self._get_data(index_list):
-            batch_encoded = self._encode(batch_inputs)
-            batch_logits = self._run_classifier(self.classifier, batch_inputs)
-            batch_word_approx = batch_encoded.word_approx
-            batch_word_quantised = batch_encoded.word_quantised
-            batch_one_hot_idx = batch_encoded.one_hot_idx
-            zipped_data = zip(batch_word_approx, batch_word_quantised, batch_logits, batch_one_hot_idx, strict=True)
-            for w_a, w_q, logit, one_hot_idx in zipped_data:
-                w_inputs = WInputs(w_a, logit)
-                w_targets = WTargets(word_quantized=w_q, one_hot_idx=one_hot_idx, logits=logit)
-                batch_data.append((w_inputs, w_targets))
+    def __getitems__(self, index_list: list[int]) -> list[tuple[Inputs, Targets]]:
+        batch_data: list[tuple[Inputs, Targets]] = []
+        for batch_inputs, batch_labels in self._get_data(index_list):
+            batch_logits = self._run_classifier(batch_inputs)
+
+            # Split batch back into individual items
+            for i in range(len(batch_inputs.cloud)):
+                cloud = batch_inputs.cloud[i]
+                logit = batch_logits[i]
+                label = batch_labels[i]
+
+                # Re-wrap in Inputs/Targets with logits
+                inp = Inputs(cloud=cloud, logits=logit)
+                tgt = Targets(ref_cloud=cloud, label=label)  # Assuming ref_cloud is same as input
+                batch_data.append((inp, tgt))
 
         return batch_data
 
 
-class WDatasetWithLogitsFrozen(WDatasetWithLogits):
-    """W Dataset with classifier logits for conditional training."""
-
-    def __init__(
-        self,
-        dataset: Dataset[tuple[Inputs, Targets]],
-        autoencoder: CounterfactualVQVAE,
-        classifier: Model[Inputs, torch.Tensor],
-    ) -> None:
-        super().__init__(dataset=dataset, autoencoder=autoencoder, classifier=classifier)
-        batch_size = 32  # Assuming hardware can support batches of 32 on inference for encoder / classifier
-        self.w_dataset: list[tuple[WInputs, WTargets]] = []
-        for batch_idx in itertools.batched(range(len(self)), batch_size, strict=False):
-            self.w_dataset.extend(super().__getitems__(list(batch_idx)))
-
-        return
-
-    @override
-    def __getitems__(self, index_list: list[int]) -> list[tuple[WInputs, WTargets]]:
-        return [self.w_dataset[i] for i in index_list]
-
-
-class DoubleReconstructedDatasetEncoder(ProcessedDataset[VQVAE], Dataset[tuple[Inputs, Targets]]):
+class DoubleReconstructedDataset(ProcessedDataset[VAE], Dataset[tuple[Inputs, Targets]]):
     """Dataset with reconstructed inputs after double encoding."""
 
     @override
@@ -169,55 +122,18 @@ class DoubleReconstructedDatasetEncoder(ProcessedDataset[VQVAE], Dataset[tuple[I
 
     @torch.inference_mode()
     def _reconstruct(self, inputs: Inputs) -> Outputs:
-        """Run autoencoder with double encoding."""
-        return self.autoencoder.double_reconstruct(inputs)
+        """Run autoencoder reconstruction."""
+        # Using forward (encode -> decode)
+        return self.autoencoder(inputs)
 
 
-class DoubleReconstructedDatasetWithLogits(
-    ProcessedDataset[CounterfactualVQVAE], ClassifierMixin, Dataset[tuple[Inputs, Targets]]
-):
-    """Reconstructed dataset with classifier logits."""
-
-    classifier: Model[Inputs, torch.Tensor]
-
-    def __init__(
-        self,
-        dataset: Dataset[tuple[Inputs, Targets]],
-        autoencoder: CounterfactualVQVAE,
-        classifier: Model[Inputs, torch.Tensor],
-    ) -> None:
-        super().__init__(dataset=dataset, autoencoder=autoencoder)
-        self.classifier = classifier
-        return
-
-    @override
-    def __getitems__(self, index_list: list[int]) -> list[tuple[Inputs, Targets]]:
-        self.autoencoder = self.autoencoder.eval()
-        batch_data = []
-        for batch_inputs, batch_labels in self._get_data(index_list):
-            batch_logits = self._run_classifier(self.classifier, batch_inputs)
-            batch_ae_out = self._reconstruct_with_logits(batch_inputs, batch_logits)
-            recons = batch_ae_out.recon
-            for recon, label in zip(recons, batch_labels, strict=True):
-                batch_data.append((Inputs(cloud=recon), Targets(ref_cloud=recon, label=label)))
-
-        return batch_data
-
-    @torch.inference_mode()
-    def _reconstruct_with_logits(self, inputs: Inputs, batched_logits: torch.Tensor) -> Outputs:
-        """Run autoencoder with double encoding."""
-        return self.autoencoder.double_reconstruct_with_logits(inputs, batched_logits)
-
-
-class CounterfactualDatasetEncoder(
-    ProcessedDataset[CounterfactualVQVAE], ClassifierMixin, Dataset[tuple[Inputs, Targets]]
-):
+class CounterfactualDataset(ProcessedDataset[CounterfactualVAE], Dataset[tuple[Inputs, Targets]]):
     """Dataset for counterfactual reconstruction with target conditioning."""
 
     def __init__(
         self,
         dataset: Dataset[tuple[Inputs, Targets]],
-        autoencoder: CounterfactualVQVAE,
+        autoencoder: CounterfactualVAE,
         classifier: Model[Inputs, torch.Tensor],
         target_dim: int,
         target_value: float = 1.0,
@@ -225,17 +141,23 @@ class CounterfactualDatasetEncoder(
         super().__init__(dataset=dataset, autoencoder=autoencoder)
         cfg = Experiment.get_config()
         self.n_classes: int = cfg.data.dataset.n_classes
-        self.target_dim: int = target_dim  # don't convert to tensor yet
+        self.target_dim: int = target_dim
         self.target_value: float = target_value
         self.classifier: Model[Inputs, torch.Tensor] = classifier
         return
+
+    @torch.inference_mode()
+    def _run_classifier(self, batch_inputs: Inputs) -> torch.Tensor:
+        """Run classifier on batch inputs."""
+        self.classifier.module.eval()
+        return self.classifier(batch_inputs)
 
     @override
     def __getitems__(self, index_list: list[int]) -> list[tuple[Inputs, Targets]]:
         self.autoencoder = self.autoencoder.eval()
         batch_data: list[tuple[Inputs, Targets]] = []
         for batch_inputs, batch_labels in self._get_data(index_list):
-            batch_logits = self._run_classifier(self.classifier, batch_inputs)
+            batch_logits = self._run_classifier(batch_inputs)
             batch_ae_out = self.counterfactual_data(batch_inputs, batch_logits, self.target_dim, self.target_value)
             recons = batch_ae_out.recon
             for recon, label in zip(recons, batch_labels, strict=True):
@@ -255,13 +177,13 @@ class CounterfactualDatasetEncoder(
         return self.autoencoder.generate_counterfactual(inputs, batched_logits, target_dim, target_value)
 
 
-class BoundaryDataset(CounterfactualDatasetEncoder):
+class BoundaryDataset(CounterfactualDataset):
     """Dataset for boundary reconstruction with neutral conditioning."""
 
     def __init__(
         self,
         dataset: Dataset[tuple[Inputs, Targets]],
-        autoencoder: CounterfactualVQVAE,
+        autoencoder: CounterfactualVAE,
         classifier: Model[Inputs, torch.Tensor],
         target_dim: int = 0,
     ) -> None:

@@ -1,34 +1,32 @@
 study_name:
-  w_decoder
+  latent_decoder
 
 n_trials: 300
 
 params:
 
-
-  w_autoencoder.model.w_decoder.proj_dim:
+  autoencoder.model.latent_decoder.proj_dim:
     suggest: suggest_categorical
     settings:
       choices: [128, 256, 512]
 
-
-  w_autoencoder.model.w_decoder.n_heads:
+  autoencoder.model.latent_decoder.n_heads:
     suggest: suggest_categorical
     settings:
       choices: [4, 8, 16]
 
-  w_autoencoder.model.w_decoder.n_transformer_layers:
+  autoencoder.model.latent_decoder.n_transformer_layers:
     suggest: suggest_int
     settings:
       low: 3
       high: 5
 
-  w_autoencoder.model.w_decoder.feedforward_dim:
+  autoencoder.model.latent_decoder.feedforward_dim:
     suggest: suggest_categorical
     settings:
       choices: [256, 512, 1024]
 
-  w_autoencoder.model.w_decoder.transformer_dropout:
+  autoencoder.model.latent_decoder.transformer_dropout:
     suggest: suggest_float
     settings:
       low: 0.
