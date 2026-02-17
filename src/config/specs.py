@@ -23,7 +23,6 @@ from src.config.options import (
     GradOp,
     ClipCriterion,
     Schedulers,
-    ReconLosses,
     ConditionalLatentEncoders,
     Classifiers,
 )
@@ -77,36 +76,68 @@ class DataConfig:
 
 @dataclass(kw_only=True)
 class ArchitectureConfig:
-    """Base specification for an architecture with optional convolutional and transformer parts.
+    """Base specification for an architecture with an activation and a normalization function.
 
     Attributes:
-        conv_dims (tuple[StrictlyPositiveInt]): Hidden dimensions for the convolutional part
-        norm_cls (NormClass): The normalization class to be applied to the convolutional
-        n_heads (StrictlyPositiveInt): Number of attention heads for self-attention
-        proj_dim (StrictlyPositiveInt): Number of dimensions in expanded embedding for self-attention
-        act_name (str): The name of the PyTorch activation class (e.g., 'ReLU', 'LeakyReLU')
-        n_transformer_layers: Number of transformer layers
         act_cls (ActClass): The activation class to be applied both to the convolutional and transformer parts
+        act_name (str): The name of the PyTorch activation class (e.g., 'ReLU', 'LeakyReLU')
+        norm_name (str): The name of the PyTorch normalization class (e.g., 'BatchNorm1d', 'LayerNorm')
+        norm_cls (NormClass): The normalization class to be applied to the convolutional
     """
 
-    conv_dims: tuple[StrictlyPositiveInt, ...] = dataclasses.field(default_factory=tuple)
-    conv_norm_name: str = ''
-    n_heads: StrictlyPositiveInt = 1
-    proj_dim: StrictlyPositiveInt = 256
-    feedforward_dim: StrictlyPositiveInt = 1024
-    n_transformer_layers: PositiveInt = 0
-    transformer_dropout: float = 0.1
+    norm_name: str = ''
     act_name: str = ''
 
     def __post_init__(self) -> None:
         """Resolve activation class from name."""
         self.act_cls = get_activation_cls(self.act_name) if self.act_name else DEFAULT_ACT
-        self.norm_cls = get_norm_cls(self.conv_norm_name) if self.conv_norm_name else DEFAULT_NORM
+        self.norm_cls = get_norm_cls(self.norm_name) if self.norm_name else DEFAULT_NORM
         return
 
 
+@dataclass(kw_only=True)
+class LinearArchitectureConfig(ArchitectureConfig):
+    """Base specification for a linear architecture.
+
+    Attributes:
+        mlp_dims (tuple[StrictlyPositiveInt]): Hidden dimensions for the MLP part
+        dropout_rate (PositiveFloat): Dropout rate for the MLP part
+    """
+
+    mlp_dims: tuple[StrictlyPositiveInt, ...] = dataclasses.field(default_factory=tuple)
+    dropout_rate: PositiveFloat = 0.0
+
+
+@dataclass(kw_only=True)
+class ConvArchitectureConfig(ArchitectureConfig):
+    """Base specification for a convolutional architecture.
+
+    Attributes:
+        conv_dims (tuple[StrictlyPositiveInt]): Hidden dimensions for the convolutional part
+    """
+
+    conv_dims: tuple[StrictlyPositiveInt, ...] = dataclasses.field(default_factory=tuple)
+
+
+@dataclass(kw_only=True)
+class TransformerArchitectureConfig(ArchitectureConfig):
+    """Base specification for a transformer architecture.
+
+    Attributes:
+        n_heads (StrictlyPositiveInt): Number of attention heads for self-attention
+        embedding_dim (StrictlyPositiveInt): Number of dimensions in expanded embedding for self-attention
+        n_transformer_layers: Number of transformer layers
+    """
+
+    n_heads: StrictlyPositiveInt = 1
+    embedding_dim: StrictlyPositiveInt = 256
+    feedforward_dim: StrictlyPositiveInt = 1024
+    n_transformer_layers: PositiveInt = 0
+    transformer_dropout: float = 0.1
+
+
 @dataclass
-class EncoderConfig(ArchitectureConfig):
+class EncoderConfig(ConvArchitectureConfig):
     """Specification for the encoder.
 
     Attributes:
@@ -119,7 +150,7 @@ class EncoderConfig(ArchitectureConfig):
 
 
 @dataclass
-class DecoderConfig(ArchitectureConfig):
+class DecoderConfig(ConvArchitectureConfig, TransformerArchitectureConfig):
     """Specification for the decoder.
 
     Attributes:
@@ -140,7 +171,7 @@ class DecoderConfig(ArchitectureConfig):
 
 
 @dataclass
-class LatentEncoderConfig(ArchitectureConfig):
+class LatentEncoderConfig(LinearArchitectureConfig):
     """Specification for the Latent-Autoencoder's encoder.
 
     Attributes:
@@ -151,7 +182,7 @@ class LatentEncoderConfig(ArchitectureConfig):
 
 
 @dataclass
-class LatentDecoderConfig(ArchitectureConfig):
+class LatentDecoderConfig(LinearArchitectureConfig):
     """Specification for the Latent-Autoencoder's decoder.
 
     Attributes:
@@ -162,7 +193,7 @@ class LatentDecoderConfig(ArchitectureConfig):
 
 
 @dataclass
-class ConditionalLatentEncoderConfig(ArchitectureConfig):
+class ConditionalLatentEncoderConfig(LinearArchitectureConfig):
     """Specification for the encoding of z2 given the classifier probabilities.
 
     Attributes:
@@ -181,13 +212,14 @@ class AutoEncoderConfig:
         class_name (AutoEncoders): The name of the autoencoder class
         encoder (EncoderConfig): The encoder configuration
         decoder (DecoderConfig): The decoder configuration
-        w_decoder (WDecoderConfig): Configuration for the latent features decoder
-        w_encoder (WEncoderConfig): Configuration for the latent features encoder
-        conditional_w_encoder (WConditionalEncoder): Configuration for the conditional latent features encoder
+        latent_decoder (LatentDecoderConfig): Configuration for the latent decoder
+        latent_encoder (LatentEncoderConfig): Configuration for the latent encoder
+        conditional_latent_encoder (ConditionalLatentEncoderConfig): Configuration for the conditional latent encoder
         z1_dim (StrictlyPositiveInt): The continuous latent space dimension
         z2_dim (StrictlyPositiveInt): The continuous latent space dimension for counterfactual manipulation
         n_pseudo_inputs (PositiveInt): The number of pseudo-inputs for the VAMP loss (0 for no pseudo inputs)
-        cf_temperature (float): Temperature for the probabilities (closer to zero means closer to samplings)
+        feature_dim (StrictlyPositiveInt): The dimension of the feature vector
+        cf_temperature (float | None): Temperature for the probabilities (closer to zero means closer to samplings)
     """
 
     name: str
@@ -199,15 +231,13 @@ class AutoEncoderConfig:
     conditional_latent_encoder: ConditionalLatentEncoderConfig
     z1_dim: StrictlyPositiveInt
     z2_dim: StrictlyPositiveInt
-    n_codes: StrictlyPositiveInt = 1
     n_pseudo_inputs: PositiveInt = 0
-    cf_temperature: float = 1.0
-    proj_dim: StrictlyPositiveInt = 256
+    feature_dim: StrictlyPositiveInt = 1024
+    cf_temperature: float | None = None
 
 
 @dataclass
-@dataclass
-class ClassifierConfig(ArchitectureConfig):
+class ClassifierConfig(LinearArchitectureConfig, ConvArchitectureConfig):
     """Specification for the classifier.
 
     Attributes:
@@ -215,24 +245,12 @@ class ClassifierConfig(ArchitectureConfig):
         class_name (Classifiers): The name of the classifier class
         n_neighbors (StrictlyPositiveInt): The number of neighbors for edge convolution (counting the point itself)
         feature_dim (StrictlyPositiveInt): The dimension of the extracted features from the convolutional part
-        mlp_dims (tuple[StrictlyPositiveInt]): Hidden dimensions for the MLP part
-        dropout_rates (tuple[PositiveFloat]): Dropout rates for the MLP part
     """
 
     name: str
     class_name: Classifiers
     n_neighbors: StrictlyPositiveInt
     feature_dim: StrictlyPositiveInt
-    mlp_dims: tuple[StrictlyPositiveInt, ...] = dataclasses.field(default_factory=tuple)
-    dropout_rates: tuple[PositiveFloat, ...] = dataclasses.field(default_factory=tuple)
-
-    @model_validator(mode='after')
-    def _check_length_dropout(self) -> Self:
-        if len(self.mlp_dims) > len(self.dropout_rates):
-            msg = 'Number of hidden dimensions {} and dropouts {} not compatible.'
-            raise ValueError(msg.format(len(self.mlp_dims), len(self.dropout_rates)))
-
-        return self
 
 
 @dataclass
@@ -242,14 +260,14 @@ class SchedulerConfig:
     Attributes:
         function (Schedulers): The name of the scheduler function
         restart_interval (PositiveInt): The number of epochs between restarts
-        restart_fraction (PositiveInt): The fraction of the base learning rate when restarting
+        restart_fraction (PositiveFloat): The fraction of the base learning rate when restarting
         warmup_steps (int): The number of initial epochs with linearly increasing learning rate
         settings (dict): A dictionary containing default settings for the scheduler
     """
 
     function: Schedulers
     restart_interval: PositiveInt
-    restart_fraction: PositiveInt
+    restart_fraction: PositiveFloat
     warmup_steps: PositiveInt
     settings: dict[str, Any] = dataclasses.field(default_factory=dict)
 
@@ -335,14 +353,15 @@ class ObjectiveAEConfig:
     """Specification for the Autoencoder's loss and metrics.
 
     Attributes:
+        n_training_output_points (StrictlyPositiveInt): The number of output points during training (0: same as input)
         n_inference_output_points (StrictlyPositiveInt): The number of inference points for evaluation
         recon_loss (ReconLosses): The denomination of the reconstruction loss
         c_kld1 (PositiveFloat): The Kullback-Leibler Divergence coefficient for the first latent variable
         c_kld2 (PositiveFloat): The Kullback-Leibler Divergence coefficient for the second latent variable
     """
 
+    n_training_output_points: StrictlyPositiveInt
     n_inference_output_points: StrictlyPositiveInt
-    recon_loss: ReconLosses
     c_kld1: PositiveFloat
     c_kld2: PositiveFloat
     kld_restart_interval: StrictlyPositiveInt
@@ -510,15 +529,10 @@ class AutoEncoderExperimentConfig(ExperimentConfig):
         train (TrainingConfig): Training options
         model (AutoEncoderConfig): The autoencoder architecture configuration
         objective (ObjectiveAEConfig): The autoencoder objective (loss and metrics) configuration
-        diagnose_every (StrictlyPositiveInt): The number of points between diagnostics (rearranging the discrete space)
-        n_training_output_points (StrictlyPositiveInt): The number of output points during training (0: same as input)
-
     """
 
     model: AutoEncoderConfig
     objective: ObjectiveAEConfig
-    diagnose_every: StrictlyPositiveInt
-    n_training_output_points: StrictlyPositiveInt
 
 
 @dataclass

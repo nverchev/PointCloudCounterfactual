@@ -1,6 +1,0 @@
-class_name: Transformer
-n_heads: 8
-feedforward_dim: 1024
-n_transformer_layers: 3
-transformer_dropout: 0.1
-conv_dims: [256, 512]

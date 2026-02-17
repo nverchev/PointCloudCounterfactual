@@ -18,11 +18,11 @@ import torch.nn as nn
 from torch import Tensor
 from torch.autograd import Function
 
+from src.config.torch import ActClass, NormClass
+
 DEBUG_MODE = sys.gettrace()
 
 type _grad_t = tuple[torch.Tensor, ...] | torch.Tensor
-type ActClass = Callable[[], nn.Module]
-type NormClass = Callable[[int], nn.Module]
 
 
 @runtime_checkable
@@ -625,6 +625,7 @@ class TransformerDecoder(nn.Module):
 
         return
 
+    @override
     def forward(
         self,
         tgt: torch.Tensor,

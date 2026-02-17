@@ -18,32 +18,37 @@ def get_scheduler(config: SchedulerConfig) -> schedulers.AbstractScheduler:
     else:
         raise ValueError(f'Scheduler {config.function} not supported.')
 
-    scheduler = scheduler.bind(
-        schedulers.restart(restart_interval=config.restart_interval, restart_fraction=config.restart_fraction)
-    ).bind(schedulers.warmup(config.warmup_steps))
-
-    return scheduler
+    restart = schedulers.restart(restart_interval=config.restart_interval, restart_fraction=config.restart_fraction)
+    warmup = schedulers.warmup(config.warmup_steps)
+    return scheduler.bind(warmup).bind(restart)
 
 
 def get_grad_op(config: LearningConfig) -> p.GradientOpProtocol:
     """Returns the gradient clipping instance based on config."""
     if config.grad_op == GradOp.GradParamNormalizer:
         return gradient_ops.GradParamNormalizer()
-    elif config.grad_op == GradOp.GradZScoreNormalizer:
+
+    if config.grad_op == GradOp.GradZScoreNormalizer:
         return gradient_ops.GradZScoreNormalizer()
-    elif config.grad_op == GradOp.GradValueClipper:
+
+    if config.grad_op == GradOp.GradValueClipper:
         return gradient_ops.GradValueClipper()
-    elif config.grad_op == GradOp.GradNormClipper:
+
+    if config.grad_op == GradOp.GradNormClipper:
         return gradient_ops.GradNormClipper()
-    elif config.grad_op == GradOp.HistClipper:
+
+    if config.grad_op == GradOp.HistClipper:
         if config.clip_criterion == ClipCriterion.ZStat:
             return gradient_ops.HistClipper(criterion=gradient_ops.ZStatCriterion())
-        elif config.clip_criterion == ClipCriterion.EMA:
+
+        if config.clip_criterion == ClipCriterion.EMA:
             return gradient_ops.HistClipper(criterion=gradient_ops.EMACriterion())
-    elif config.grad_op == GradOp.ParamHistClipper:
+
+    if config.grad_op == GradOp.ParamHistClipper:
         if config.clip_criterion == ClipCriterion.ZStat:
             return gradient_ops.ParamHistClipper(criterion=gradient_ops.ZStatCriterion())
-        elif config.clip_criterion == ClipCriterion.EMA:
+
+        if config.clip_criterion == ClipCriterion.EMA:
             return gradient_ops.ParamHistClipper(criterion=gradient_ops.EMACriterion())
 
     return gradient_ops.NoOp()

@@ -20,24 +20,3 @@ params:
       low: 10
       high: 30
       log: false
-
-  autoencoder.model.encoder.proj_dim:
-    suggest: suggest_categorical
-    settings:
-      choices: [256, 512]
-
-  autoencoder.model.encoder.n_heads:
-    suggest: suggest_categorical
-    settings:
-      choices: [ 4, 8 ]
-
-  autoencoder.model.encoder.n_transformer_layers:
-    suggest: suggest_int
-    settings:
-      low: 1
-      high: 3
-
-  autoencoder.model.encoder.feedforward_dim:
-    suggest: suggest_categorical
-    settings:
-      choices: [256, 512, 1024]

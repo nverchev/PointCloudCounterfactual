@@ -57,7 +57,7 @@ class Outputs:
 
     model_epoch: int
     recon: torch.Tensor
-    latent_features: torch.Tensor
+    features: torch.Tensor
     z1: torch.Tensor
     z2: torch.Tensor
     mu1: torch.Tensor

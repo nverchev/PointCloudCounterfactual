@@ -24,3 +24,19 @@ params:
       suggest: suggest_categorical
       settings:
         choices: [256, 512, 1024]
+
+  autoencoder.model.decoder.n_heads:
+    suggest: suggest_categorical
+    settings:
+      choices: [4, 8]
+
+  autoencoder.model.decoder.n_transformer_layers:
+    suggest: suggest_int
+    settings:
+      low: 1
+      high: 3
+
+  autoencoder.model.decoder.feedforward_dim:
+    suggest: suggest_categorical
+    settings:
+      choices: [256, 512, 1024]

@@ -1,5 +1,0 @@
-n_inference_output_points: ${data.n_target_points}
-recon_loss: ChamferEMD
-c_kld1: .2
-c_kld2: .4
-kld_restart_interval: ${autoencoder.train.n_epochs}

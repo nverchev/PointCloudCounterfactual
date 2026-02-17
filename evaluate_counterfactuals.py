@@ -11,9 +11,9 @@ from drytorch import DataLoader, Model, Test
 from drytorch.core import protocols as p
 from drytorch.lib.objectives import Metric, compute_metrics
 
-from src.module import CounterfactualVQVAE, get_classifier
-from src.config import AllConfig, Experiment, hydra_main
-from src.data.processed import CounterfactualDatasetEncoder, DoubleReconstructedDatasetWithLogits
+from src.module import BaseClassifier, CounterfactualVAE, get_classifier
+from src.config import AllConfig, Experiment, get_trackers, hydra_main
+from src.data.processed import CounterfactualDataset, ReconstructedEvaluatedDataset
 from src.data import Inputs, Targets, Partitions, get_dataset
 from src.train.metrics_and_losses import get_classification_loss
 
@@ -29,39 +29,43 @@ def get_label_distribution(test_loader: p.LoaderProtocol[tuple[Inputs, Targets]]
 
 
 def evaluate_original_performance(
-    classifier: p.ModelProtocol[Inputs, Tensor],
+    classifier_model: p.ModelProtocol[Inputs, Tensor],
     test_loader: DataLoader[tuple[Inputs, Targets]],
 ) -> Test[Inputs, Targets, Tensor]:
     """Evaluate classifier performance on original test data."""
     loss = get_classification_loss()
-    test_original = Test(classifier, name='ClassificationOriginal', loader=test_loader, metric=loss)
+    test_original = Test(classifier_model, name='ClassificationOriginal', loader=test_loader, metric=loss)
     test_original(store_outputs=True)
     return test_original
 
 
 def evaluate_reconstructed_performance(
-    classifier: Model[Inputs, Tensor],
+    classifier_model: Model[Inputs, Tensor],
     test_dataset: Dataset[tuple[Inputs, Targets]],
-    vqvae: CounterfactualVQVAE,
+    vae: CounterfactualVAE,
+    classifier: BaseClassifier,
     batch_size: int,
 ) -> None:
     """Evaluate classifier performance on reconstructed test data."""
-    reconstructed_dataset = DoubleReconstructedDatasetWithLogits(
+    reconstructed_dataset = ReconstructedEvaluatedDataset(
         dataset=test_dataset,
-        autoencoder=vqvae,
+        autoencoder=vae,
         classifier=classifier,
     )
     reconstructed_loader = DataLoader(dataset=reconstructed_dataset, batch_size=batch_size, pin_memory=False)
     loss = get_classification_loss()
-    test_reconstructed = Test(classifier, name='ClassificationReconstructed', loader=reconstructed_loader, metric=loss)
+    test_reconstructed = Test(
+        classifier_model, name='ClassificationReconstructed', loader=reconstructed_loader, metric=loss
+    )
     test_reconstructed()
     return
 
 
 def evaluate_counterfactual_performance(
-    classifier: Model[Inputs, Tensor],
+    classifier_model: Model[Inputs, Tensor],
     test_dataset: Dataset[tuple[Inputs, Targets]],
-    vqvae: CounterfactualVQVAE,
+    vae: CounterfactualVAE,
+    classifier: BaseClassifier,
     n_classes: int,
     batch_size: int,
     target_value: float,
@@ -71,12 +75,11 @@ def evaluate_counterfactual_performance(
     loss = get_classification_loss()
 
     for j in range(n_classes):
-        counterfactual_dataset = CounterfactualDatasetEncoder(
-            test_dataset, vqvae, classifier, target_dim=j, target_value=target_value
+        counterfactual_dataset = CounterfactualDataset(
+            test_dataset, vae, classifier, target_dim=j, target_value=target_value
         )
         counterfactual_loader = DataLoader(dataset=counterfactual_dataset, batch_size=batch_size, pin_memory=False)
-
-        test = Test(classifier, name=f'Counterfeit_to_{j}', loader=counterfactual_loader, metric=loss)
+        test = Test(classifier_model, name=f'Counterfeit_to_{j}', loader=counterfactual_loader, metric=loss)
         test()
         metrics.append(cast(Metric[Tensor, Targets], test.objective))
 
@@ -89,9 +92,10 @@ def evaluate_counterfactual_performance(
 
 
 def evaluate_misclassified_samples(
-    classifier: Model[Inputs, Tensor],
+    classifier_model: Model[Inputs, Tensor],
     test_dataset: Dataset[tuple[Inputs, Targets]],
-    vqvae: CounterfactualVQVAE,
+    vae: CounterfactualVAE,
+    classifier: BaseClassifier,
     labels: Tensor,
     predictions: Tensor,
     batch_size: int,
@@ -99,25 +103,25 @@ def evaluate_misclassified_samples(
     """Evaluate reconstruction performance on misclassified samples."""
     misclassified_bool = predictions != labels
     misclassified_dataset = Subset(test_dataset, indices=list(map(int, misclassified_bool.nonzero())))
-    misclassified_reconstruction = DoubleReconstructedDatasetWithLogits(
-        dataset=misclassified_dataset, autoencoder=vqvae, classifier=classifier
+    misclassified_reconstruction = ReconstructedEvaluatedDataset(
+        dataset=misclassified_dataset, autoencoder=vae, classifier=classifier
     )
     misclassified_reconstruction_loader = DataLoader(
         misclassified_reconstruction, batch_size=batch_size, pin_memory=False
     )
-
     loss = get_classification_loss()
     test_misclassified = Test(
-        classifier, name='MisclassifiedReconstructed', loader=misclassified_reconstruction_loader, metric=loss
+        classifier_model, name='MisclassifiedReconstructed', loader=misclassified_reconstruction_loader, metric=loss
     )
     test_misclassified()
     return
 
 
 def evaluate_class_specific_counterfactuals(
-    classifier: Model[Inputs, Tensor],
+    classifier_model: Model[Inputs, Tensor],
     test_dataset: Dataset[tuple[Inputs, Targets]],
-    vqvae: CounterfactualVQVAE,
+    vae: CounterfactualVAE,
+    classifier: BaseClassifier,
     labels: Tensor,
     predictions: Tensor,
     num_classes: int,
@@ -139,15 +143,15 @@ def evaluate_class_specific_counterfactuals(
 
             counterfactual_indices = list(i_instead_of_j.nonzero())
             i_instead_of_j_dataset = Subset(test_dataset, indices=list(map(int, counterfactual_indices)))
-            counterfactual_dataset = CounterfactualDatasetEncoder(
+            counterfactual_dataset = CounterfactualDataset(
                 i_instead_of_j_dataset,
-                vqvae,
+                vae,
                 classifier=classifier,
                 target_dim=j,
                 target_value=target_value,
             )
             counterfactual_loader = DataLoader(dataset=counterfactual_dataset, batch_size=batch_size, pin_memory=False)
-            test = Test(classifier, name=f'{i}_to_{j}', loader=counterfactual_loader, metric=loss)
+            test = Test(classifier_model, name=f'{i}_to_{j}', loader=counterfactual_loader, metric=loss)
             test(store_outputs=True)
             metrics.append(cast(Metric[Tensor, Targets], test.objective))
 
@@ -180,7 +184,9 @@ def compute_overall_metric(metrics: list[Metric[Tensor, Targets]]) -> Metric[Ten
 
 
 @torch.inference_mode()
-def evaluate_counterfactuals(classifier: Model[Inputs, Tensor], vqvae: CounterfactualVQVAE) -> None:
+def evaluate_counterfactuals(
+    classifier_model: Model[Inputs, Tensor], vae: CounterfactualVAE, classifier: BaseClassifier
+) -> None:
     """Evaluate the counterfactuals according to different metrics."""
     cfg = Experiment.get_config()
     num_classes = cfg.data.dataset.n_classes
@@ -189,30 +195,48 @@ def evaluate_counterfactuals(classifier: Model[Inputs, Tensor], vqvae: Counterfa
     test_dataset = get_dataset(Partitions.test if cfg.final else Partitions.val)
     test_loader = DataLoader(dataset=test_dataset, batch_size=batch_size)
     test_labels = get_label_distribution(test_loader, num_classes)
-
-    test_original = evaluate_original_performance(classifier, test_loader)
-    evaluate_reconstructed_performance(classifier, test_dataset, vqvae, batch_size)
-    evaluate_counterfactual_performance(classifier, test_dataset, vqvae, num_classes, batch_size, counterfactual_value)
+    test_original = evaluate_original_performance(classifier_model, test_loader)
+    evaluate_reconstructed_performance(classifier_model, test_dataset, vae, classifier, batch_size)
+    evaluate_counterfactual_performance(
+        classifier_model, test_dataset, vae, classifier, num_classes, batch_size, counterfactual_value
+    )
     outputs_logits = torch.cat(test_original.outputs_list)
     predictions = outputs_logits.argmax(dim=1)
-    evaluate_misclassified_samples(classifier, test_dataset, vqvae, test_labels, predictions, batch_size)
+    evaluate_misclassified_samples(
+        classifier_model, test_dataset, vae, classifier, test_labels, predictions, batch_size
+    )
     evaluate_class_specific_counterfactuals(
-        classifier, test_dataset, vqvae, test_labels, predictions, num_classes, batch_size, counterfactual_value
+        classifier_model,
+        test_dataset,
+        vae,
+        classifier,
+        test_labels,
+        predictions,
+        num_classes,
+        batch_size,
+        counterfactual_value,
     )
 
 
 @hydra_main
 def main(cfg: AllConfig) -> None:
     """Set up the experiment and launch the counterfactual evaluation."""
+    trackers = get_trackers(cfg)
     exp = Experiment(cfg, name=cfg.name, par_dir=cfg.user.path.version_dir, tags=cfg.tags)
+    for tracker in trackers:
+        exp.trackers.subscribe(tracker)
+
+    print(exp.trackers.named_trackers)
     with exp.create_run(resume=True):
-        dgcnn_module = get_classifier()
-        classifier = Model(dgcnn_module, name=cfg.classifier.model.name, device=cfg.user.device)
-        classifier.load_state()
-        vqvae = CounterfactualVQVAE()
-        autoencoder = Model(vqvae, name=cfg.autoencoder.model.name, device=cfg.user.device)
-        autoencoder.load_state()
-        evaluate_counterfactuals(classifier, vqvae)
+        classifier = get_classifier()
+        classifier_model = Model(classifier, name=cfg.classifier.model.name, device=cfg.user.device)
+        classifier_model.load_state()
+        vae = CounterfactualVAE()
+        autoencoder_model = Model(vae, name=cfg.autoencoder.model.name, device=cfg.user.device)
+        autoencoder_model.load_state()
+        evaluate_counterfactuals(classifier_model, vae, classifier)
+
+    return
 
 
 if __name__ == '__main__':

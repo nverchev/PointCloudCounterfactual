@@ -1,5 +1,6 @@
 """Classifier architecture."""
 
+import abc
 import itertools
 
 import torch
@@ -16,8 +17,8 @@ from src.module.layers import EdgeConvLayer, LinearLayer, PointsConvLayer
 from src.utils.neighbour_ops import get_graph_features
 
 
-class DGCNN(nn.Module):
-    """Standard Dynamic Graph Convolutional Neural Network classifier."""
+class BaseClassifier(nn.Module, abc.ABC):
+    """Base class for a point cloud classifier."""
 
     def __init__(self) -> None:
         super().__init__()
@@ -29,8 +30,19 @@ class DGCNN(nn.Module):
         self.conv_dims: tuple[int, ...] = cfg_class_model.conv_dims
         self.feature_dim: int = cfg_class_model.feature_dim
         self.mlp_dims: tuple[int, ...] = cfg_class_model.mlp_dims
-        self.dropout_rates: tuple[float, ...] = cfg_class_model.dropout_rates
+        self.dropout_rate: float = cfg_class_model.dropout_rate
         self.n_classes: int = cfg.data.dataset.n_classes
+
+    @abc.abstractmethod
+    def forward(self, inputs: Inputs) -> torch.Tensor:
+        """Forward Pass."""
+
+
+class DGCNN(BaseClassifier):
+    """Standard Dynamic Graph Convolutional Neural Network classifier."""
+
+    def __init__(self) -> None:
+        super().__init__()
         conv_modules: list[torch.nn.Module] = []
         for in_dim, out_dim in itertools.pairwise((IN_CHAN, *self.conv_dims)):
             conv_modules.append(EdgeConvLayer(2 * in_dim, out_dim, act_cls=self.act_cls, norm_cls=self.norm_cls))
@@ -40,8 +52,10 @@ class DGCNN(nn.Module):
         mlp_modules: list[torch.nn.Module] = [
             LinearLayer(2 * self.feature_dim, self.mlp_dims[0], act_cls=self.act_cls, norm_cls=self.norm_cls)
         ]
-        for (in_dim, out_dim), rate in zip(itertools.pairwise(self.mlp_dims), self.dropout_rates, strict=False):
-            mlp_modules.append(nn.Dropout(p=rate))
+        for in_dim, out_dim in itertools.pairwise(self.mlp_dims):
+            if self.dropout_rate > 0:
+                mlp_modules.append(nn.Dropout(p=self.dropout_rate))
+
             mlp_modules.append(LinearLayer(in_dim, out_dim, act_cls=self.act_cls, norm_cls=self.norm_cls))
 
         mlp_modules.append(LinearLayer(self.mlp_dims[-1], self.n_classes))

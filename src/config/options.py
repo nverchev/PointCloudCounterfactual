@@ -13,9 +13,9 @@ class Datasets(enum.StrEnum):
 class Encoders(enum.StrEnum):
     """Encoder classes."""
 
+    PointNet = enum.auto()
     LDGCNN = enum.auto()
     DGCNN = enum.auto()
-    Transformer = enum.auto()
 
 
 class Decoders(enum.StrEnum):
@@ -28,20 +28,19 @@ class LatentEncoders(enum.StrEnum):
     """Encoder classes for the Latent-autoencoder."""
 
     Convolutional = enum.auto()
-    Transformer = enum.auto()
+    Linear = enum.auto()
 
 
 class LatentDecoders(enum.StrEnum):
     """Decoder classes for the Latent-autoencoder."""
 
     Linear = enum.auto()
-    Transformer = enum.auto()
 
 
 class ConditionalLatentEncoders(enum.StrEnum):
     """Posterior classes."""
 
-    Transformer = enum.auto()
+    Linear = enum.auto()
 
 
 class AutoEncoders(enum.StrEnum):
@@ -83,10 +82,3 @@ class Schedulers(enum.StrEnum):
     Constant = enum.auto()
     Cosine = enum.auto()
     Exponential = enum.auto()
-
-
-class ReconLosses(enum.StrEnum):
-    """Loss names."""
-
-    Chamfer = enum.auto()
-    ChamferEMD = enum.auto()

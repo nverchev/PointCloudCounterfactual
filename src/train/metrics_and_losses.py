@@ -5,39 +5,38 @@ import math
 import numpy as np
 import torch
 
-from structural_losses import match_cost
 from torcheval.metrics.functional import multiclass_accuracy, multiclass_f1_score
 
 from drytorch.lib.objectives import Loss, LossBase, Metric
 
 from src.config.experiment import Experiment
-from src.config.options import AutoEncoders, ReconLosses
+from src.config.options import AutoEncoders
 from src.data.structures import Outputs, Targets
 from src.utils.neighbour_ops import pykeops_square_distance, torch_square_distance
 
 
 def pykeops_chamfer(t1: torch.Tensor, t2: torch.Tensor) -> torch.Tensor:
-    """The following code is currently not supported for backprop:
+    """Calculates the matching points with pykeops and returns distance with torch.
+
+    The following code is not currently supported for backprop:
 
         ```python
         def pykeops_chamfer(t1: torch.Tensor, t2: torch.Tensor) -> torch.Tensor:
-                    dist = pykeops_square_distance(t1, t2)
-                    return (dist.min(axis = 2) + dist.min(axis = 1)).sum(axis=(1, 2)
+            dist = pykeops_square_distance(t1, t2)
+            return (dist.min(axis=2) + dist.min(axis=1)).sum(axis=(1, 2))
         ```
-
-    We use the retrieved index on torch
     """
     dist = pykeops_square_distance(t1, t2)
 
     # match t1 to t2
     idx1 = dist.argmin(axis=1).expand(-1, -1, t1.shape[2])
     m1 = t1.gather(1, idx1)
-    squared1 = ((t2 - m1) ** 2).sum(2).mean(1)
+    squared1 = ((t2 - m1) ** 2).sum((1, 2))
 
     # match t2 to t1
     idx2 = dist.argmin(axis=2).expand(-1, -1, t2.shape[2])
     m2 = t2.gather(1, idx2)
-    squared2 = ((t1 - m2) ** 2).sum(2).mean(1)
+    squared2 = ((t1 - m2) ** 2).sum((1, 2))
 
     # sum squared distances
     squared = squared1 + squared2
@@ -48,15 +47,6 @@ def torch_chamfer(t1: torch.Tensor, t2: torch.Tensor) -> torch.Tensor:
     """Calculate Chamfer distance between two point clouds using PyTorch backend."""
     dist = torch_square_distance(t1, t2)
     return torch.min(dist, dim=-1)[0].sum(1) + torch.min(dist, dim=-2)[0].sum(1)
-
-
-def get_emd_loss() -> LossBase[Outputs, Targets]:
-    """Calculate earthmover's distance between two point clouds using PyTorch backend."""
-
-    def _emd(out: Outputs, targets: Targets) -> torch.Tensor:
-        return match_cost(out.recon, targets.ref_cloud)
-
-    return Loss(_emd, name='EMD')
 
 
 def get_chamfer_loss() -> LossBase[Outputs, Targets]:
@@ -70,18 +60,6 @@ def get_chamfer_loss() -> LossBase[Outputs, Targets]:
     return Loss(_chamfer, name='Chamfer')
 
 
-def get_recon_loss() -> LossBase[Outputs, Targets]:
-    """Calculate reconstruction loss based on configuration settings."""
-    cfg = Experiment.get_config()
-    cfg_autoencoder = cfg.autoencoder
-    recon_loss = cfg_autoencoder.objective.recon_loss
-
-    if recon_loss == ReconLosses.ChamferEMD and torch.cuda.is_available() and not cfg.user.cpu:
-        return get_chamfer_loss() + get_emd_loss()
-
-    return get_chamfer_loss()
-
-
 def gaussian_ll(x: torch.Tensor, mu: torch.Tensor, log_var: torch.Tensor) -> torch.Tensor:
     """Calculate the Gaussian log-likelihood."""
     return -0.5 * (log_var + torch.pow(x - mu, 2) / torch.exp(log_var)) + np.log(2 * math.pi)
@@ -89,7 +67,7 @@ def gaussian_ll(x: torch.Tensor, mu: torch.Tensor, log_var: torch.Tensor) -> tor
 
 def gaussian_kld(mu: torch.Tensor, log_var: torch.Tensor) -> torch.Tensor:
     """Calculate KL divergence between Gaussian distributions."""
-    return 0.5 * (-1 - log_var + log_var.exp() + (mu**2))
+    return 0.5 * (-1 - log_var + log_var.exp() + mu**2)
 
 
 def diff_gaussian_kld(d_mu: torch.Tensor, d_log_var: torch.Tensor, p_log_var: torch.Tensor) -> torch.Tensor:
@@ -101,7 +79,7 @@ def get_kld1_loss() -> LossBase[Outputs, Targets]:
     """Get KL divergence loss for the first latent variable in the variational autoencoder."""
 
     def _kld1(out: Outputs, _: Targets) -> torch.Tensor:
-        return gaussian_kld(mu=out.mu1, log_var=out.log_var1).sum((1, 2))
+        return gaussian_kld(mu=out.mu1, log_var=out.log_var1).sum(1)
 
     return Loss(_kld1, name='KLD1')
 
@@ -110,7 +88,7 @@ def get_kld2_loss() -> LossBase[Outputs, Targets]:
     """Get KL divergence loss for the second latent variable in the variational autoencoder."""
 
     def _kld2(out: Outputs, _: Targets) -> torch.Tensor:
-        return diff_gaussian_kld(d_mu=out.d_mu2, d_log_var=out.d_log_var2, p_log_var=out.p_log_var2).sum((1, 2))
+        return diff_gaussian_kld(d_mu=out.d_mu2, d_log_var=out.d_log_var2, p_log_var=out.p_log_var2).sum(1)
 
     return Loss(_kld2, name='KLD2')
 
@@ -122,29 +100,24 @@ def get_kld_vamp_loss() -> LossBase[Outputs, Targets]:
 
     def _kld2_vamp(out: Outputs, _: Targets) -> torch.Tensor:
         """Calculate KL divergence loss for VAMP prior."""
-        z_kld = out.z1
-        mu_kld = out.mu1
-        log_var_kld = out.log_var1
-        pseudo_mu = out.pseudo_mu1
-        pseudo_log_var = out.pseudo_log_var1
-        batch = mu_kld.shape[0]
-        # z1 is [Batch, n_codes, Dim]. Pseudo is [Pseudo, n_codes, Dim].
-        # Expand z for pseudo: [Batch, Pseudo, n_codes, Dim]
-        z = z_kld.unsqueeze(1).expand(-1, n_pseudo_inputs, -1, -1)
+        z_kld = out.z1  # z1 is [Batch, Dim]
+        mu_kld = out.mu1  # mu1 is [Batch, Dim]
+        log_var_kld = out.log_var1  # log_var1 is [Batch, Dim]
+        pseudo_mu = out.pseudo_mu1  # pseudo_mu1 is [Pseudo, Dim]
+        pseudo_log_var = out.pseudo_log_var1  # pseudo_log_var1 is [Pseudo, Dim]
+        batch_size = mu_kld.shape[0]
 
-        # Posterior ll: sum over dim (1, 2).
-        posterior_ll = gaussian_ll(z_kld, mu_kld, log_var_kld).sum((1, 2))
+        z = z_kld.unsqueeze(1).expand(-1, n_pseudo_inputs, -1)
+
+        # Posterior ll: sum over dim (1)
+        posterior_ll = gaussian_ll(z_kld, mu_kld, log_var_kld).sum(1)
 
         # Prior ll:
-        # pseudo_mu: [Pseudo, n_codes, Dim] -> [1, Pseudo, n_codes, Dim] -> [Batch, Pseudo, n_codes, Dim]
-        pseudo_mu = pseudo_mu.unsqueeze(0).expand(batch, -1, -1, -1)
-        pseudo_log_var = pseudo_log_var.unsqueeze(0).expand(batch, -1, -1, -1)
+        pseudo_mu = pseudo_mu.unsqueeze(0).expand(batch_size, -1, -1)
+        pseudo_log_var = pseudo_log_var.unsqueeze(0).expand(batch_size, -1, -1)
+        prior_ll = torch.logsumexp(gaussian_ll(z, pseudo_mu, pseudo_log_var).sum(2), dim=1)
 
-        # ll(z|pseudo): sum over dim (2, 3). [Batch, Pseudo]
-        # logsumexp over pseudo (1).
-        prior_ll = torch.logsumexp(gaussian_ll(z, pseudo_mu, pseudo_log_var).sum((2, 3)), dim=1)
-        total = posterior_ll - prior_ll + np.log(n_pseudo_inputs)
-        return total
+        return posterior_ll - prior_ll + np.log(n_pseudo_inputs)
 
     return Loss(_kld2_vamp, name='KLD2_VAMP')
 
@@ -154,7 +127,7 @@ def get_annealing() -> LossBase[Outputs, Targets]:
     period = Experiment.get_config().autoencoder.objective.kld_restart_interval
 
     def _annealing(outputs: Outputs, _: Targets) -> torch.Tensor:
-        t_epoch = outputs.model_epoch % period
+        t_epoch = outputs.model_epoch % period or period
         time_fraction = torch.tensor(t_epoch / period, device=outputs.recon.device)
         time_fraction = torch.clamp(time_fraction, 0.0, 1.0)
         return 0.5 * (1.0 - torch.cos(time_fraction * math.pi))
@@ -165,7 +138,6 @@ def get_annealing() -> LossBase[Outputs, Targets]:
 def get_kld_loss() -> LossBase[Outputs, Targets]:
     """Get KL divergence loss for the first latent variable in the variational autoencoder."""
     cfg_ae = Experiment.get_config().autoencoder
-    # Access n_pseudo_inputs from model or config? It's in AutoEncoderConfig now.
     vamp = cfg_ae.model.n_pseudo_inputs > 0
     c_kld1 = cfg_ae.objective.c_kld1
     c_kld2 = cfg_ae.objective.c_kld2
@@ -223,6 +195,6 @@ def get_autoencoder_loss() -> LossBase[Outputs, Targets]:
     """Get autoencoder loss combining reconstruction and KLD losses."""
     cfg_ae = Experiment.get_config().autoencoder
     if cfg_ae.model.class_name is not AutoEncoders.AE:
-        return get_recon_loss() + get_kld_loss()
+        return get_chamfer_loss() + get_kld_loss()
 
-    return get_recon_loss()
+    return get_chamfer_loss()

@@ -1,30 +1,16 @@
-"""Visualize counterfactuals."""
+"""Generate reconstructions and counterfactuals."""
 
 from collections.abc import Sized
-from typing import Any
 
-import numpy.typing as npt
+import numpy as np
 import torch
 
 from drytorch import Model
 
-from src.module import CounterfactualVQVAE, get_classifier
+from src.module import CounterfactualVAE, get_classifier
 from src.config import AllConfig, Experiment, hydra_main
 from src.data import Inputs, Partitions, get_dataset
 from src.utils.visualization import render_cloud
-
-
-def calculate_and_print_probs(
-    classifier: Model[Inputs, torch.Tensor],
-    cloud: torch.Tensor,
-    label_prefix: str,
-) -> tuple[torch.Tensor, str]:
-    """Calculate probabilities and print them."""
-    logits = classifier(Inputs(cloud=cloud))
-    probs = torch.softmax(logits, dim=1).cpu().numpy()[0]
-    str_out = f'{label_prefix}: ({" ".join(f"{p:.2f}" for p in probs)})'
-    print(str_out)
-    return logits, str_out
 
 
 @torch.inference_mode()
@@ -42,59 +28,85 @@ def create_and_render_counterfactuals() -> None:
     classifier.load_state()
     test_dataset = get_dataset(Partitions.test if cfg.final else Partitions.val)
     num_classes = cfg.data.dataset.n_classes
-    vqvae_module = CounterfactualVQVAE().eval()
-    model = Model(vqvae_module, name=cfg_ae.model.name, device=cfg_user.device)
+    vae_module = CounterfactualVAE().eval()
+    model = Model(vae_module, name=cfg_ae.model.name, device=cfg_user.device)
     model.load_state()
+
+    # 1. Collect Batch Data
+    clouds = []
+    labels = []
 
     for i in cfg_user.plot.sample_indices:
         assert isinstance(test_dataset, Sized)
         if i >= len(test_dataset):
             raise ValueError(f'Index {i} is too large for the selected dataset of length {len(test_dataset)}')
 
-        save_dir = save_dir_base / f'sample_{i}'
+        sample_i, target_i = test_dataset[i]
+        clouds.append(sample_i.cloud)
+        labels.append(target_i.label)
+
+    # 2. Batch Inference
+    batch_cloud = torch.stack(clouds).to(model.device)
+    inputs = Inputs(cloud=batch_cloud)
+
+    # Classifier (Original)
+    logits_original = classifier(inputs)
+    probs_original = torch.softmax(logits_original, dim=1).cpu().numpy()
+    inputs = inputs._replace(logits=logits_original)
+
+    # VAE Reconstruction
+    out_recon = vae_module(inputs)
+    recon_clouds = out_recon.recon.detach().cpu().numpy()
+    logits_recon = classifier(Inputs(cloud=out_recon.recon))
+    probs_recon = torch.softmax(logits_recon, dim=1).cpu().numpy()
+
+    # Counterfactuals
+    cf_results: dict[int, tuple[np.ndarray, np.ndarray]] = {}  # Map target_class -> (clouds, probs)
+    for j in range(num_classes):
+        out_cf = vae_module.generate_counterfactual(
+            inputs,
+            target_dim=j,
+            target_value=counterfactual_value,
+        )
+        cf_clouds = out_cf.recon.detach().cpu().numpy()
+        logits_cf = classifier(Inputs(cloud=out_cf.recon))
+        probs_cf = torch.softmax(logits_cf, dim=1).cpu().numpy()
+        cf_results[j] = (cf_clouds, probs_cf)
+
+    # 3. Visualization and Reporting
+    for idx, sample_idx in enumerate(cfg_user.plot.sample_indices):
+        print(f'Sample {sample_idx} with label {labels[idx]}:')
+        save_dir = save_dir_base / f'sample_{sample_idx}'
         save_dir.mkdir(parents=True, exist_ok=True)
         for old_file in save_dir.iterdir():
             old_file.unlink()
 
-        sample_i = test_dataset[i][0]
-        cloud = sample_i.cloud.to(model.device).unsqueeze(0)
-        sample_i = Inputs(cloud=cloud)
-        label_i = test_dataset[i][1].label
-        print(f'Sample {i} with label {label_i}:')
+        # Original
+        p_orig = probs_original[idx]
+        str_original = f'Original: ({", ".join(f"{i}: {100 * p:.2f}%" for i, p in enumerate(p_orig))})'
+        print(str_original)
+        render_cloud((batch_cloud[idx].cpu().numpy(),), title=str_original, interactive=interactive, save_dir=save_dir)
 
-        input_pc = cloud.squeeze().cpu().numpy()
-        logits, str_original = calculate_and_print_probs(classifier, sample_i.cloud, 'Original')
+        # Reconstruction
+        p_recon = probs_recon[idx]
+        str_recon = f'Reconstruction: ({", ".join(f"{i}: {100 * p:.2f}%" for i, p in enumerate(p_recon))})'
+        print(str_recon)
+        render_cloud((recon_clouds[idx],), title=str_recon, interactive=interactive, save_dir=save_dir)
 
-        out = vqvae_module(sample_i)
-        recon = out.recon.detach().squeeze().cpu().numpy()
-        _, str_recon = calculate_and_print_probs(classifier, out.recon, 'Reconstruction')
-
-        out = vqvae_module.double_reconstruct_with_logits(sample_i, logits)
-        double_recon = out.recon.detach().squeeze().cpu().numpy()
-        _, str_double_recon = calculate_and_print_probs(classifier, out.recon, 'Double Reconstruction')
-
-        counterfactuals = list[npt.NDArray[Any]]()
-        str_counterfactual = list[str]()
+        # Counterfactuals
+        cf_clouds_list = []
         for j in range(num_classes):
-            out = vqvae_module.generate_counterfactual(
-                sample_i,
-                sample_logits=logits,
-                target_dim=j,
-                target_value=counterfactual_value,
-            )
-            _, str_out = calculate_and_print_probs(classifier, out.recon, f'Counterfactual to {j}')
-            str_counterfactual.append(str_out)
-            counterfactual = out.recon.detach().squeeze().cpu().numpy()
-            counterfactuals.append(counterfactual)
+            clouds_j, probs_j = cf_results[j]
+            cloud_np = clouds_j[idx]
+            p_cf = probs_j[idx]
+            str_cf = f'Counterfactual to {j}: ({", ".join(f"{i}: {100 * p:.2f}%" for i, p in enumerate(p_cf))})'
+            print(str_cf)
+            render_cloud((cloud_np,), title=str_cf, interactive=interactive, save_dir=save_dir)
+            cf_clouds_list.append(cloud_np)
 
+        # All counterfactuals combined
+        render_cloud(cf_clouds_list, title='Counterfactuals', interactive=interactive, save_dir=save_dir)
         print()
-        render_cloud((input_pc,), title=str_original, interactive=interactive, save_dir=save_dir)
-        render_cloud((recon,), title=str_recon, interactive=interactive, save_dir=save_dir)
-        render_cloud((double_recon,), title=str_double_recon, interactive=interactive, save_dir=save_dir)
-        for j in range(num_classes):
-            render_cloud((counterfactuals[j],), title=str_counterfactual[j], interactive=interactive, save_dir=save_dir)
-
-        render_cloud(counterfactuals, title='Counterfactuals', interactive=interactive, save_dir=save_dir)
 
     return
 

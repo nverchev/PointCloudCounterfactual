@@ -3,23 +3,12 @@ study_name: conditional_latent_encoder
 n_trials: 300
 
 params:
-  autoencoder.model.conditional_latent_encoder.proj_dim:
-    suggest: suggest_categorical
-    settings:
-      choices: [ 256, 512 ]
 
-  autoencoder.model.conditional_latent_encoder.n_heads:
-    suggest: suggest_categorical
+  autoencoder.model.conditional_latent_encoder.mlp_dims:
+    suggest: suggest_list
     settings:
-      choices: [ 4, 8, 16 ]
-
-  autoencoder.model.conditional_latent_encoder.n_transformer_layers:
-    suggest: suggest_int
-    settings:
-      low: 1
-      high: 3
-
-  autoencoder.model.conditional_latent_encoder.feedforward_dim:
-    suggest: suggest_categorical
-    settings:
-      choices: [256, 512, 1024]
+      min_length: 1
+      max_length: 3
+      suggest: suggest_categorical
+      settings:
+        choices: [256, 512, 1024]

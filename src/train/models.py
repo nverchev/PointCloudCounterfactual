@@ -6,7 +6,7 @@ from src.data import Inputs, Outputs
 
 
 class ModelEpoch(Model[Inputs, Outputs]):
-    """This class adds a hook to include the epoch in the outputs (to anneal the kld loss)."""
+    """This class adds the epoch to the outputs (to anneal the kld loss)."""
 
     def __call__(self, inputs: Inputs) -> Outputs:
         out = super().__call__(inputs)

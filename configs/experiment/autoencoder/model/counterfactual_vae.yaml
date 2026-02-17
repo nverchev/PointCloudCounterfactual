@@ -7,8 +7,9 @@ defaults:
   - _self_
 
 name: VAE
-class_name: VAE
+class_name: CounterfactualVAE
 z1_dim: 16
 z2_dim: 16
 n_pseudo_inputs: 0
 feature_dim: 1024
+cf_temperature: 5.0
