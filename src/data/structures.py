@@ -17,6 +17,7 @@ class Inputs(NamedTuple):
 
     cloud: torch.Tensor
     initial_sampling: torch.Tensor = torch.empty(0)
+    logits: torch.Tensor = torch.empty(0)
 
 
 class Targets(NamedTuple):
@@ -40,13 +41,7 @@ class Outputs:
     Attributes:
         model_epoch: the epoch of the model (used for annealing in some losses)
         recon: the reconstructed point cloud.
-        word: the discrete encodings' embeddings (with straight-through gradients to word_approx).
-        word_approx: outer encoder approximation of the discrete encodings' embedding.
-        word_quantised: the discrete encodings' embeddings vectorized (gradients flow to codebook).
-        word_recon: inner autoencoder reconstruction of the discrete encodings' embeddings.
-        quantization_error: square distances between w and the embeddings.
-        idx: the discrete encoding as the index for the embedding.
-        one_hot_idx: the discrete encoding as one hot encoding for the index.
+        latent_features: the latent features from the latent decoder.
         z1: the first latent variable.
         z2: the second latent variable.
         mu1: the mean of the distribution for z1.
@@ -62,13 +57,7 @@ class Outputs:
 
     model_epoch: int
     recon: torch.Tensor
-    word: torch.Tensor
-    word_approx: torch.Tensor
-    word_quantised: torch.Tensor
-    word_recon: torch.Tensor
-    quantization_error: torch.Tensor
-    idx: torch.Tensor
-    one_hot_idx: torch.Tensor
+    latent_features: torch.Tensor
     z1: torch.Tensor
     z2: torch.Tensor
     mu1: torch.Tensor
@@ -104,29 +93,3 @@ class Outputs:
                 parts.append(f'{name}=<uninitialized>')
 
         return f'{self.__class__.__name__}({", ".join(parts)})'
-
-
-class WInputs(NamedTuple):
-    """Targets for training the inner autoencoder.
-
-    Attributes:
-        word_approx: outer encoder approximation of the discrete encodings' embedding.
-        logits: classifier evaluation needed for CounterFactualWAutoencoder.
-    """
-
-    word_approx: torch.Tensor
-    logits: torch.Tensor = torch.empty(0)
-
-
-class WTargets(NamedTuple):
-    """Targets for training the inner autoencoder.
-
-    Attributes:
-        word_quantized: the discrete encodings' embedding vectorized.
-        one_hot_idx: torch.Tensor
-        logits: classifier evaluation needed for CounterFactualWAutoencoder.
-    """
-
-    word_quantized: torch.Tensor
-    one_hot_idx: torch.Tensor
-    logits: torch.Tensor = torch.empty(0)

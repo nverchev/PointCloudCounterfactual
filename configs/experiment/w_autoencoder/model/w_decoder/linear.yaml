@@ -1,4 +1,0 @@
-class_name: Linear
-conv_dims: [2048, 2048, 2048]
-act_name: ''
-norm_name: BatchNorm1d

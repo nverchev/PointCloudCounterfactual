@@ -2,17 +2,17 @@
 
 from typing import TYPE_CHECKING, Any
 
-from drytorch import DataLoader, Diagnostic, Model, Test, Trainer
+from drytorch import DataLoader, Test, Trainer
 from drytorch.core.exceptions import TrackerNotUsedError
-from drytorch.lib.hooks import EarlyStoppingCallback, Hook, StaticHook, call_every, saving_hook
+from drytorch.lib.hooks import EarlyStoppingCallback, Hook, call_every, saving_hook
 from drytorch.utils.average import get_moving_average, get_trailing_mean
 
 from src.data import get_datasets
-from src.module import BaseVQVAE, get_autoencoder
+from src.module import get_autoencoder
 from src.config import AllConfig, Experiment, get_trackers, hydra_main
 from src.train import get_autoencoder_loss, get_learning_schema
-from src.train.hooks import DiscreteSpaceOptimizer
 from src.train.metrics_and_losses import get_emd_loss, get_recon_loss
+from src.train.models import ModelEpoch
 from src.utils.parallel import DistributedWorker
 
 
@@ -29,7 +29,7 @@ def train_autoencoder(trial: Trial | None = None) -> None:
     cfg_user = cfg.user
     cfg_early = cfg_ae.train.early_stopping
     ae = get_autoencoder()
-    model = Model(ae, name=cfg_ae.model.name, device=cfg_user.device)
+    model = ModelEpoch(ae, name=cfg_ae.model.name, device=cfg_user.device)
     train_dataset, test_dataset = get_datasets()  # test is validation unless final=True
     train_loader = DataLoader(
         dataset=train_dataset, batch_size=cfg_ae.train.batch_size_per_device, n_workers=cfg_user.n_workers
@@ -40,15 +40,9 @@ def train_autoencoder(trial: Trial | None = None) -> None:
     learning_schema = get_learning_schema(cfg.autoencoder)
     loss = get_autoencoder_loss()
     trainer = Trainer(model, loader=train_loader, loss=loss, learning_schema=learning_schema)
-    diagnostic = Diagnostic(model, loader=train_loader, objective=loss)
     test_all_metrics = Test(model, loader=test_loader, metric=loss | get_emd_loss())
     if cfg_user.load_checkpoint:
         trainer.load_checkpoint(cfg_user.load_checkpoint)
-
-    if isinstance(ae, BaseVQVAE):
-        start = interval = cfg_ae.diagnose_every
-        rearrange_hook = StaticHook(DiscreteSpaceOptimizer(diagnostic)).bind(call_every(interval, start - 1))
-        trainer.pre_epoch_hooks.register(rearrange_hook)  # pre-hook to ensure new embeddings are trained
 
     if not cfg.final:
         trainer.add_validation(test_loader)  # when not final, this uses the validation dataset

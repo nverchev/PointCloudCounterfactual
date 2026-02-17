@@ -24,21 +24,21 @@ class Decoders(enum.StrEnum):
     PCGen = enum.auto()
 
 
-class WEncoders(enum.StrEnum):
-    """Encoder classes for the W-autoencoder."""
+class LatentEncoders(enum.StrEnum):
+    """Encoder classes for the Latent-autoencoder."""
 
     Convolutional = enum.auto()
     Transformer = enum.auto()
 
 
-class WDecoders(enum.StrEnum):
-    """Decoder classes for the W-autoencoder."""
+class LatentDecoders(enum.StrEnum):
+    """Decoder classes for the Latent-autoencoder."""
 
     Linear = enum.auto()
     Transformer = enum.auto()
 
 
-class WConditionalEncoders(enum.StrEnum):
+class ConditionalLatentEncoders(enum.StrEnum):
     """Posterior classes."""
 
     Transformer = enum.auto()
@@ -48,8 +48,8 @@ class AutoEncoders(enum.StrEnum):
     """Autoencoder classes."""
 
     AE = enum.auto()
-    VQVAE = enum.auto()
-    CounterfactualVQVAE = enum.auto()
+    VAE = enum.auto()
+    CounterfactualVAE = enum.auto()
 
 
 class Classifiers(enum.StrEnum):

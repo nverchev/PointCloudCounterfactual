@@ -1,5 +1,5 @@
 defaults:
-  - model: vqvae
+  - model: vae
   - objective: chamfer_emd
   - train: default_train
   - _self_

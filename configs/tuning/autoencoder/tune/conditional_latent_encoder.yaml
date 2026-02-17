@@ -1,25 +1,25 @@
-study_name: conditional_w_encoder
+study_name: conditional_latent_encoder
 
 n_trials: 300
 
 params:
-  w_autoencoder.model.conditional_w_encoder.proj_dim:
+  autoencoder.model.conditional_latent_encoder.proj_dim:
     suggest: suggest_categorical
     settings:
       choices: [ 256, 512 ]
 
-  w_autoencoder.model.conditional_w_encoder.n_heads:
+  autoencoder.model.conditional_latent_encoder.n_heads:
     suggest: suggest_categorical
     settings:
       choices: [ 4, 8, 16 ]
 
-  w_autoencoder.model.conditional_w_encoder.n_transformer_layers:
+  autoencoder.model.conditional_latent_encoder.n_transformer_layers:
     suggest: suggest_int
     settings:
       low: 1
       high: 3
 
-  w_autoencoder.model.conditional_w_encoder.feedforward_dim:
+  autoencoder.model.conditional_latent_encoder.feedforward_dim:
     suggest: suggest_categorical
     settings:
       choices: [256, 512, 1024]

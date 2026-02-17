@@ -3,7 +3,6 @@ defaults:
   - autoencoder: autoencoder_exp
   - classifier: classifier_exp
   - user: user_settings
-  - w_autoencoder: w_autoencoder_exp
   - data: default_data
   - _self_
 
