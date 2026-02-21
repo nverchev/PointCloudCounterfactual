@@ -1,9 +1,15 @@
 """Hooks to execute during training."""
 
+from typing import Any
+
 from torch.utils import data
 
+from drytorch import Trainer
 from drytorch.core import protocols as p
+from drytorch.core.exceptions import TrackerNotUsedError
+from drytorch.lib.hooks import EarlyStoppingCallback, Hook, call_every, saving_hook
 from drytorch.lib.load import take_from_dataset
+from drytorch.utils.averages import get_moving_average, get_trailing_mean
 
 from src.data.structures import Inputs, Outputs, Targets
 
@@ -91,3 +97,43 @@ class TensorBoardLogReconstruction:
                 vertices=recon.unsqueeze(0),
                 global_step=model.epoch,
             )
+
+
+def register_checkpointing(trainer: Trainer, checkpoint_every: int | None) -> None:
+    """Register the checkpointing hook."""
+    if checkpoint_every:
+        trainer.post_epoch_hooks.register(saving_hook.bind(call_every(checkpoint_every)))
+    return
+
+
+def register_early_stopping(trainer: Trainer, window: int, patience: int = 0) -> None:
+    """Register the early stopping hook."""
+    trainer.post_epoch_hooks.register(
+        EarlyStoppingCallback(metric=trainer.objective, filter_fn=get_trailing_mean(window), patience=patience)
+    )
+    return
+
+
+def register_pruning(trainer: Trainer, trial: Any) -> None:
+    """Register the pruning hook."""
+    from drytorch.contrib.optuna import TrialCallback
+
+    prune_hook = TrialCallback(trial, metric=trainer.objective, filter_fn=get_moving_average())
+    trainer.post_epoch_hooks.register(prune_hook)
+    return
+
+
+def register_reconstruction_hook(trainer: Trainer, restart_interval: int) -> None:
+    """Register the reconstruction hook."""
+    try:
+        from src.train.hooks import TensorBoardLogReconstruction
+
+        trainer.post_epoch_hooks.register(
+            Hook(TensorBoardLogReconstruction(trainer.loader.dataset)).bind(call_every(restart_interval))
+        )
+    except TrackerNotUsedError:  # tracker is not subscribed
+        pass
+    except (ImportError, ModuleNotFoundError):  # library is not installed
+        pass
+
+    return

@@ -1,5 +1,6 @@
-"""Generate reconstructions and counterfactuals."""
+"""Generate counterfactual point clouds, and visualize them together with the original point clouds."""
 
+import logging
 from collections.abc import Sized
 
 import numpy as np
@@ -13,13 +14,19 @@ from src.data import Inputs, Partitions, get_dataset
 from src.utils.visualization import render_cloud
 
 
+def format_probs(probs: np.ndarray, class_names: list[str]) -> str:
+    """Format probability distribution for logging."""
+    return f'({", ".join(f"{name}: {100 * p:.1f}%" for name, p in zip(class_names, probs, strict=True))})'
+
+
 @torch.inference_mode()
 def create_and_render_counterfactuals() -> None:
     """Create and visualize the selected point clouds in the dataset."""
     cfg = Experiment.get_config()
     cfg_ae = cfg.autoencoder
     cfg_user = cfg.user
-    counterfactual_value = cfg_user.counterfactual_value
+    counterfactual_value = cfg_ae.objective.counterfactual_value
+
     interactive = cfg_user.plot.interactive
     save_dir_base = cfg.user.path.version_dir / 'images' / cfg.name
 
@@ -27,7 +34,7 @@ def create_and_render_counterfactuals() -> None:
     classifier = Model(dgcnn_module, name=cfg.classifier.model.name, device=cfg.user.device)
     classifier.load_state()
     test_dataset = get_dataset(Partitions.test if cfg.final else Partitions.val)
-    num_classes = cfg.data.dataset.n_classes
+    class_names = test_dataset.classes
     vae_module = CounterfactualVAE().eval()
     model = Model(vae_module, name=cfg_ae.model.name, device=cfg_user.device)
     model.load_state()
@@ -62,7 +69,7 @@ def create_and_render_counterfactuals() -> None:
 
     # Counterfactuals
     cf_results: dict[int, tuple[np.ndarray, np.ndarray]] = {}  # Map target_class -> (clouds, probs)
-    for j in range(num_classes):
+    for j in range(len(class_names)):
         out_cf = vae_module.generate_counterfactual(
             inputs,
             target_dim=j,
@@ -75,7 +82,9 @@ def create_and_render_counterfactuals() -> None:
 
     # 3. Visualization and Reporting
     for idx, sample_idx in enumerate(cfg_user.plot.sample_indices):
-        print(f'Sample {sample_idx} with label {labels[idx]}:')
+        label_idx = labels[idx]
+        label_name = class_names[label_idx]
+        logging.info('Sample %d with label "%s" (%d):', sample_idx, label_name, label_idx)
         save_dir = save_dir_base / f'sample_{sample_idx}'
         save_dir.mkdir(parents=True, exist_ok=True)
         for old_file in save_dir.iterdir():
@@ -83,24 +92,24 @@ def create_and_render_counterfactuals() -> None:
 
         # Original
         p_orig = probs_original[idx]
-        str_original = f'Original: ({", ".join(f"{i}: {100 * p:.2f}%" for i, p in enumerate(p_orig))})'
-        print(str_original)
+        str_original = f'Original: {format_probs(p_orig, class_names)}'
+        logging.info(str_original)
         render_cloud((batch_cloud[idx].cpu().numpy(),), title=str_original, interactive=interactive, save_dir=save_dir)
 
         # Reconstruction
         p_recon = probs_recon[idx]
-        str_recon = f'Reconstruction: ({", ".join(f"{i}: {100 * p:.2f}%" for i, p in enumerate(p_recon))})'
-        print(str_recon)
+        str_recon = f'Reconstruction: {format_probs(p_recon, class_names)}'
+        logging.info(str_recon)
         render_cloud((recon_clouds[idx],), title=str_recon, interactive=interactive, save_dir=save_dir)
 
         # Counterfactuals
         cf_clouds_list = []
-        for j in range(num_classes):
+        for j, class_name in enumerate(class_names):
             clouds_j, probs_j = cf_results[j]
             cloud_np = clouds_j[idx]
             p_cf = probs_j[idx]
-            str_cf = f'Counterfactual to {j}: ({", ".join(f"{i}: {100 * p:.2f}%" for i, p in enumerate(p_cf))})'
-            print(str_cf)
+            str_cf = f'Counterfactual to {class_name} ({j}): {format_probs(p_cf, class_names)}'
+            logging.info(str_cf)
             render_cloud((cloud_np,), title=str_cf, interactive=interactive, save_dir=save_dir)
             cf_clouds_list.append(cloud_np)
 

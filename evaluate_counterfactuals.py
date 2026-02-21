@@ -1,5 +1,6 @@
-"""Evaluate counterfactuals."""
+"""Evaluate counterfactual generation performance."""
 
+import logging
 from typing import cast
 
 import torch
@@ -18,13 +19,14 @@ from src.data import Inputs, Targets, Partitions, get_dataset
 from src.train.metrics_and_losses import get_classification_loss
 
 
-def get_label_distribution(test_loader: p.LoaderProtocol[tuple[Inputs, Targets]], num_classes: int) -> Tensor:
+def get_label_distribution(test_loader: p.LoaderProtocol[tuple[Inputs, Targets]], class_names: list[str]) -> Tensor:
     """Extract labels from the test loader and compute distribution."""
     with torch.inference_mode():  # using inference mode to prevent augmentation
         labels = torch.cat([batch_data[1].label for batch_data in test_loader])
 
-    distribution = {'count_' + str(i): int((labels == i).sum().item()) for i in range(num_classes)}
-    print('label distribution:', distribution)
+    counts = [(labels == i).sum().item() for i in range(len(class_names))]
+    dist_str = ' | '.join(f'{name}: {int(count)}' for name, count in zip(class_names, counts, strict=True))
+    logging.info('Label distribution: %s', dist_str)
     return labels
 
 
@@ -66,7 +68,7 @@ def evaluate_counterfactual_performance(
     test_dataset: Dataset[tuple[Inputs, Targets]],
     vae: CounterfactualVAE,
     classifier: BaseClassifier,
-    n_classes: int,
+    class_names: list[str],
     batch_size: int,
     target_value: float,
 ) -> None:
@@ -74,19 +76,19 @@ def evaluate_counterfactual_performance(
     metrics: list[Metric[Tensor, Targets]] = []
     loss = get_classification_loss()
 
-    for j in range(n_classes):
+    for j, class_name in enumerate(class_names):
         counterfactual_dataset = CounterfactualDataset(
             test_dataset, vae, classifier, target_dim=j, target_value=target_value
         )
         counterfactual_loader = DataLoader(dataset=counterfactual_dataset, batch_size=batch_size, pin_memory=False)
-        test = Test(classifier_model, name=f'Counterfeit_to_{j}', loader=counterfactual_loader, metric=loss)
+        test = Test(classifier_model, name=f'Counterfeit_to_{class_name}', loader=counterfactual_loader, metric=loss)
         test()
         metrics.append(cast(Metric[Tensor, Targets], test.objective))
 
     overall_metric = compute_overall_metric(metrics)
     if overall_metric:
-        print('Overall counterfeit success: ')
-        print_metrics(overall_metric)
+        logging.info('Overall counterfeit success:')
+        log_metrics(overall_metric)
 
     return
 
@@ -124,7 +126,7 @@ def evaluate_class_specific_counterfactuals(
     classifier: BaseClassifier,
     labels: Tensor,
     predictions: Tensor,
-    num_classes: int,
+    class_names: list[str],
     batch_size: int,
     target_value: float,
 ) -> None:
@@ -132,8 +134,8 @@ def evaluate_class_specific_counterfactuals(
     metrics: list[Metric[Tensor, Targets]] = []
     loss = get_classification_loss()
 
-    for i in range(num_classes):
-        for j in range(num_classes):
+    for i, name_i in enumerate(class_names):
+        for j, name_j in enumerate(class_names):
             if i == j:
                 continue
 
@@ -151,22 +153,23 @@ def evaluate_class_specific_counterfactuals(
                 target_value=target_value,
             )
             counterfactual_loader = DataLoader(dataset=counterfactual_dataset, batch_size=batch_size, pin_memory=False)
-            test = Test(classifier_model, name=f'{i}_to_{j}', loader=counterfactual_loader, metric=loss)
+            test = Test(classifier_model, name=f'{name_i}_to_{name_j}', loader=counterfactual_loader, metric=loss)
             test(store_outputs=True)
             metrics.append(cast(Metric[Tensor, Targets], test.objective))
 
     overall_metric = compute_overall_metric(metrics)
     if overall_metric:
-        print('Overall misclassified counterfeit success:')
-        print_metrics(overall_metric)
+        logging.info('Overall misclassified counterfeit success:')
+        log_metrics(overall_metric)
 
     return
 
 
-def print_metrics(metrics: p.ObjectiveProtocol[Tensor, Targets]) -> None:
-    """Print metrics."""
-    for metric_name, metric_value in compute_metrics(metrics).items():
-        print(f'{metric_name}: {round(metric_value, 3)}')
+def log_metrics(metrics: p.ObjectiveProtocol[Tensor, Targets], prefix: str = '') -> None:
+    """Log metrics."""
+    results = compute_metrics(metrics)
+    metrics_str = ' | '.join(f'{k}: {v:.3f}' for k, v in results.items())
+    logging.info('%s%s', prefix, metrics_str)
 
     return
 
@@ -189,16 +192,17 @@ def evaluate_counterfactuals(
 ) -> None:
     """Evaluate the counterfactuals according to different metrics."""
     cfg = Experiment.get_config()
-    num_classes = cfg.data.dataset.n_classes
     batch_size = cfg.classifier.train.batch_size_per_device
-    counterfactual_value = cfg.user.counterfactual_value
+    counterfactual_value = cfg.autoencoder.objective.counterfactual_value
+
     test_dataset = get_dataset(Partitions.test if cfg.final else Partitions.val)
+    class_names = test_dataset.classes
     test_loader = DataLoader(dataset=test_dataset, batch_size=batch_size)
-    test_labels = get_label_distribution(test_loader, num_classes)
+    test_labels = get_label_distribution(test_loader, class_names)
     test_original = evaluate_original_performance(classifier_model, test_loader)
     evaluate_reconstructed_performance(classifier_model, test_dataset, vae, classifier, batch_size)
     evaluate_counterfactual_performance(
-        classifier_model, test_dataset, vae, classifier, num_classes, batch_size, counterfactual_value
+        classifier_model, test_dataset, vae, classifier, class_names, batch_size, counterfactual_value
     )
     outputs_logits = torch.cat(test_original.outputs_list)
     predictions = outputs_logits.argmax(dim=1)
@@ -212,7 +216,7 @@ def evaluate_counterfactuals(
         classifier,
         test_labels,
         predictions,
-        num_classes,
+        class_names,
         batch_size,
         counterfactual_value,
     )
@@ -226,7 +230,6 @@ def main(cfg: AllConfig) -> None:
     for tracker in trackers:
         exp.trackers.subscribe(tracker)
 
-    print(exp.trackers.named_trackers)
     with exp.create_run(resume=True):
         classifier = get_classifier()
         classifier_model = Model(classifier, name=cfg.classifier.model.name, device=cfg.user.device)

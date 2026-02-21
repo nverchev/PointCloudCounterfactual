@@ -1,6 +1,7 @@
 """Metrics and losses used for training and evaluation."""
 
 import math
+import warnings
 
 import numpy as np
 import torch
@@ -167,12 +168,13 @@ def get_macro_accuracy() -> Metric[torch.Tensor, Targets]:
     """Get macro-averaged accuracy metric."""
 
     def _macro_accuracy(outputs: torch.Tensor, targets: Targets) -> torch.Tensor:
-        return multiclass_accuracy(outputs, targets.label, average='macro', num_classes=outputs.shape[1])
-
-    # triggering deprecated warning (remove this in the future if not fixed by torcheval)
-    zero_output = torch.FloatTensor([[1, 0]])
-    zero_tensor = torch.LongTensor([0])
-    _macro_accuracy(zero_output, Targets(ref_cloud=zero_tensor, scale=zero_tensor, label=zero_tensor))
+        with warnings.catch_warnings():
+            warnings.filterwarnings(
+                'ignore',
+                message='The reduce argument of torch.scatter with Tensor src is deprecated',
+                category=UserWarning,
+            )
+            return multiclass_accuracy(outputs, targets.label, average='macro', num_classes=outputs.shape[1])
 
     return Metric(_macro_accuracy, name='Macro Accuracy', higher_is_better=True)
 

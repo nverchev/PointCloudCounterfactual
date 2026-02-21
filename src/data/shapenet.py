@@ -108,5 +108,7 @@ class ShapeNetFlowDataset(SplitCreator):
     @override
     def split(self, split: Partitions) -> Dataset[tuple[Inputs, Targets]]:
         dataset = ShapenetFlowSplit(self.paths[split])
+        set_id = set(dataset.folder_id_list)
+        dataset.classes = [self.classes[hex_id] for hex_id in sorted(set_id)]
         logging.info('Loaded ShapeNetFlow %s', split.name.capitalize())
         return dataset

@@ -11,6 +11,12 @@ from src.data.structures import Inputs, Targets
 
 
 class PointCloudDataset(Dataset[tuple[Inputs, Targets]], metaclass=ABCMeta):
+    classes: list[str]
+
+    def __init__(self) -> None:
+        super().__init__()
+        self.classes = []
+
     @abstractmethod
     def __len__(self) -> int: ...
 

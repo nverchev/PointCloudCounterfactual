@@ -51,7 +51,7 @@ class PointNet(BasePointEncoder):
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         """Forward pass."""
-        x.transpose_(1, 2)
+        x = x.transpose(1, 2)
         for conv in self.points_convolutions:
             x = conv(x)
 
@@ -77,7 +77,7 @@ class LDGCNN(BasePointEncoder):
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         """Forward pass."""
-        x.transpose_(2, 1)
+        x = x.transpose(1, 2)
         indices, x = get_graph_features(x, n_neighbors=self.n_neighbors, indices=torch.empty(0))
         x = self.edge_conv(x)
         x = x.max(dim=3, keepdim=False)[0]
@@ -109,7 +109,7 @@ class DGCNN(BasePointEncoder):
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         """Forward pass."""
         xs = []
-        x.transpose_(2, 1)
+        x = x.transpose(1, 2)
         indices = torch.empty(0)
         for conv in self.edge_convolutions:
             indices, x = get_graph_features(x, n_neighbors=self.n_neighbors, indices=indices)

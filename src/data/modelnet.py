@@ -112,7 +112,13 @@ class ModelNet40Dataset(SplitCreator):
             self._train_val_to_train_and_val()
 
         logging.info('Loaded ModelNet %s', split.name.capitalize())
-        return ModelNet40Split(pcd=self.pcd[split], labels=self.labels[split])
+        dataset = ModelNet40Split(pcd=self.pcd[split], labels=self.labels[split])
+        cfg = Experiment.get_config()
+        if cfg.data.dataset.n_classes < 40:
+            dataset.classes = cfg.data.dataset.settings['select_classes']
+        else:
+            dataset.classes = self.classes
+        return dataset
 
     def _download(self) -> None:
         url = 'https://gaimfs.ugent.be/Public/Dataset/modelnet40_hdf5_2048.zip'

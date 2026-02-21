@@ -362,6 +362,7 @@ class ObjectiveAEConfig:
 
     n_training_output_points: StrictlyPositiveInt
     n_inference_output_points: StrictlyPositiveInt
+    counterfactual_value: PositiveFloat
     c_kld1: PositiveFloat
     c_kld2: PositiveFloat
     kld_restart_interval: StrictlyPositiveInt
@@ -470,9 +471,7 @@ class UserSettings:
     plot: PlottingOptions
     seed: int | None
     checkpoint_every: PositiveInt
-    n_inference_output_points: int
     load_checkpoint: int = -1
-    counterfactual_value: PositiveFloat = 1.0
     hydra = HydraSettings()
     path = PathSpecs()
 

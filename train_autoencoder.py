@@ -1,17 +1,18 @@
 """Train the outer encoder to learn a discrete representation."""
 
 from typing import TYPE_CHECKING, Any
+from drytorch import Model, Test, Trainer
 
-from drytorch import DataLoader, Model, Test, Trainer
-from drytorch.core.exceptions import TrackerNotUsedError
-from drytorch.lib.hooks import EarlyStoppingCallback, Hook, call_every, saving_hook
-from drytorch.utils.average import get_trailing_mean, get_moving_average
-
-from src.data import get_datasets
-from src.data.processed import EvaluatedDataset
 from src.module import get_autoencoder, get_classifier, CounterfactualVAE, BaseClassifier
 from src.config import AllConfig, Experiment, get_trackers, hydra_main
 from src.train import get_autoencoder_loss, get_learning_schema
+from src.train.hooks import (
+    register_checkpointing,
+    register_early_stopping,
+    register_pruning,
+    register_reconstruction_hook,
+)
+from src.train.loaders import get_loaders, get_evaluated_loaders
 from src.train.models import ModelEpoch
 from src.utils.parallel import DistributedWorker
 
@@ -29,10 +30,16 @@ def train_autoencoder(classifier: BaseClassifier | None = None, trial: Trial | N
     cfg_user = cfg.user
     ae = get_autoencoder()
     model = ModelEpoch(ae, name=cfg_ae.model.name, device=cfg_user.device)
+
+    # test_loader loads the validation dataset unless the final flag is set
     if isinstance(ae, CounterfactualVAE) and classifier is not None:
-        train_loader, test_loader = _get_evaluated_loaders(classifier)
+        train_loader, test_loader = get_evaluated_loaders(
+            classifier, batch_size=cfg_ae.train.batch_size_per_device, n_workers=cfg_user.n_workers
+        )
     else:
-        train_loader, test_loader = _get_loaders()  # test_loader loads the validation dataset unless final=True
+        train_loader, test_loader = get_loaders(
+            batch_size=cfg_ae.train.batch_size_per_device, n_workers=cfg_user.n_workers
+        )
 
     loss = get_autoencoder_loss()
     learning_schema = get_learning_schema(cfg.autoencoder)
@@ -44,107 +51,21 @@ def train_autoencoder(classifier: BaseClassifier | None = None, trial: Trial | N
     if not cfg.final:
         trainer.add_validation(test_loader)  # loads the validation dataset
 
-    _register_reconstruction_hook(trainer)
+    register_reconstruction_hook(trainer, cfg.autoencoder.train.learn.scheduler.restart_interval)
     if not cfg.final and cfg.autoencoder.train.early_stopping.active:
-        _register_early_stopping(trainer)
+        cfg_early = cfg.autoencoder.train.early_stopping
+        register_early_stopping(trainer, window=cfg_early.window, patience=cfg_early.patience)
 
     if trial is not None:
-        _register_pruning(trainer, trial)
+        register_pruning(trainer, trial)
     else:
-        _register_checkpointing(trainer)
+        register_checkpointing(trainer, cfg_user.checkpoint_every)
 
     trainer.train_until(cfg_ae.train.n_epochs)
     if trial is None:
         trainer.save_checkpoint()
 
     test()
-    return
-
-
-def _get_evaluated_loaders(classifier: BaseClassifier) -> tuple[DataLoader, DataLoader]:
-    """Get dataloaders for training and testing with classifier evaluation."""
-    cfg = Experiment.get_config()
-    cfg_ae = cfg.autoencoder
-    cfg_user = cfg.user
-    train_dataset, test_dataset = get_datasets()  # test is validation unless final=True
-    processed_train_dataset = EvaluatedDataset(train_dataset, classifier)
-    processed_test_dataset = EvaluatedDataset(test_dataset, classifier)
-    train_loader = DataLoader(
-        dataset=processed_train_dataset,
-        batch_size=cfg_ae.train.batch_size_per_device,
-        n_workers=cfg_user.n_workers,
-        pin_memory=False,
-    )
-    test_loader = DataLoader(
-        dataset=processed_test_dataset,
-        batch_size=cfg_ae.train.batch_size_per_device,
-        n_workers=cfg_user.n_workers,
-        pin_memory=False,
-    )
-    return train_loader, test_loader
-
-
-def _get_loaders() -> tuple[DataLoader, DataLoader]:
-    """Get dataloaders for training and testing."""
-    cfg = Experiment.get_config()
-    cfg_ae = cfg.autoencoder
-    cfg_user = cfg.user
-    train_dataset, test_dataset = get_datasets()
-    train_loader = DataLoader(
-        dataset=train_dataset, batch_size=cfg_ae.train.batch_size_per_device, n_workers=cfg_user.n_workers
-    )
-    test_loader = DataLoader(
-        dataset=test_dataset, batch_size=cfg_ae.train.batch_size_per_device, n_workers=cfg_user.n_workers
-    )
-    return train_loader, test_loader
-
-
-def _register_checkpointing(trainer: Trainer) -> None:
-    """Register the checkpointing hook."""
-    cfg = Experiment.get_config()
-    cfg_user = cfg.user
-    if checkpoint_every := cfg_user.checkpoint_every:
-        trainer.post_epoch_hooks.register(saving_hook.bind(call_every(checkpoint_every)))
-
-    return
-
-
-def _register_early_stopping(trainer: Trainer) -> None:
-    """Register the early stopping hook."""
-    cfg = Experiment.get_config()
-    cfg_early = cfg.autoencoder.train.early_stopping
-    trainer.post_epoch_hooks.register(
-        EarlyStoppingCallback(
-            metric=trainer.objective, filter_fn=get_trailing_mean(cfg_early.window), patience=cfg_early.patience
-        )
-    )
-    return
-
-
-def _register_pruning(trainer: Trainer, trial: Trial) -> None:
-    """Register the pruning hook."""
-    from drytorch.contrib.optuna import TrialCallback
-
-    prune_hook = TrialCallback(trial, metric=trainer.objective, filter_fn=get_moving_average())
-    trainer.post_epoch_hooks.register(prune_hook)
-    return
-
-
-def _register_reconstruction_hook(trainer: Trainer) -> None:
-    """Register the reconstruction hook."""
-    cfg = Experiment.get_config()
-    try:
-        from src.train.hooks import TensorBoardLogReconstruction
-
-        restart_interval = cfg.autoencoder.train.learn.scheduler.restart_interval
-        trainer.post_epoch_hooks.register(
-            Hook(TensorBoardLogReconstruction(trainer.loader.dataset)).bind(call_every(restart_interval))
-        )
-    except TrackerNotUsedError:  # tracker is not subscribed
-        pass
-    except (ImportError, ModuleNotFoundError):  # library is not installed
-        pass
-
     return
 
 
