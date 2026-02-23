@@ -13,7 +13,7 @@ from src.train.hooks import (
     register_reconstruction_hook,
 )
 from src.train.loaders import get_loaders, get_evaluated_loaders
-from src.train.models import ModelEpoch
+from src.train.models import EMAModel
 from src.utils.parallel import DistributedWorker
 
 
@@ -29,7 +29,7 @@ def train_autoencoder(classifier: BaseClassifier | None = None, trial: Trial | N
     cfg_ae = cfg.autoencoder
     cfg_user = cfg.user
     ae = get_autoencoder()
-    model = ModelEpoch(ae, name=cfg_ae.model.name, device=cfg_user.device)
+    model = EMAModel(ae, name=cfg_ae.model.name, device=cfg_user.device)
 
     # test_loader loads the validation dataset unless the final flag is set
     if isinstance(ae, CounterfactualVAE) and classifier is not None:

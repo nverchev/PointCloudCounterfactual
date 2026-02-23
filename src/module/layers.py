@@ -125,12 +125,12 @@ class BaseLayer(nn.Module, metaclass=abc.ABCMeta):
         self.out_dim: int = out_dim
         self.n_groups_layer: int = n_groups_layer
         self.use_bias: bool = True if norm_cls is None else False
-        self.module = self.get_module()
-        self.norm = self.get_norm_layer(norm_cls, out_dim)
-        self.act = self.get_activation(act_cls)
+        self.module: nn.Module = self.get_module()
+        self.norm: nn.Module | None = self.get_norm_layer(norm_cls, out_dim)
+        self.act: nn.Module | None = self.get_activation(act_cls)
         self.use_trunc_init: bool = use_trunc_init
-        self.init_weight_fn = self.get_init_weight(self.act, use_trunc_init)
-        self.init_bias_fn = self.get_init_bias(use_trunc_init)
+        self.init_weight_fn: Callable[[torch.Tensor], torch.Tensor] = self.get_init_weight(self.act, use_trunc_init)
+        self.init_bias_fn: Callable[[torch.Tensor], torch.Tensor] = self.get_init_bias(use_trunc_init)
         self.reset_parameters()
 
         if DEBUG_MODE:
@@ -249,8 +249,8 @@ class ProjectionLayer(nn.Module):
     def __init__(self, in_dim: int, out_dim: int) -> None:
         """Initialize the projection layer."""
         super().__init__()
-        self.in_dim = in_dim
-        self.out_dim = out_dim
+        self.in_dim: int = in_dim
+        self.out_dim: int = out_dim
         return
 
     def forward(self, x: Tensor) -> Tensor:
@@ -388,10 +388,10 @@ class TransformerEncoderLayer(nn.Module):
         dropout_rate: float,
     ) -> None:
         super().__init__()
-        self.embedding_dim = embedding_dim
-        self.n_heads = n_heads
-        self.dim_feedforward = feedforward_dim
-        self.dropout_p = dropout_rate
+        self.embedding_dim: int = embedding_dim
+        self.n_heads: int = n_heads
+        self.dim_feedforward: int = feedforward_dim
+        self.dropout_p: float = dropout_rate
         self.self_attn = nn.MultiheadAttention(embedding_dim, n_heads, dropout=dropout_rate, batch_first=True)
         self.linear1 = LinearLayer(embedding_dim, feedforward_dim, act_cls=act_cls, use_trunc_init=True)
         self.linear2 = LinearLayer(feedforward_dim, self.embedding_dim, use_trunc_init=True)
@@ -450,10 +450,10 @@ class TransformerDecoderLayer(nn.Module):
         dropout_rate: float,
     ) -> None:
         super().__init__()
-        self.embedding_dim = embedding_dim
-        self.n_heads = n_heads
-        self.dim_feedforward = feedforward_dim
-        self.dropout_p = dropout_rate
+        self.embedding_dim: int = embedding_dim
+        self.n_heads: int = n_heads
+        self.dim_feedforward: int = feedforward_dim
+        self.dropout_p: float = dropout_rate
         self.self_attn = nn.MultiheadAttention(embedding_dim, n_heads, dropout=dropout_rate, batch_first=True)
         self.cross_attn = nn.MultiheadAttention(embedding_dim, n_heads, dropout=dropout_rate, batch_first=True)
         self.linear1 = LinearLayer(embedding_dim, feedforward_dim, act_cls=act_cls, use_trunc_init=True)
@@ -547,7 +547,7 @@ class TransformerEncoder(nn.Module):
                 for _ in range(n_layers)
             ]
         )
-        self.norm = nn.LayerNorm(embedding_dim) if use_final_norm else None
+        self.norm: nn.Module | None = nn.LayerNorm(embedding_dim) if use_final_norm else None
         return
 
     def reset_parameters(self) -> None:
@@ -612,7 +612,7 @@ class TransformerDecoder(nn.Module):
                 for _ in range(n_layers)
             ]
         )
-        self.norm = nn.LayerNorm(embedding_dim) if use_final_norm else None
+        self.norm: nn.Module | None = nn.LayerNorm(embedding_dim) if use_final_norm else None
         return
 
     def reset_parameters(self) -> None:
@@ -665,17 +665,15 @@ class TransformerDecoder(nn.Module):
 
 
 class TemperatureScaledSoftmax(nn.Softmax):
-    temperature: torch.Tensor
-
     def __init__(self, dim: int | None = None, temperature: float = 1):
         super().__init__(dim)
-        self.temperature = torch.tensor(temperature, dtype=torch.float)
+        self.temperature: torch.Tensor = torch.tensor(temperature, dtype=torch.float)
         return
 
     @override
-    def forward(self, x: Tensor) -> Tensor:
+    def forward(self, input: Tensor) -> Tensor:
         """Forward pass"""
-        return super().forward(x / self.temperature)
+        return super().forward(input / self.temperature)
 
 
 class TransferGrad(Function):

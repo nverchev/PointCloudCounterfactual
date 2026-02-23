@@ -2,20 +2,32 @@
 
 import logging
 
+import numpy as np
+import numpy.typing as npt
 import torch
 import torch.distributed as dist
 from torchmetrics import ConfusionMatrix
 
-from drytorch import DataLoader, Test, Trainer
+from drytorch import Test, Trainer
 from drytorch.core.exceptions import TrackerNotUsedError
+from drytorch.core import protocols as p
 
+from src.data.structures import Inputs
 from src.utils.visualization import plot_confusion_matrix_heatmap
 
 
 class ClassificationEvaluation(Test):
     """Evaluation of classification performance, including confusion matrix and misclassified logging."""
 
-    def __init__(self, model, loader: DataLoader, metric, n_classes: int, class_names: list[str], name: str = 'Test'):
+    def __init__(
+        self,
+        model: p.ModelProtocol[Inputs, torch.Tensor],
+        loader: p.LoaderProtocol[tuple[Inputs, torch.Tensor]],
+        metric: p.ObjectiveProtocol[torch.Tensor, torch.Tensor],
+        n_classes: int,
+        class_names: list[str],
+        name: str = 'Test',
+    ):
         """Initialize the classification evaluation."""
         super().__init__(model=model, loader=loader, metric=metric, name=name)
         self.n_classes = n_classes
@@ -27,7 +39,7 @@ class ClassificationEvaluation(Test):
         Args:
             trainer: Training protocol containing the model and trackers.
         """
-        if dist.is_initialized() and dist.get_rank() != 0:
+        if dist.is_initialized() and dist.get_rank() != 0:  # type: ignore[attr-defined]
             return
 
         if not self.outputs_list:
@@ -42,11 +54,12 @@ class ClassificationEvaluation(Test):
         self._log_to_logger(cf_matrix_numpy, misclassified_str)
         return
 
+    @torch.inference_mode()
     def _get_predictions_and_labels(self) -> tuple[torch.Tensor, torch.Tensor]:
         """Concatenate outputs and collect labels from the loader."""
         outputs_probs = torch.cat(self.outputs_list)
         predictions = outputs_probs.argmax(dim=1)
-        labels = torch.cat([batch_data[1].label for batch_data in self.loader.get_loader(inference=True)])  # type: ignore
+        labels = torch.cat([batch_data[1].label for batch_data in self.loader])
         return predictions, labels
 
     def _get_misclassified_info(self, predictions: torch.Tensor, labels: torch.Tensor) -> tuple[list[int], str]:
@@ -85,7 +98,7 @@ class ClassificationEvaluation(Test):
 
         return
 
-    def _log_to_logger(self, matrix, misclassified_str: str) -> None:
+    def _log_to_logger(self, matrix: npt.NDArray[np.int_], misclassified_str: str) -> None:
         """Log results to the console with clean formatting."""
         # Format confusion matrix as a table
         col_width = 15

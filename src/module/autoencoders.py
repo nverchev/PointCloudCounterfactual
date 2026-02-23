@@ -148,7 +148,7 @@ class BaseVAE(AE):
         self.latent_decoder = get_latent_decoder()
         self.z2_prior = ConditionalPrior()
         self.z2_posterior = get_conditional_latent_encoder()
-        self.pseudo_manager = PseudoInputManager() if self.n_pseudo_inputs > 0 else None
+        self.pseudo_manager: PseudoInputManager | None = PseudoInputManager() if self.n_pseudo_inputs > 0 else None
         return
 
     def encode(self, inputs: Inputs) -> Outputs:

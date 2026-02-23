@@ -7,7 +7,7 @@ from hydra.core import utils as hydra_utils
 
 import drytorch
 
-from drytorch.core import track
+from drytorch.core import tracking  # ty:ignore[unresolved-import]
 from drytorch.trackers import logging
 
 from src.config.specs import AllConfig
@@ -19,13 +19,13 @@ class Experiment(drytorch.Experiment[AllConfig]):
     pass
 
 
-def get_trackers(cfg: AllConfig) -> list[track.Tracker]:
+def get_trackers(cfg: AllConfig) -> list[tracking.Tracker]:
     """Get trackers from according to the user configuration."""
     cfg_trackers = cfg.user.trackers
     cfg_hydra = cfg.user.hydra
     hydra_utils.configure_log(cfg_hydra.job_logging)
     drytorch.init_trackers(mode='hydra')
-    tracker_list: list[track.Tracker] = []
+    tracker_list: list[tracking.Tracker] = []
     if sys.gettrace():  # skip in debug mode
         return tracker_list
 
