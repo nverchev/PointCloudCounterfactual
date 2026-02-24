@@ -1,10 +1,11 @@
 [project]
 name = "pointcloudcounterfactual"
-version = "1.9"
+version = "2.0"
 description = 'Code to replicate the article "Towards Point Cloud Counterfactual Explanations" DOI: 10.23919/EUSIPCO63237.2025.11226754'
 readme = "README.md"
 requires-python = "~=3.13.0"
 dependencies = [
+    "drytorch>=0.1.0rc6",
     "dotenv>=0.9.9",
     "h5py>=3.15.1",
     "hydra-core>=1.3.2",
@@ -24,22 +25,13 @@ track_all = [
     "tensorboard>=2.20.0",
     "wandb>=0.23.1",
     "sqlalchemy>=2.0.0",
-    "tqdm"
+    "tqdm",
 ]
-finetune = [
-    "optuna>=4.6.0",
-]
-visualize = [
-        "pyvista>=0.46.4",
-        "seaborn>=0.13.2",
-]
+finetune = ["optuna>=4.6.0"]
+visualize = ["pyvista>=0.46.4", "seaborn>=0.13.2"]
 
 [dependency-groups]
-dev = [
-    "basedpyright>=1.37.1",
-    "pre-commit>=4.5.1",
-    "ruff>=0.14.11",
-]
+dev = ["basedpyright>=1.37.1", "pre-commit>=4.5.1", "ruff>=0.14.11"]
 
 [tool.basedpyright]
 venvPath = "."

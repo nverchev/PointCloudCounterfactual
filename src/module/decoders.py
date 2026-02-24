@@ -37,7 +37,7 @@ class BasePointDecoder(nn.Module, metaclass=abc.ABCMeta):
         self.tau: float = cfg_decoder.tau
 
     @abc.abstractmethod
-    def forward(self, z: torch.Tensor, n_output_points: int, initial_sampling: torch.Tensor) -> torch.Tensor:
+    def forward(self, initial_sampling: torch.Tensor, features: torch.Tensor, n_output_points: int) -> torch.Tensor:
         """Forward pass."""
 
 
@@ -84,13 +84,8 @@ class PCGen(BasePointDecoder):
 
         return
 
-    def _initialize_sampling(
-        self, batch: int, n_output_points: int, device: torch.device, initial_sampling: torch.Tensor
-    ) -> torch.Tensor:
+    def _initialize_sampling(self, batch: int, n_output_points: int, device: torch.device) -> torch.Tensor:
         """Initialize and normalize the sampling points."""
-        if initial_sampling.numel():
-            return initial_sampling.to(device)
-
         return torch.randn(batch, self.sample_dim, n_output_points, device=device)
 
     def _process_component_groups(self, x: torch.Tensor) -> tuple[torch.Tensor, list[torch.Tensor]]:
@@ -126,31 +121,25 @@ class PCGen(BasePointDecoder):
 
         return x
 
-    def forward(self, features: torch.Tensor, n_output_points: int, initial_sampling: torch.Tensor) -> torch.Tensor:
+    def forward(self, initial_sampling: torch.Tensor, features: torch.Tensor, n_output_points: int) -> torch.Tensor:
         """Forward pass.
 
         Args:
-            features: Latent vector [Batch, n_codes * proj_dim]
-            n_output_points: Number of output points
             initial_sampling: Initial sampling points
+            features: features of dimension [Batch, feature_dim]
+            n_output_points: Number of output points
         """
         batch = features.size()[0]
         device = features.device
+        if initial_sampling.numel():
+            x = initial_sampling
+        else:
+            x = self._initialize_sampling(batch, n_output_points, device)
 
-        # Initialize sampling points
-        x = self._initialize_sampling(batch, n_output_points, device, initial_sampling)
-
-        # Map and join with latent code (using projected w)
         x = self.map_sample(x)
         x = self._join_operation(x, features)
-
-        # Process component groups
         xs, group_atts = self._process_component_groups(x)
-
-        # Mix components with attention
         x = self._apply_attention_mixing(xs, group_atts)
-
-        # Optional graph filtering
         if self.filtering:
             x = graph_filtering(x)
 

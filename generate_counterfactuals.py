@@ -8,9 +8,10 @@ import torch
 
 from drytorch import Model
 
-from src.module import CounterfactualVAE, get_classifier
+from src.module import CounterfactualVAE, get_classifier, get_autoencoder
 from src.config import AllConfig, Experiment, hydra_main
 from src.data import Inputs, Partitions, get_dataset
+from src.train.models import EMAModel
 from src.utils.visualization import render_cloud
 
 
@@ -31,13 +32,16 @@ def create_and_render_counterfactuals() -> None:
     save_dir_base = cfg.user.path.version_dir / 'images' / cfg.name
 
     dgcnn_module = get_classifier().eval()
-    classifier = Model(dgcnn_module, name=cfg.classifier.model.name, device=cfg.user.device)
+    classifier = Model(dgcnn_module, name=cfg.classifier.model.name, device=cfg_user.device)
     classifier.load_state()
     test_dataset = get_dataset(Partitions.test if cfg.final else Partitions.val)
     class_names = test_dataset.classes
-    vae_module = CounterfactualVAE().eval()
-    model = Model(vae_module, name=cfg_ae.model.name, device=cfg_user.device)
+    module = get_autoencoder().eval()
+    model = EMAModel(module, name=cfg_ae.model.name, device=cfg_user.device)
     model.load_state()
+    ema_module = model.averaged_module
+    if not isinstance(ema_module, CounterfactualVAE):
+        raise TypeError('Averaged module is not a CounterfactualVAE')
 
     # 1. Collect Batch Data
     clouds = []
@@ -62,7 +66,7 @@ def create_and_render_counterfactuals() -> None:
     inputs = inputs._replace(logits=logits_original)
 
     # VAE Reconstruction
-    out_recon = vae_module(inputs)
+    out_recon = ema_module(inputs)
     recon_clouds = out_recon.recon.detach().cpu().numpy()
     logits_recon = classifier(Inputs(cloud=out_recon.recon))
     probs_recon = torch.softmax(logits_recon, dim=1).cpu().numpy()
@@ -70,7 +74,7 @@ def create_and_render_counterfactuals() -> None:
     # Counterfactuals
     cf_results: dict[int, tuple[np.ndarray, np.ndarray]] = {}  # Map target_class -> (clouds, probs)
     for j in range(len(class_names)):
-        out_cf = vae_module.generate_counterfactual(
+        out_cf = ema_module.generate_counterfactual(
             inputs,
             target_dim=j,
             target_value=counterfactual_value,

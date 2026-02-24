@@ -2,9 +2,9 @@
 
 import torch
 
-from drytorch import Model
 
-from src.module import CounterfactualVAE
+from src.train.models import EMAModel
+from src.module import get_autoencoder, BaseVAE
 from src.config import AllConfig, Experiment, hydra_main
 from src.utils.visualization import render_cloud
 
@@ -17,14 +17,17 @@ def generate_random_samples() -> None:
     cfg_user = cfg.user
     cfg_generate = cfg_user.generate
     save_dir = cfg.user.path.version_dir / 'images' / cfg.name / 'generated'
-    module = CounterfactualVAE().eval()
-    model = Model(module, name=cfg_ae.model.name, device=cfg_user.device)
+    module = get_autoencoder().eval()
+    model = EMAModel(module, name=cfg_ae.model.name, device=cfg_user.device)
     model.load_state()
-    if module.pseudo_manager is not None:
-        module.pseudo_manager.update_pseudo_latent(module.encode_z1)
+    ema_module = model.averaged_module
+    assert isinstance(ema_module, BaseVAE)
+
+    if ema_module.pseudo_manager is not None:
+        ema_module.pseudo_manager.update_pseudo_latent(ema_module.encode_z1)
 
     z1_bias = torch.zeros(cfg_generate.batch_size, cfg_ae.model.z1_dim, device=cfg_user.device)
-    clouds = module.generate(batch_size=cfg_generate.batch_size, z1_bias=z1_bias).recon
+    clouds = ema_module.generate(batch_size=cfg_generate.batch_size, z1_bias=z1_bias).recon
     cloud: torch.Tensor
     for i, cloud in enumerate(clouds):
         np_cloud = cloud.cpu().numpy()

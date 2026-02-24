@@ -125,7 +125,7 @@ class AE(AbstractAE):
 
     def decode(self, out: Outputs, inputs: Inputs) -> Outputs:
         """Decode features to point cloud."""
-        x = self.decoder(out.features, self.n_output_points, inputs.initial_sampling)
+        x = self.decoder(inputs.initial_sampling, out.features, self.n_output_points)
         out.recon = x
         return out
 

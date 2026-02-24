@@ -55,7 +55,7 @@ class ModelNet40Split(PointCloudDataset):
         else:
             ref_cloud = input_cloud = torch.from_numpy(np_cloud[: self.input_points])
 
-        return Inputs(cloud=input_cloud), Targets(ref_cloud=ref_cloud, label=label)
+        return Inputs(cloud=input_cloud, initial_sampling=input_cloud), Targets(ref_cloud=ref_cloud, label=label)
 
 
 class ModelNet40Dataset(SplitCreator):
