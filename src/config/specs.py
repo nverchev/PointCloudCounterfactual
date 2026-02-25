@@ -289,24 +289,32 @@ class LearningConfig:
     Attributes:
         optimizer_name (str): The name of the PyTorch optimizer (e.g., 'Adam', 'SGD')
         learning_rate (PositiveFloat): The learning rate or a dictionary of learning rates for model parameters
-        grad_op (GradOp | None): The gradient operation to be applied before the optimizer
-        clip_criterion (ClipCriterion): The criterion for gradient clipping (only used for some gradient operations)
-        opt_settings (dict): A dictionary containing default settings for the optimizer
         scheduler (SchedulerConfig): The scheduler configuration for learning rate decay
+        grad_op (GradOp | None): The gradient operation to be applied before the optimizer
+        clip_criterion (ClipCriterion | None): The criterion for gradient clipping used by some gradient operations
+        opt_settings (dict): A dictionary containing default settings for the optimizer
         optimizer_cls (type[torch.optim.Optimizer]): The optimizer class
     """
 
     optimizer_name: str
     learning_rate: PositiveFloat
-    grad_op: GradOp | None
-    clip_criterion: ClipCriterion
     scheduler: SchedulerConfig
+    grad_op: GradOp | None = None
+    clip_criterion: ClipCriterion | None = None
     opt_settings: dict[str, Any] = dataclasses.field(default_factory=dict)
 
     def __post_init__(self) -> None:
         """Resolve optimizer class from name."""
         self.optimizer_cls = get_optim_cls(self.optimizer_name)
         return
+
+    @model_validator(mode='after')
+    def _check_clip_criterion(self) -> Self:
+        if self.clip_criterion is None and self.grad_op in (GradOp.HistClipper, GradOp.ParamHistClipper):
+            msg = 'Must specify clip_criterion when using HistClipper or ParamHistClipper.'
+            raise ValueError(msg)
+
+        return self
 
 
 @dataclass

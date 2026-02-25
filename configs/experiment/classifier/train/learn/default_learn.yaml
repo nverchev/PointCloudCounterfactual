@@ -5,6 +5,6 @@ defaults:
 optimizer_name: SGD
 learning_rate: 0.01
 grad_op:
-clip_criterion: ZStat
+clip_criterion:
 opt_settings:
     weight_decay: 0.
