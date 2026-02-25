@@ -57,30 +57,25 @@ class PCGen(BasePointDecoder):
 
         modules.append(PointsConvLayer(self.map_dims[-1], self.feature_dim, act_cls=nn.Hardtanh))
         self.map_sample = nn.Sequential(*modules)
-        self.group_conv = nn.ModuleList()
-        self.group_transformer = nn.ModuleList()
-        self.group_final = nn.ModuleList()
-        for _ in range(self.n_components):
-            block = PointsConvResBlock(
-                [self.feature_dim, *self.conv_dims, self.embedding_dim],
-                act_cls=self.act_cls,
-                norm_cls=self.norm_cls,
-            )
-            self.group_conv.append(block)
-            transformer_decoder = TransformerEncoder(
-                embedding_dim=self.embedding_dim,
-                n_heads=self.n_heads,
-                feedforward_dim=self.feedforward_dim,
-                dropout_rate=self.transformer_dropout,
-                act_cls=self.act_cls,
-                n_layers=self.n_transformer_layers,
-                use_final_norm=True,
-            )
-            self.group_transformer.append(transformer_decoder)
-            self.group_final.append(PointsConvLayer(self.embedding_dim, OUT_CHAN, use_trunc_init=True))
-
+        self.conv_block = PointsConvResBlock(
+            [self.feature_dim, *self.conv_dims, self.embedding_dim],
+            act_cls=self.act_cls,
+            norm_cls=self.norm_cls,
+        )
+        self.transformer = TransformerEncoder(
+            embedding_dim=self.embedding_dim,
+            n_heads=self.n_heads,
+            feedforward_dim=self.feedforward_dim,
+            dropout_rate=self.transformer_dropout,
+            act_cls=self.act_cls,
+            n_layers=self.n_transformer_layers,
+            use_final_norm=True,
+        )
+        self.out_conv = PointsConvLayer(
+            self.embedding_dim, self.n_components * OUT_CHAN, use_trunc_init=True, n_groups_layer=self.n_components
+        )
         if self.n_components > 1:
-            self.att = PointsConvLayer(self.embedding_dim * self.n_components, self.n_components)
+            self.att = PointsConvLayer(self.embedding_dim, self.n_components, n_groups_layer=self.n_components)
 
         return
 
@@ -88,36 +83,30 @@ class PCGen(BasePointDecoder):
         """Initialize and normalize the sampling points."""
         return torch.randn(batch, self.sample_dim, n_output_points, device=device)
 
-    def _process_component_groups(self, x: torch.Tensor) -> tuple[torch.Tensor, list[torch.Tensor]]:
-        """Process all component groups and return outputs and attention features."""
-        xs_list = []
-        group_atts = []
+    def _process_component_groups(self, x: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor]:
+        """Return component outputs and attention features."""
+        x = self.conv_block(x)
+        x.transpose_(2, 1)
+        x = self.transformer(x)
+        x.transpose_(2, 1)
+        x_out = self.out_conv(x)
+        return x, x_out
 
-        for group in range(self.n_components):
-            x_group = self.group_conv[group](x)
-            group_atts.append(x_group)
-            x_group.transpose_(2, 1)
-            x_group = self.group_transformer[group](x_group)
-            x_group.transpose_(2, 1)
-            x_group = self.group_final[group](x_group)
-            xs_list.append(x_group)
-
-        xs = torch.stack(xs_list, dim=3)
-        return xs, group_atts
-
-    def _apply_attention_mixing(self, xs: torch.Tensor, group_atts: list[torch.Tensor]) -> torch.Tensor:
+    def _apply_attention_mixing(self, x: torch.Tensor, x_out: torch.Tensor) -> torch.Tensor:
         """Apply attention-based mixing across components if there are more than one, otherwise return the component."""
         if self.n_components > 1:
-            x_att = self.att(torch.cat(group_atts, dim=1).contiguous())
+            batch, _, n_output_points = x_out.shape
+            x_out = x_out.view(batch, self.n_components, OUT_CHAN, n_output_points)
+            x_att = self.att(x)
+            x_att = x_att.unsqueeze(2)
             if self.training:
                 x_att = F.gumbel_softmax(x_att, tau=self.tau, dim=1)
             else:
                 x_att = torch.softmax(x_att / self.tau, dim=1)
 
-            x_att.transpose_(2, 1)
-            x = (xs * x_att.unsqueeze(1)).sum(3)
+            x = (x_out * x_att).sum(1)
         else:
-            x = xs.squeeze(3)
+            x = x_out
 
         return x
 
@@ -138,8 +127,8 @@ class PCGen(BasePointDecoder):
 
         x = self.map_sample(x)
         x = self._join_operation(x, features)
-        xs, group_atts = self._process_component_groups(x)
-        x = self._apply_attention_mixing(xs, group_atts)
+        x, x_out = self._process_component_groups(x)
+        x = self._apply_attention_mixing(x, x_out)
         if self.filtering:
             x = graph_filtering(x)
 
