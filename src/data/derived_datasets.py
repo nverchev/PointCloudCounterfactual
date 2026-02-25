@@ -11,7 +11,7 @@ from torch.utils.data import Dataset
 
 from src.module import BaseClassifier, BaseVAE, CounterfactualVAE
 from src.data.structures import Inputs, Outputs, Targets
-from src.data.protocols import AbstractSingleton
+from src.data.databuilder import AbstractSingleton
 
 V = TypeVar('V', bound=BaseVAE)
 

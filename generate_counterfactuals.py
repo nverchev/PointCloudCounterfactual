@@ -35,7 +35,7 @@ def create_and_render_counterfactuals() -> None:
     classifier = Model(dgcnn_module, name=cfg.classifier.model.name, device=cfg_user.device)
     classifier.load_state()
     test_dataset = get_dataset(Partitions.test if cfg.final else Partitions.val)
-    class_names = test_dataset.classes
+    class_names = test_dataset.class_names
     module = get_autoencoder().eval()
     model = EMAModel(module, name=cfg_ae.model.name, device=cfg_user.device)
     model.load_state()

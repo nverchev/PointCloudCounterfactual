@@ -25,6 +25,15 @@ else:
     Figure = Any
 
 
+def norm_to_unit_sphere(cloud: npt.NDArray[Any]) -> npt.NDArray[Any]:
+    """Normalizes a point cloud to the unit sphere."""
+    cloud = cloud - cloud.mean(axis=0)
+    norms = np.linalg.norm(cloud, axis=1, keepdims=True)
+    max_norms = norms.max(axis=0, keepdims=True)
+    cloud = cloud / (max_norms + 1e-8)
+    return cloud
+
+
 def render_cloud(
     clouds: Sequence[npt.NDArray[Any]],
     colorscale: Literal['blue_red', 'sequence'] = 'sequence',
@@ -50,6 +59,8 @@ def render_cloud(
     for i, cloud in enumerate(clouds):
         if not len(cloud):
             continue
+
+        cloud = norm_to_unit_sphere(cloud)
         if colorscale == 'blue_red':
             i_norm = i / (len(clouds) - 1)
             color = (1 - i_norm) * BLUE + i_norm * RED

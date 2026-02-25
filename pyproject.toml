@@ -18,6 +18,8 @@ dependencies = [
     "torcheval>=0.0.7",
     "torchmetrics>=1.0.3",
     "typing-extensions>=4.15.0",
+    "scikit-learn>=1.8.0",
+    "tqdm>=4.66.5",
 ]
 
 [project.optional-dependencies]

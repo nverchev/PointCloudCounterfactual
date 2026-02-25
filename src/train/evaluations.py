@@ -12,7 +12,7 @@ from drytorch import Test, Trainer
 from drytorch.core.exceptions import TrackerNotUsedError
 from drytorch.core import protocols as p
 
-from src.data.structures import Inputs
+from src.data.structures import Inputs, Targets
 from src.utils.visualization import plot_confusion_matrix_heatmap
 
 
@@ -22,8 +22,8 @@ class ClassificationEvaluation(Test):
     def __init__(
         self,
         model: p.ModelProtocol[Inputs, torch.Tensor],
-        loader: p.LoaderProtocol[tuple[Inputs, torch.Tensor]],
-        metric: p.ObjectiveProtocol[torch.Tensor, torch.Tensor],
+        loader: p.LoaderProtocol[tuple[Inputs, Targets]],
+        metric: p.ObjectiveProtocol[torch.Tensor, Targets],
         n_classes: int,
         class_names: list[str],
         name: str = 'Test',

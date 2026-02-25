@@ -1,9 +1,9 @@
-"""Package containing dataset classes and data types."""
+"""Subpackage for augmentation, pre-processing and loading of point cloud data."""
 
 from src.data.dataset import get_dataset, get_datasets
 from src.data.modelnet import ModelNet40Dataset
-from src.data.protocols import PointCloudDataset, Partitions
 from src.data.shapenet import ShapeNetFlowDataset
+from src.data.split import Partitions
 from src.data.structures import Inputs, Outputs, Targets
 
 IN_CHAN = 3
@@ -16,9 +16,7 @@ __all__ = [
     'ModelNet40Dataset',
     'Outputs',
     'Partitions',
-    'PointCloudDataset',
     'ShapeNetFlowDataset',
-    'Targets',
     'Targets',
     'get_dataset',
     'get_datasets',

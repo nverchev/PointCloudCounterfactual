@@ -1,4 +1,4 @@
-"""Training classes, evaluation and losses."""
+"""Subpackage for training, evaluation and losses."""
 
 from src.train.learning_schema import get_learning_schema
 from src.train.loaders import get_loaders, get_evaluated_loaders

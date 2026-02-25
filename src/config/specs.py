@@ -38,13 +38,23 @@ class DatasetConfig:
 
     Attributes:
         name (Datasets): The name of the dataset
-        n_classes (PositiveInt): The number of classes in the dataset, 0 if no class information is available
-        settings (dict): A dictionary containing dataset-specific settings
+        selected_classes (list[str]): The list of classes to be used in the dataset, if empty all classes are used
     """
 
     name: Datasets
-    n_classes: PositiveInt
-    settings: dict[str, Any] = dataclasses.field(default_factory=dict)
+    selected_classes: list[str] = dataclasses.field(default_factory=list)
+
+    @property
+    def n_classes(self) -> int:
+        """Number of classes."""
+        if self.selected_classes:
+            return len(self.selected_classes)
+        elif self.name == Datasets.ModelNet:
+            return 40
+        elif self.name == Datasets.ShapeNetFlow:
+            return 55
+
+        raise ValueError(f'Unknown dataset: {self.name}')
 
 
 @dataclass

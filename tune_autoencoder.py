@@ -9,7 +9,6 @@ import optuna
 import torch
 
 from omegaconf import DictConfig
-from optuna.visualization import plot_param_importances
 
 from drytorch.contrib.optuna import get_final_value, suggest_overrides
 from drytorch.core.exceptions import ConvergenceError
@@ -69,7 +68,6 @@ def main(tune_cfg: DictConfig):
     )
     log_study_settings(study, tune_cfg)
     study.optimize(set_objective(tune_cfg), n_trials=tune_cfg.tune.n_trials)
-    plot_param_importances(study).show(renderer=tune_cfg.renderer)
     return
 
 

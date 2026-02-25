@@ -2,7 +2,7 @@
 
 from drytorch import DataLoader
 from src.data import get_datasets
-from src.data.processed import EvaluatedDataset
+from src.data.derived_datasets import EvaluatedDataset
 from src.module import BaseClassifier
 
 
@@ -19,16 +19,16 @@ def get_evaluated_loaders(
 ) -> tuple[DataLoader, DataLoader]:
     """Get dataloaders for training and testing with classifier evaluation."""
     train_dataset, test_dataset = get_datasets()  # test is validation unless final=True
-    processed_train_dataset = EvaluatedDataset(train_dataset, classifier)
-    processed_test_dataset = EvaluatedDataset(test_dataset, classifier)
+    evaluated_train_dataset = EvaluatedDataset(train_dataset, classifier)
+    evaluated_test_dataset = EvaluatedDataset(test_dataset, classifier)
     train_loader = DataLoader(
-        dataset=processed_train_dataset,
+        dataset=evaluated_train_dataset,
         batch_size=batch_size,
         n_workers=n_workers,
         pin_memory=False,
     )
     test_loader = DataLoader(
-        dataset=processed_test_dataset,
+        dataset=evaluated_test_dataset,
         batch_size=batch_size,
         n_workers=n_workers,
         pin_memory=False,

@@ -14,7 +14,7 @@ from drytorch.lib.objectives import Metric, compute_metrics
 
 from src.module import BaseClassifier, CounterfactualVAE, get_classifier, get_autoencoder
 from src.config import AllConfig, Experiment, get_trackers, hydra_main
-from src.data.processed import CounterfactualDataset, ReconstructedEvaluatedDataset
+from src.data.derived_datasets import CounterfactualDataset, ReconstructedEvaluatedDataset
 from src.data import Inputs, Targets, Partitions, get_dataset
 from src.train.metrics_and_losses import get_classification_loss
 from src.train.models import EMAModel
@@ -197,7 +197,7 @@ def evaluate_counterfactuals(
     counterfactual_value = cfg.autoencoder.objective.counterfactual_value
 
     test_dataset = get_dataset(Partitions.test if cfg.final else Partitions.val)
-    class_names = test_dataset.classes
+    class_names = test_dataset.class_names
     test_loader = DataLoader(dataset=test_dataset, batch_size=batch_size)
     test_labels = get_label_distribution(test_loader, class_names)
     test_original = evaluate_original_performance(classifier_model, test_loader)

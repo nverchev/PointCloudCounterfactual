@@ -1,4 +1,4 @@
-"""Architecture for modules."""
+"""Subpackage for autoencoders, decoders, encoders and classifiers."""
 
 from src.module.autoencoders import BaseVAE, CounterfactualVAE, VAE, get_autoencoder, AbstractAE
 from src.module.decoders import get_decoder

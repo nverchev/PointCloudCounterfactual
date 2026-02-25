@@ -1,10 +1,10 @@
-"""Classes for inputs, outputs and targets."""
+"""Module containing classes for inputs, outputs and targets."""
 
 import dataclasses
-
-from typing import NamedTuple, Self
+from typing import NamedTuple, Self, Any
 
 import torch
+import numpy.typing as npt
 
 
 class Inputs(NamedTuple):
@@ -13,11 +13,17 @@ class Inputs(NamedTuple):
     Attributes:
         cloud: the input cloud.
         initial_sampling: specify the sampling for the reconstructed cloud from the initial sampling space.
+        cloud_512: downsampled version with 512 points.
+        cloud_128: double downsampled version with 128 points.
     """
 
     cloud: torch.Tensor
     initial_sampling: torch.Tensor = torch.empty(0)
     logits: torch.Tensor = torch.empty(0)
+    cloud_512: torch.Tensor = torch.empty(0)
+    cloud_128: torch.Tensor = torch.empty(0)
+    cloud_512_up: torch.Tensor = torch.empty(0)
+    cloud_128_up: torch.Tensor = torch.empty(0)
 
 
 class Targets(NamedTuple):
@@ -93,3 +99,16 @@ class Outputs:
                 parts.append(f'{name}=<uninitialized>')
 
         return f'{self.__class__.__name__}({", ".join(parts)})'
+
+
+@dataclasses.dataclass(slots=True)
+class PCD:
+    """Container for point cloud data and its downsampled versions."""
+
+    pcs: npt.NDArray[Any]
+    pcs_512: npt.NDArray[Any]
+    pcs_128: npt.NDArray[Any]
+    pcs_512_up: npt.NDArray[Any]
+    pcs_128_up: npt.NDArray[Any]
+    labels: npt.NDArray[Any]
+    std: npt.NDArray[Any]

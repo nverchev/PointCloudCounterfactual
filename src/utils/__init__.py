@@ -1,1 +1,1 @@
-"""Package for general utilities."""
+"""Subpackage for general utilities."""

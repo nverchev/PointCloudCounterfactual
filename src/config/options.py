@@ -7,7 +7,7 @@ class Datasets(enum.StrEnum):
     """Dataset classes."""
 
     ModelNet = enum.auto()
-    ShapenetFlow = enum.auto()
+    ShapeNetFlow = enum.auto()
 
 
 class Encoders(enum.StrEnum):

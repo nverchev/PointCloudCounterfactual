@@ -1,21 +1,10 @@
-"""Augmentation functions and classes."""
+"""Module containing augmentation functions and classes."""
 
-from typing import Any
 from collections.abc import Callable, Iterable
 
-import numpy as np
 import torch
-from numpy import typing as npt
 
 from src.config.experiment import Experiment
-
-
-def normalise(cloud: npt.NDArray[Any]) -> tuple[npt.NDArray[Any], float]:
-    """Standard normalization to unit sphere."""
-    cloud -= cloud.mean(axis=0)
-    std = np.max(np.sqrt(np.sum(cloud**2, axis=1)))
-    cloud /= std
-    return cloud, std
 
 
 def jitter(cloud: torch.Tensor, sigma: float = 0.01, clip: float = 0.02) -> torch.Tensor:
