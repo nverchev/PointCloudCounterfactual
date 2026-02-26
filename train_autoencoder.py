@@ -1,7 +1,7 @@
 """Train the outer encoder to learn a discrete representation."""
 
 from typing import TYPE_CHECKING, Any
-from drytorch import Model, Test, Trainer
+from drytorch import Test, Trainer, Model
 
 from src.module import get_autoencoder, get_classifier, CounterfactualVAE, BaseClassifier
 from src.config import AllConfig, Experiment, get_trackers, hydra_main
@@ -13,7 +13,7 @@ from src.train.hooks import (
     register_reconstruction_hook,
 )
 from src.train.loaders import get_loaders, get_evaluated_loaders
-from src.train.models import EMAModel
+from src.train.models import ModelEpoch, EMAModelEpoch
 from src.utils.parallel import DistributedWorker
 
 
@@ -30,9 +30,9 @@ def train_autoencoder(classifier: BaseClassifier | None = None, trial: Trial | N
     cfg_user = cfg.user
     ae = get_autoencoder()
     if trial is None:
-        model = EMAModel(ae, name=cfg_ae.model.name, device=cfg_user.device)
+        model = EMAModelEpoch(ae, name=cfg_ae.model.name, device=cfg_user.device)
     else:
-        model = Model(ae, name=cfg_ae.model.name, device=cfg_user.device)  # normal model for tuning
+        model = ModelEpoch(ae, name=cfg_ae.model.name, device=cfg_user.device)  # normal model for tuning
 
     # test_loader loads the validation dataset unless the final flag is set
     if isinstance(ae, CounterfactualVAE) and classifier is not None:
