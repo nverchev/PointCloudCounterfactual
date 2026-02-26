@@ -2,6 +2,7 @@ defaults:
   - all_config
   - autoencoder: autoencoder_exp
   - classifier: classifier_exp
+  - flow: flow_exp
   - user: user_settings
   - data: default_data
   - _self_

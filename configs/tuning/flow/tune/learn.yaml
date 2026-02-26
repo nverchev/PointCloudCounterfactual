@@ -1,0 +1,25 @@
+study_name:
+  flow_learn
+
+n_trials: 100
+
+params:
+  flow.train.learn.learning_rate:
+    suggest: suggest_float
+    settings:
+      low: 1e-04
+      high: 5e-03
+      log: true
+
+  flow.train.learn.scheduler.warmup_steps:
+    suggest: suggest_int
+    settings:
+      low: 0
+      high: 20
+
+  flow.train.learn.opt_settings.weight_decay:
+    suggest: suggest_float
+    settings:
+      low: 1e-06
+      high: 1e-03
+      log: true

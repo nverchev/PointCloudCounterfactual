@@ -1,0 +1,7 @@
+defaults:
+  - model: standard_fm
+  - objective: standard_fm
+  - train: default_train
+  - _self_
+
+name: flow

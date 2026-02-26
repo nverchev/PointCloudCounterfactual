@@ -1,0 +1,16 @@
+study_name:
+  flow_model
+
+n_trials: 100
+
+params:
+  flow.model.n_timesteps:
+    suggest: suggest_int
+    settings:
+      low: 5
+      high: 50
+
+  flow.model.time_embedding_dim:
+    suggest: suggest_categorical
+    settings:
+      choices: [64, 128, 256]

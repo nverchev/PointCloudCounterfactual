@@ -1,0 +1,8 @@
+defaults:
+  - ../optuna
+  - _self_
+  - tune: learn
+
+db_name: flow_optimization
+overrides: []
+n_epochs: 100
