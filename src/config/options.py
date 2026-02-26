@@ -51,6 +51,12 @@ class AutoEncoders(enum.StrEnum):
     CounterfactualVAE = enum.auto()
 
 
+class FlowModels(enum.StrEnum):
+    """Flow matching model classes."""
+
+    FlowMatchingModel = enum.auto()
+
+
 class Classifiers(enum.StrEnum):
     """Classifier classes."""
 

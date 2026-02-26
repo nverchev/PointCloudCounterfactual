@@ -25,7 +25,7 @@ class ConfigPath(enum.StrEnum):
 
     CONFIGS = 'experiment'
     TUNING_AUTOENCODER = 'tuning/autoencoder'
-    TUNING_W_AUTOENCODER = 'tuning/w_autoencoder'
+    TUNING_FLOW = 'tuning/flow'
 
     @classmethod
     def get_folder(cls) -> str:

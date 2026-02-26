@@ -44,7 +44,6 @@ class PointCloudSplit(Dataset[tuple[Inputs, Targets]]):
         np_cloud, np_label = self.pcd.pcs[index], self.labels[index]
         np_cloud_512_up = self.pcd.pcs_512_up[index]
         label = torch.tensor(np_label, dtype=torch.long)
-
         if not torch.is_inference_mode_enabled():
             if self.resample:
                 index_pool = np.arange(np_cloud.shape[0])
@@ -64,15 +63,12 @@ class PointCloudSplit(Dataset[tuple[Inputs, Targets]]):
             ref_cloud = input_cloud = torch.from_numpy(np_cloud[: self.input_points])
             input_cloud_512_up = torch.from_numpy(np_cloud_512_up[: self.input_points])
 
-        cloud_512 = torch.from_numpy(self.pcd.pcs_512[index])
-        cloud_128 = torch.from_numpy(self.pcd.pcs_128[index])
-        cloud_128_up = torch.from_numpy(self.pcd.pcs_128_up[index])
-
-        return Inputs(
+        inputs = Inputs(
             cloud=input_cloud,
-            initial_sampling=input_cloud,
-            cloud_512=cloud_512,
-            cloud_128=cloud_128,
+            cloud_512=torch.from_numpy(self.pcd.pcs_512[index]),
+            cloud_128=torch.from_numpy(self.pcd.pcs_128[index]),
             cloud_512_up=input_cloud_512_up,
-            cloud_128_up=cloud_128_up,
-        ), Targets(ref_cloud=ref_cloud, label=label)
+            cloud_128_up=torch.from_numpy(self.pcd.pcs_128_up[index]),
+        )
+        targets = Targets(ref_cloud=ref_cloud, label=label)
+        return inputs, targets

@@ -8,14 +8,6 @@ from pykeops.torch import LazyTensor  # type: ignore
 pykeops.set_verbose(False)
 
 
-def square_distance(t1: torch.Tensor, t2: torch.Tensor) -> torch.Tensor | LazyTensor:
-    """Compute the squared distance between two point clouds using PyKeOps or PyTorch backend."""
-    if t1.device.type == 'cuda':
-        return pykeops_square_distance(t1, t2)
-    else:
-        return torch_square_distance(t1, t2)
-
-
 def pykeops_square_distance(t1: torch.Tensor, t2: torch.Tensor) -> LazyTensor:
     """Compute the squared distance between two point clouds using PyKeOps backend."""
     t1_lazy = LazyTensor(t1[:, :, None, :])
@@ -31,7 +23,7 @@ def torch_square_distance(t1: torch.Tensor, t2: torch.Tensor) -> torch.Tensor:
     dist = -2 * torch.matmul(t1, t2)
     dist += torch.sum(t1**2, -1, keepdim=True)
     dist += torch.sum(t2**2, -2, keepdim=True)
-    return dist
+    return dist.clamp(min=0)
 
 
 def self_square_distance(t1: torch.Tensor) -> torch.Tensor:

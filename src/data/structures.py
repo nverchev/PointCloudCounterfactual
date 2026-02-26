@@ -59,6 +59,8 @@ class Outputs:
         d_mu2: the difference in mean between the prior and posterior distributions for z2 | probs.
         d_log_var2: the difference in log variance between the prior and posterior distributions for z2 | probs.
         probs: classifier or counterfactual probabilities for z2 | probs.
+        v_pred: predicted velocity for flow matching.
+        v_target: target velocity for flow matching.
     """
 
     model_epoch: int
@@ -75,6 +77,8 @@ class Outputs:
     d_mu2: torch.Tensor
     d_log_var2: torch.Tensor
     probs: torch.Tensor
+    v_pred: torch.Tensor
+    v_target: torch.Tensor
 
     def update(self, other: Self) -> None:
         """Update the state with another instance's one."""

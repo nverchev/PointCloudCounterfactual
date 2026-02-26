@@ -25,6 +25,7 @@ from src.config.options import (
     Schedulers,
     ConditionalLatentEncoders,
     Classifiers,
+    FlowModels,
 )
 
 PositiveInt = Annotated[int, Field(ge=0)]
@@ -553,6 +554,55 @@ class AutoEncoderExperimentConfig(ExperimentConfig):
 
 
 @dataclass
+class FlowModelConfig:
+    """Specification for the flow matching model.
+
+    Attributes:
+        name (str): The name of the flow matching model
+        class_name (FlowModels): The name of the flow matching model class
+        n_timesteps (StrictlyPositiveInt): The number of timesteps for ODE sampling
+        assign_noise (bool): Whether to assign noise to data via linear assignment
+        time_embedding_dim (StrictlyPositiveInt): Dimensions for the time embedding
+        mlp_dims (tuple[StrictlyPositiveInt]): Hidden dimensions for the time MLP
+    """
+
+    name: str
+    class_name: FlowModels
+    n_timesteps: StrictlyPositiveInt
+    assign_noise: bool
+    time_embedding_dim: StrictlyPositiveInt
+    mlp_dims: tuple[StrictlyPositiveInt, ...]
+
+
+@dataclass
+class FlowObjectiveConfig:
+    """Specification for the flow matching objective.
+
+    Attributes:
+        n_training_output_points (StrictlyPositiveInt): The number of output points during training
+        n_inference_output_points (StrictlyPositiveInt): The number of inference points for evaluation
+    """
+
+    n_training_output_points: StrictlyPositiveInt
+    n_inference_output_points: StrictlyPositiveInt
+
+
+@dataclass
+class FlowExperimentConfig(ExperimentConfig):
+    """Specification for the flow experimental part.
+
+    Attributes:
+        name (str): The name of the experiment part
+        train (TrainingConfig): Training options
+        model (FlowModelConfig): The flow architecture configuration
+        objective (FlowObjectiveConfig): The flow objective configuration
+    """
+
+    model: FlowModelConfig
+    objective: FlowObjectiveConfig
+
+
+@dataclass
 class AllConfig:
     """Root specification for all experiment settings.
 
@@ -569,6 +619,7 @@ class AllConfig:
     final: bool
     classifier: ClassifierExperimentConfig
     autoencoder: AutoEncoderExperimentConfig
+    flow: FlowExperimentConfig
     user: UserSettings
     data: DataConfig
     tags: list[str] = dataclasses.field(default_factory=list)

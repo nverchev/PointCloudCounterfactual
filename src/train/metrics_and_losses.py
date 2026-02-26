@@ -188,6 +188,16 @@ def get_f1() -> Metric[torch.Tensor, Targets]:
     return Metric(_f1, name='F1_Score', higher_is_better=True)
 
 
+def get_velocity_mse() -> LossBase[Outputs, Targets]:
+    """Get velocity MSE loss."""
+    mse = torch.nn.MSELoss(reduction='none')
+
+    def _velocity_mse(out: Outputs, _: Targets) -> torch.Tensor:
+        return mse(out.v_pred, out.v_target).sum((1, 2))
+
+    return Loss(_velocity_mse, name='VelocityMSE')
+
+
 def get_classification_loss() -> LossBase[torch.Tensor, Targets]:
     """Get combined classification loss and metrics."""
     return get_cross_entropy_loss() | get_accuracy() | get_macro_accuracy()
@@ -200,3 +210,8 @@ def get_autoencoder_loss() -> LossBase[Outputs, Targets]:
         return get_chamfer_loss() + get_kld_loss()
 
     return get_chamfer_loss()
+
+
+def get_flow_loss() -> LossBase[Outputs, Targets]:
+    """Get flow matching loss."""
+    return get_velocity_mse()

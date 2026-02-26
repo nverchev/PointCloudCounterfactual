@@ -2,6 +2,6 @@ class_name: PCGen
 sample_dim: 3  # has to be fixed to 3 for flow matching
 map_dims: [ 64]
 conv_dims: [ 1024 ]
-n_components: 1
+n_components: 4
 tau: 5
 filter: True

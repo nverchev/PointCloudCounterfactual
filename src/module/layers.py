@@ -16,7 +16,6 @@ import torch
 import torch.nn as nn
 
 from torch import Tensor
-from torch.autograd import Function
 
 from src.config.torch import ActClass, NormClass
 
@@ -676,24 +675,23 @@ class TemperatureScaledSoftmax(nn.Softmax):
         return super().forward(input / self.temperature)
 
 
-class TransferGrad(Function):
-    """Transfers the gradient from one tensor to another."""
+class SinusoidalPositionalEmbedding(nn.Module):
+    freqs: torch.Tensor
 
-    @staticmethod
-    def forward(ctx: Any, *args: torch.Tensor, **kwargs: Any) -> torch.Tensor:
-        """Forward pass."""
-        from_tensor, _to_tensor = args
-        return from_tensor
+    def __init__(self, dim: int = 128, max_period: float = 6.0):
+        super().__init__()
+        self.dim: int = dim
+        half_dim = dim // 2
+        half_range = torch.arange(0, half_dim).float() / half_dim
+        freqs = torch.exp(-math.log(max_period) * half_range)
+        self.register_buffer('freqs', freqs)
+        return
 
-    @staticmethod
-    def backward(ctx: Any, *grad_outputs: torch.Tensor) -> tuple[None, torch.Tensor]:
-        """Backward pass."""
-        return None, grad_outputs[0].clone()
-
-    @classmethod
-    def apply(cls, x: torch.Tensor, y: torch.Tensor) -> torch.Tensor:
-        """Apply the function to two tensors."""
-        return cast(torch.Tensor, super().apply(x, y))
+    def forward(self, t: torch.Tensor) -> torch.Tensor:
+        t = t.view(-1)
+        args = t[:, None] * self.freqs[None, :] * 2 * math.pi  # ← fix
+        embedding = torch.cat([torch.sin(args), torch.cos(args)], dim=-1)
+        return embedding
 
 
 def debug_check(_not_used1: nn.Module, _not_used2: _grad_t, tensor_out: _grad_t) -> None:
