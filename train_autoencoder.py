@@ -29,7 +29,10 @@ def train_autoencoder(classifier: BaseClassifier | None = None, trial: Trial | N
     cfg_ae = cfg.autoencoder
     cfg_user = cfg.user
     ae = get_autoencoder()
-    model = EMAModel(ae, name=cfg_ae.model.name, device=cfg_user.device)
+    if trial is None:
+        model = EMAModel(ae, name=cfg_ae.model.name, device=cfg_user.device)
+    else:
+        model = Model(ae, name=cfg_ae.model.name, device=cfg_user.device)  # normal model for tuning
 
     # test_loader loads the validation dataset unless the final flag is set
     if isinstance(ae, CounterfactualVAE) and classifier is not None:
