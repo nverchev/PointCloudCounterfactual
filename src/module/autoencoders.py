@@ -55,9 +55,11 @@ class PseudoInputManager(nn.Module):
 
         return
 
-    def update_pseudo_latent(self, encoder_func: Callable[[None], Outputs]) -> None:
+    def update_pseudo_latent(self, encoder_func: Callable[[Outputs], Outputs]) -> None:
         """Update pseudo latent parameters based on encoder output."""
-        pseudo_out = encoder_func(None)
+        out = Outputs()
+        out.features = self.pseudo_inputs
+        pseudo_out = encoder_func(out)
         self.pseudo_mu.data = pseudo_out.pseudo_mu1
         self.pseudo_log_var.data = pseudo_out.pseudo_log_var1
         return
@@ -154,37 +156,20 @@ class BaseVAE(AE):
     def encode(self, inputs: Inputs) -> Outputs:
         """Encode point cloud to latent variables."""
         out = super().encode(inputs)
-
-        # Z1 encoding
         out = self.encode_z1(out)
-
-        # probabilities for z2 conditioning
         out = self.get_probabilities(inputs, out)
-
-        # Z2 encoding
         out = self.encode_z2(out)
-
-        # sampling
         out = self.sample_posterior(out)
-
         return out
 
     def decode(self, out: Outputs, inputs: Inputs) -> Outputs:
         """Decode latent variables to point cloud."""
-        # latent variables to features
         out.features = self.latent_decoder(out.z1, out.z2)
-
-        # features to point cloud
         return super().decode(out, inputs)
 
-    def encode_z1(self, out: Outputs | None = None) -> Outputs:
+    def encode_z1(self, out: Outputs) -> Outputs:
         """Encode from dense features to z1."""
-        if out is None:
-            input_tensor = self._get_input(out)
-            out = Outputs()
-        else:
-            input_tensor = out.features
-
+        input_tensor = self._get_input(out.features)
         latent = self.latent_encoder(input_tensor)
         if self.pseudo_manager is not None:
             split_index = [-self.pseudo_manager.n_pseudo_inputs]
@@ -257,18 +242,9 @@ class BaseVAE(AE):
         mu2_combined, log_var2_combined = self.z2_prior(probs).chunk(2, 1)
         return self.sample_gaussian(mu2_combined, log_var2_combined)
 
-    def _get_input(self, out: Outputs | None = None) -> torch.Tensor:
+    def _get_input(self, x: torch.Tensor) -> torch.Tensor:
         """Get input tensor, combining with pseudo inputs if available."""
-        if self.pseudo_manager is None:
-            if out is None:
-                raise ValueError('No input available.')
-
-            return out.features
-
-        if out is None:
-            return self.pseudo_manager.pseudo_inputs
-
-        return self.pseudo_manager.get_combined_input(out.features)
+        return x if self.pseudo_manager is None else self.pseudo_manager.get_combined_input(x)
 
     @staticmethod
     def sample_gaussian(mu: torch.Tensor, log_var: torch.Tensor) -> torch.Tensor:
