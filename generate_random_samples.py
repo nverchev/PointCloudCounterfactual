@@ -19,7 +19,7 @@ def generate_random_samples() -> None:
     save_dir = cfg.user.path.version_dir / 'images' / cfg.name / 'generated'
     module = get_autoencoder().eval()
     model = EMAModel(module, name=cfg_ae.model.name, device=cfg_user.device)
-    model.load_state(1000)
+    model.load_state(-1)
     ema_module = model.averaged_module
     assert isinstance(ema_module, BaseVAE)
 
