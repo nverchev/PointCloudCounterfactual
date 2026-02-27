@@ -3,7 +3,7 @@ defaults:
     - _self_
 
 optimizer_name: AdamW
-learning_rate: 0.001
+learning_rate: 0.0005
 grad_op: GradNormClipper
 clip_criterion:
 opt_settings:

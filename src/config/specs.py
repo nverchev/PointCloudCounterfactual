@@ -166,7 +166,6 @@ class DecoderConfig(ConvArchitectureConfig, TransformerArchitectureConfig):
 
     Attributes:
         class_name (Decoders): The name of the decoder class
-        sample_dim (StrictlyPositiveInt): Dimensions of the sampling sphere
         n_components (StrictlyPositiveInt): Number of components for PCGen
         map_dims (tuple[StrictlyPositiveInt]): Hidden dimensions for mapping the initial sampling
         tau (PositiveFloat): Coefficient for Gumbel Softmax activation
@@ -174,7 +173,6 @@ class DecoderConfig(ConvArchitectureConfig, TransformerArchitectureConfig):
     """
 
     class_name: Decoders
-    sample_dim: StrictlyPositiveInt
     n_components: StrictlyPositiveInt
     map_dims: tuple[StrictlyPositiveInt, ...]
     tau: PositiveFloat

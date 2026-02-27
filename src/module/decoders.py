@@ -10,7 +10,7 @@ import torch.nn.functional as F
 from src.config import ActClass, NormClass
 from src.config.experiment import Experiment
 from src.config.options import Decoders
-from src.data import OUT_CHAN
+from src.data import IN_CHAN, OUT_CHAN
 from src.module.layers import PointsConvLayer, TransformerEncoder, PointsConvResBlock
 from src.utils.neighbour_ops import graph_filtering
 
@@ -32,7 +32,6 @@ class BasePointDecoder(nn.Module, metaclass=abc.ABCMeta):
         self.act_cls: ActClass = cfg_decoder.act_cls
         self.norm_cls: NormClass = cfg_decoder.norm_cls
         self.filtering: bool = cfg_decoder.filter
-        self.sample_dim: int = cfg_decoder.sample_dim
         self.n_components: int = cfg_decoder.n_components
         self.tau: float = cfg_decoder.tau
 
@@ -51,7 +50,7 @@ class PCGen(BasePointDecoder):
         decoder_cfg = Experiment.get_config().autoencoder.model.decoder
         self.embedding_dim: int = decoder_cfg.embedding_dim
         modules: list[nn.Module] = []
-        dim_pairs = itertools.pairwise([self.sample_dim, *self.map_dims])
+        dim_pairs = itertools.pairwise([IN_CHAN, *self.map_dims])
         for in_dim, out_dim in dim_pairs:
             modules.append(PointsConvLayer(in_dim, out_dim, act_cls=torch.nn.ReLU))
 
@@ -78,10 +77,6 @@ class PCGen(BasePointDecoder):
             self.att = PointsConvLayer(self.embedding_dim, self.n_components, n_groups_layer=self.n_components)
 
         return
-
-    def _initialize_sampling(self, batch: int, n_output_points: int, device: torch.device) -> torch.Tensor:
-        """Initialize and normalize the sampling points."""
-        return torch.randn(batch, self.sample_dim, n_output_points, device=device)
 
     def _process_component_groups(self, x: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor]:
         """Return component outputs and attention features."""
@@ -118,14 +113,9 @@ class PCGen(BasePointDecoder):
             features: features of dimension [Batch, feature_dim]
             n_output_points: Number of output points
         """
-        batch = features.size()[0]
-        device = features.device
-        if initial_sampling.numel():
-            x = initial_sampling
-        else:
-            x = self._initialize_sampling(batch, n_output_points, device)
+        initial_sampling = initial_sampling.transpose(2, 1)
 
-        x = self.map_sample(x)
+        x = self.map_sample(initial_sampling)
         x = self._join_operation(x, features)
         x, x_out = self._process_component_groups(x)
         x = self._apply_attention_mixing(x, x_out)

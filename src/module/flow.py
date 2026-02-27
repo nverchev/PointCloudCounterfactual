@@ -42,7 +42,7 @@ class FlowMatchingModel(nn.Module):
         t = self._sample_time(batch_size, device=device)
         x_t = (1.0 - t) * x_0 + t * x_1
         features = self.time_embedding(t)
-        v_pred = self.decoder(x_t.transpose(1, 2), features, self.n_output_points)
+        v_pred = self.decoder(x_t, features, self.n_output_points)
         out.v_pred = v_pred
         out.v_target = x_1 - x_0
         return out
