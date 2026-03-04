@@ -6,15 +6,17 @@ from src.module.latent_decoders import get_latent_decoder
 from src.module.encoders import get_encoder
 from src.module.latent_encoders import get_latent_encoder, get_conditional_latent_encoder
 from src.module.classifier import get_classifier, BaseClassifier
-from src.module.flow import FlowMatchingModel, get_flow_module
+from src.module.flow import get_flow_module, BaseFlow, FlowMatching, CondFlowMatching
 
 __all__ = [
     'VAE',
     'AbstractAE',
     'BaseClassifier',
+    'BaseFlow',
     'BaseVAE',
+    'CondFlowMatching',
     'CounterfactualVAE',
-    'FlowMatchingModel',
+    'FlowMatching',
     'get_autoencoder',
     'get_classifier',
     'get_conditional_latent_encoder',

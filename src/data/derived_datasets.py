@@ -11,7 +11,6 @@ from torch.utils.data import Dataset
 
 from src.module import BaseClassifier, BaseVAE, CounterfactualVAE
 from src.data.structures import Inputs, Outputs, Targets
-from src.data.databuilder import AbstractSingleton
 
 V = TypeVar('V', bound=BaseVAE)
 
@@ -61,7 +60,7 @@ class CounterfactualMixin(ClassifierMixin, AutoencoderMixin[CounterfactualVAE]):
         return self.autoencoder.generate_counterfactual(batch_inputs, self.target_dim, self.target_value)
 
 
-class ProcessedDataset(abc.ABC, metaclass=AbstractSingleton):
+class ProcessedDataset(abc.ABC):
     """Base dataset for VAE models with common functionality."""
 
     def __init__(self, dataset: Dataset[tuple[Inputs, Targets]], pin_memory: bool = True) -> None:

@@ -1,6 +1,0 @@
-name: FlowMapping
-class_name: FlowMatchingModel
-n_timesteps: 10
-assign_noise: false
-time_embedding_dim: 128
-mlp_dims: [512]

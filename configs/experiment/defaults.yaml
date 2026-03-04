@@ -2,7 +2,9 @@ defaults:
   - all_config
   - autoencoder: autoencoder_exp
   - classifier: classifier_exp
-  - flow: flow_exp
+  - flow_stage1: cond_stage1
+  - flow_stage2: cond_stage2
+  - flow_stage3: cond_stage3
   - user: user_settings
   - data: default_data
   - _self_

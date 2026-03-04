@@ -1,0 +1,11 @@
+defaults:
+  - train: default_train
+  - model: cond
+  - _self_
+
+name: flow_stage3
+
+objective:
+  n_timesteps: 30
+
+stage: 3

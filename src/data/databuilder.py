@@ -24,10 +24,6 @@ class Singleton(type):
         return cls._instances[cls]
 
 
-class AbstractSingleton(Singleton, abc.ABCMeta):
-    """Combining abstract and singleton metaclass."""
-
-
 class PointCloudDataBuilder(metaclass=Singleton):
     """Common base class for Point Cloud datasets like ModelNet and ShapeNet."""
 
@@ -65,11 +61,9 @@ class PointCloudDataBuilder(metaclass=Singleton):
             val_pcd = self.split_to_pcd[Partitions.val]
 
             pcd = PCD(
-                pcs=np.concatenate([train_pcd.pcs, val_pcd.pcs]),
-                pcs_512=np.concatenate([train_pcd.pcs_512, val_pcd.pcs_512]),
-                pcs_128=np.concatenate([train_pcd.pcs_128, val_pcd.pcs_128]),
-                pcs_512_up=np.concatenate([train_pcd.pcs_512_up, val_pcd.pcs_512_up]),
-                pcs_128_up=np.concatenate([train_pcd.pcs_128_up, val_pcd.pcs_128_up]),
+                pcd=np.concatenate([train_pcd.pcd, val_pcd.pcd]),
+                pcd_512=np.concatenate([train_pcd.pcd_512, val_pcd.pcd_512]),
+                pcd_128=np.concatenate([train_pcd.pcd_128, val_pcd.pcd_128]),
                 labels=np.concatenate([train_pcd.labels, val_pcd.labels]),
                 std=np.concatenate([train_pcd.std, val_pcd.std]),
             )
@@ -99,7 +93,7 @@ class PointCloudDataBuilder(metaclass=Singleton):
             h5_path = self.dir_processed / class_name / f'{partition.name}.h5'
             try:
                 pcd = load_h5(h5_path.parent, h5_path.name)
-                pcd.labels = np.full(pcd.pcs.shape[0], label, dtype=np.int64)
+                pcd.labels = np.full(pcd.pcd.shape[0], label, dtype=np.int64)
                 pcds.append(pcd)
             except FileNotFoundError:
                 if partition == Partitions.val:
@@ -107,11 +101,9 @@ class PointCloudDataBuilder(metaclass=Singleton):
                 raise
 
         self.split_to_pcd[partition] = PCD(
-            pcs=np.concatenate([p.pcs for p in pcds]),
-            pcs_512=np.concatenate([p.pcs_512 for p in pcds]),
-            pcs_128=np.concatenate([p.pcs_128 for p in pcds]),
-            pcs_512_up=np.concatenate([p.pcs_512_up for p in pcds]),
-            pcs_128_up=np.concatenate([p.pcs_128_up for p in pcds]),
+            pcd=np.concatenate([p.pcd for p in pcds]),
+            pcd_512=np.concatenate([p.pcd_512 for p in pcds]),
+            pcd_128=np.concatenate([p.pcd_128 for p in pcds]),
             labels=np.concatenate([p.labels for p in pcds]),
             std=np.concatenate([p.std for p in pcds]),
         )

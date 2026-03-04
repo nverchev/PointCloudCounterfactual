@@ -26,6 +26,7 @@ from src.config.options import (
     ConditionalLatentEncoders,
     Classifiers,
     FlowModels,
+    TimeEmbeddings,
 )
 
 PositiveInt = Annotated[int, Field(ge=0)]
@@ -81,8 +82,14 @@ class DataConfig:
     rotate: bool
     jitter_sigma: PositiveFloat
     jitter_clip: PositiveFloat
-    resample: bool
-    sample_with_replacement: bool
+
+    @model_validator(mode='after')
+    def _validate_points(self) -> Self:
+        if self.n_input_points not in (2048, 8192):
+            msg = f'n_input_points must be 2048 or 8192, got {self.n_input_points}'
+            raise ValueError(msg)
+
+        return self
 
 
 @dataclass(kw_only=True)
@@ -177,6 +184,19 @@ class DecoderConfig(ConvArchitectureConfig, TransformerArchitectureConfig):
     map_dims: tuple[StrictlyPositiveInt, ...]
     tau: PositiveFloat
     filter: bool
+
+
+@dataclass
+class TimeEmbeddingConfig(LinearArchitectureConfig):
+    """Specification for the time embedding.
+
+    Attributes:
+        class_name (TimeEmbeddings): The name of the time-embedding class
+        embedding_dim (StrictlyPositiveInt): The dimension of the initial time embedding
+    """
+
+    class_name: TimeEmbeddings
+    embedding_dim: StrictlyPositiveInt
 
 
 @dataclass
@@ -384,6 +404,18 @@ class ObjectiveAEConfig:
     c_kld2: PositiveFloat
     kld_restart_interval: StrictlyPositiveInt
 
+    @model_validator(mode='after')
+    def _validate_points(self) -> Self:
+        if self.n_training_output_points not in (2048, 8192):
+            msg = f'n_training_output_points must be 2048 or 8192, got {self.n_training_output_points}'
+            raise ValueError(msg)
+
+        if self.n_inference_output_points <= 512:
+            msg = f'n_inference_output_points must be greater than 512, got {self.n_inference_output_points}'
+            raise ValueError(msg)
+
+        return self
+
 
 @dataclass
 class PlottingOptions:
@@ -473,7 +505,6 @@ class UserSettings:
         plot (PlottingOptions): Options for plotting and visualization
         seed (Optional[int]): The seed for PyTorch/NumPy randomness. If None, no seed is set
         checkpoint_every (PositiveInt): The number of epochs between saving checkpoints
-        n_inference_output_points (int): The number of output points during inference for each point cloud
         load_checkpoint (int): The checkpoint to load if available. Default is the last one (-1)
         counterfactual_value (PositiveFloat): Value associated with counterfactual change (0 no change, 1 full change)
         hydra (HydraSettings): Subset of the current hydra settings
@@ -489,6 +520,7 @@ class UserSettings:
     seed: int | None
     checkpoint_every: PositiveInt
     load_checkpoint: int = -1
+    flow_stage: int | None = None
     hydra = HydraSettings()
     path = PathSpecs()
 
@@ -558,18 +590,19 @@ class FlowModelConfig:
     Attributes:
         name (str): The name of the flow matching model
         class_name (FlowModels): The name of the flow matching model class
-        n_timesteps (StrictlyPositiveInt): The number of timesteps for ODE sampling
         assign_noise (bool): Whether to assign noise to data via linear assignment
-        time_embedding_dim (StrictlyPositiveInt): Dimensions for the time embedding
-        mlp_dims (tuple[StrictlyPositiveInt]): Hidden dimensions for the time MLP
+        noise_variance (float): The variance of the noise to be added to the data
     """
 
     name: str
     class_name: FlowModels
-    n_timesteps: StrictlyPositiveInt
     assign_noise: bool
-    time_embedding_dim: StrictlyPositiveInt
-    mlp_dims: tuple[StrictlyPositiveInt, ...]
+    feature_dim: StrictlyPositiveInt
+    time_embedding: TimeEmbeddingConfig
+    latent_decoder: LatentDecoderConfig
+    decoder: DecoderConfig
+    noise_variance: float = 1.0
+    stage: int | None = None
 
 
 @dataclass
@@ -577,12 +610,10 @@ class FlowObjectiveConfig:
     """Specification for the flow matching objective.
 
     Attributes:
-        n_training_output_points (StrictlyPositiveInt): The number of output points during training
-        n_inference_output_points (StrictlyPositiveInt): The number of inference points for evaluation
+        n_timesteps (StrictlyPositiveInt): The number of timesteps for ODE sampling
     """
 
-    n_training_output_points: StrictlyPositiveInt
-    n_inference_output_points: StrictlyPositiveInt
+    n_timesteps: StrictlyPositiveInt
 
 
 @dataclass
@@ -594,10 +625,12 @@ class FlowExperimentConfig(ExperimentConfig):
         train (TrainingConfig): Training options
         model (FlowModelConfig): The flow architecture configuration
         objective (FlowObjectiveConfig): The flow objective configuration
+        stage (int): The flow stage (1, 2, or 3)
     """
 
     model: FlowModelConfig
     objective: FlowObjectiveConfig
+    stage: int
 
 
 @dataclass
@@ -609,6 +642,9 @@ class AllConfig:
         final (bool): If True, it uses the validation dataset for training and the test dataset for testing
         classifier (ClassifierExperimentConfig): The configuration for training the classifier
         autoencoder (AutoEncoderExperimentConfig): The configuration for training the autoencoder
+        flow_stage1 (FlowExperimentConfig): The configuration for flow stage 1
+        flow_stage2 (FlowExperimentConfig): The configuration for flow stage 2
+        flow_stage3 (FlowExperimentConfig): The configuration for flow stage 3
         user (UserSettings): User-specific settings
         data (DataConfig): Data pre-processing configuration
     """
@@ -617,7 +653,9 @@ class AllConfig:
     final: bool
     classifier: ClassifierExperimentConfig
     autoencoder: AutoEncoderExperimentConfig
-    flow: FlowExperimentConfig
+    flow_stage1: FlowExperimentConfig
+    flow_stage2: FlowExperimentConfig
+    flow_stage3: FlowExperimentConfig
     user: UserSettings
     data: DataConfig
     tags: list[str] = dataclasses.field(default_factory=list)

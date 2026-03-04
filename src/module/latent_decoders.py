@@ -6,26 +6,21 @@ import torch
 import torch.nn as nn
 
 from src.config import ActClass, NormClass
-from src.config.experiment import Experiment
 from src.config.options import LatentDecoders
+from src.config.specs import LatentDecoderConfig
 from src.module.layers import LinearLayer
 
 
 class BaseLatentDecoder(nn.Module, metaclass=abc.ABCMeta):
     """Base class for latent decoder."""
 
-    def __init__(self) -> None:
+    def __init__(self, cfg: LatentDecoderConfig, z1_dim: int, z2_dim: int, feature_dim: int) -> None:
         super().__init__()
-        cfg = Experiment.get_config()
-        cfg_ae = cfg.autoencoder
-        cfg_ae_model = cfg_ae.model
-        cfg_latent_decoder = cfg_ae_model.latent_decoder
-        self.n_classes: int = cfg.data.dataset.n_classes
-        self.z1_dim: int = cfg_ae_model.z1_dim
-        self.z2_dim: int = cfg_ae_model.z2_dim
-        self.feature_dim: int = cfg_ae_model.feature_dim
-        self.act_cls: ActClass = cfg_latent_decoder.act_cls
-        self.norm_cls: NormClass = cfg_latent_decoder.norm_cls
+        self.z1_dim: int = z1_dim
+        self.z2_dim: int = z2_dim
+        self.feature_dim: int = feature_dim
+        self.act_cls: ActClass = cfg.act_cls
+        self.norm_cls: NormClass = cfg.norm_cls
         return
 
     @abc.abstractmethod
@@ -36,12 +31,10 @@ class BaseLatentDecoder(nn.Module, metaclass=abc.ABCMeta):
 class LinearLatentDecoder(BaseLatentDecoder):
     """Latent decoder using linear architecture."""
 
-    def __init__(self) -> None:
-        super().__init__()
-        cfg = Experiment.get_config()
-        cfg_latent_decoder = cfg.autoencoder.model.latent_decoder
-        dropout_rate = cfg_latent_decoder.dropout_rate
-        mlp_dims = cfg_latent_decoder.mlp_dims
+    def __init__(self, cfg: LatentDecoderConfig, z1_dim: int, z2_dim: int, feature_dim: int) -> None:
+        super().__init__(cfg, z1_dim, z2_dim, feature_dim)
+        dropout_rate = cfg.dropout_rate
+        mlp_dims = cfg.mlp_dims
         layers = []
         input_dim = self.z1_dim + self.z2_dim
         for dim in mlp_dims:
@@ -60,9 +53,9 @@ class LinearLatentDecoder(BaseLatentDecoder):
         return self.mlp(torch.cat([z1, z2], dim=1))
 
 
-def get_latent_decoder() -> BaseLatentDecoder:
+def get_latent_decoder(cfg: LatentDecoderConfig, z1_dim: int, z2_dim: int, feature_dim: int) -> BaseLatentDecoder:
     """Get W-decoder according to the configuration."""
     decoder_dict: dict[LatentDecoders, type[BaseLatentDecoder]] = {
         LatentDecoders.Linear: LinearLatentDecoder,
     }
-    return decoder_dict[Experiment.get_config().autoencoder.model.latent_decoder.class_name]()
+    return decoder_dict[cfg.class_name](cfg, z1_dim, z2_dim, feature_dim)

@@ -3,7 +3,6 @@
 import enum
 
 import torch
-import numpy as np
 
 from torch.utils.data import Dataset
 
@@ -30,45 +29,42 @@ class PointCloudSplit(Dataset[tuple[Inputs, Targets]]):
         self.pcd = pcd
         self.labels = pcd.labels
         self.input_points = cfg_data.n_input_points
-        self.resample = cfg_data.resample
-        self.replace = cfg_data.sample_with_replacement
         self.augment = augment_clouds()
         self.jitter = jitter_cloud()
         self.class_names = class_names
         return
 
     def __len__(self) -> int:
-        return self.pcd.pcs.shape[0]
+        return self.pcd.pcd.shape[0]
 
     def __getitem__(self, index: int) -> tuple[Inputs, Targets]:
-        np_cloud, np_label = self.pcd.pcs[index], self.labels[index]
-        np_cloud_512_up = self.pcd.pcs_512_up[index]
+        # Choose the right cloud level based on n_input_points
+        if self.input_points == 2048 and self.pcd.pcd_2048 is not None:
+            np_cloud = self.pcd.pcd_2048[index]
+        else:
+            np_cloud = self.pcd.pcd[index]
+
+        cloud_512 = torch.from_numpy(self.pcd.pcd_512[index])
+        cloud_128 = torch.from_numpy(self.pcd.pcd_128[index])
+        cloud_2048 = torch.from_numpy(self.pcd.pcd_2048[index]) if self.pcd.pcd_2048 is not None else torch.empty(0)
+
+        np_label = self.labels[index]
         label = torch.tensor(np_label, dtype=torch.long)
         if not torch.is_inference_mode_enabled():
-            if self.resample:
-                index_pool = np.arange(np_cloud.shape[0])
-                sampled_indices = np.random.choice(index_pool, size=self.input_points, replace=self.replace)
-                np_input_cloud = np_cloud[sampled_indices]
-                np_input_cloud_512_up = np_cloud_512_up[sampled_indices]
-            else:
-                np_input_cloud = np_cloud[: self.input_points]
-                np_input_cloud_512_up = np_cloud_512_up[: self.input_points]
-
+            np_input_cloud = np_cloud[: self.input_points]
             input_cloud = torch.from_numpy(np_input_cloud)
             input_cloud = self.jitter(input_cloud)
             ref_cloud = torch.from_numpy(np_cloud[: self.input_points])
-            input_cloud_512_up = torch.from_numpy(np_input_cloud_512_up)
-            input_cloud, ref_cloud, input_cloud_512_up, *_ = self.augment([input_cloud, ref_cloud, input_cloud_512_up])
+            clouds = (input_cloud, cloud_512, cloud_128, cloud_2048, ref_cloud)
+            input_cloud, cloud_512, cloud_128, cloud_2048, ref_cloud = self.augment(clouds)
         else:
             ref_cloud = input_cloud = torch.from_numpy(np_cloud[: self.input_points])
-            input_cloud_512_up = torch.from_numpy(np_cloud_512_up[: self.input_points])
 
         inputs = Inputs(
             cloud=input_cloud,
-            cloud_512=torch.from_numpy(self.pcd.pcs_512[index]),
-            cloud_128=torch.from_numpy(self.pcd.pcs_128[index]),
-            cloud_512_up=input_cloud_512_up,
-            cloud_128_up=torch.from_numpy(self.pcd.pcs_128_up[index]),
+            cloud_512=cloud_512,
+            cloud_128=cloud_128,
+            cloud_2048=cloud_2048,
         )
         targets = Targets(ref_cloud=ref_cloud, label=label)
         return inputs, targets

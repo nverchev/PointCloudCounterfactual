@@ -7,6 +7,7 @@ cpu: false  # false enables acceleration
 n_workers: 0  # 0 means that the data will be loaded in the main process
 n_subprocesses: 0  # number of subprocesses used for training (0 for no parallelism)
 checkpoint_every: 100  # save a checkpoint of the model after every n epochs
+flow_stage: null  # train a specific stage (3, 2, 1) or all if null
 load_checkpoint: 0  # load a checkpoint from the experiments folder, -1 indicates loading the latest checkpoint
 
 # Optional trackers for monitoring the experiment

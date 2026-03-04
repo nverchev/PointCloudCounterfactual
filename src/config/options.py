@@ -22,6 +22,7 @@ class Decoders(enum.StrEnum):
     """Encoder classes."""
 
     PCGen = enum.auto()
+    PCGenClusters = enum.auto()
 
 
 class LatentEncoders(enum.StrEnum):
@@ -51,10 +52,17 @@ class AutoEncoders(enum.StrEnum):
     CounterfactualVAE = enum.auto()
 
 
+class TimeEmbeddings(enum.StrEnum):
+    """Time embedding classes."""
+
+    Sinusoidal = enum.auto()
+
+
 class FlowModels(enum.StrEnum):
     """Flow matching model classes."""
 
-    FlowMatchingModel = enum.auto()
+    FlowMatching = enum.auto()
+    CondFlowMatching = enum.auto()
 
 
 class Classifiers(enum.StrEnum):

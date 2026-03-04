@@ -1,0 +1,11 @@
+defaults:
+  - train: default_train
+  - model: standard
+  - _self_
+
+name: flow_stage2
+
+objective:
+  n_timesteps: 30
+
+stage: 2

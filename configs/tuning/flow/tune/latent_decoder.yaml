@@ -1,0 +1,15 @@
+study_name:
+  latent_decoder
+
+n_trials: 100
+
+params:
+
+  stage.model.latent_decoder.mlp_dims:
+    suggest: suggest_list
+    settings:
+      min_length: 1
+      max_length: 3
+      suggest: suggest_categorical
+      settings:
+        choices: [256, 512, 1024]
