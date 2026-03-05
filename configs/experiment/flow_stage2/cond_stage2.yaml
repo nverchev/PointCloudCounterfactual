@@ -9,3 +9,4 @@ objective:
   n_timesteps: 30
 
 stage: 2
+s_k: 0.3333333333333333

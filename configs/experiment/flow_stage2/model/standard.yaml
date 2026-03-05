@@ -8,4 +8,3 @@ name: flow_stage2
 class_name: FlowMatching
 assign_noise: true
 feature_dim: 1024
-noise_variance: 0.0625

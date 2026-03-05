@@ -626,11 +626,14 @@ class FlowExperimentConfig(ExperimentConfig):
         model (FlowModelConfig): The flow architecture configuration
         objective (FlowObjectiveConfig): The flow objective configuration
         stage (int): The flow stage (1, 2, or 3)
+        s_k (float): The start time of the stage in the global [0, 1] interval
+        s_k (float): The start time of the stage in the global [0, 1] interval
     """
 
     model: FlowModelConfig
     objective: FlowObjectiveConfig
     stage: int
+    s_k: float = 0.0
 
 
 @dataclass

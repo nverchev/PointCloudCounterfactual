@@ -21,21 +21,23 @@ class BaseFlow(nn.Module, abc.ABC):
     """Abstract Base Class for Flow Matching Models."""
 
     decoder: BasePointDecoder
-    noise_std: torch.Tensor
     n_training_points_training: int
     n_inference_output_points: int
     time_embedding_dim: int
     mlp_dims: tuple[int, ...]
+    d_k: int
+    noise_scale: torch.Tensor
 
     def __init__(self, cfg_flow: FlowExperimentConfig):
         super().__init__()
         cfg_ae = Experiment.get_config().autoencoder
         cfg_model = cfg_flow.model
-
-        self.assign_noise: bool = cfg_model.assign_noise
-        self.noise_variance: float = cfg_model.noise_variance
-
         decoder_cfg = cfg_model.decoder if cfg_model.decoder is not None else cfg_ae.model.decoder
+
+        self._setup_stage()
+        self.assign_noise: bool = cfg_model.assign_noise
+        self.s_k: float = cfg_flow.s_k
+        self.register_buffer('noise_scale', torch.tensor(1.0 / self.d_k**0.5))
         self.decoder = get_decoder(decoder_cfg, cfg_model.feature_dim)
         return
 
@@ -67,14 +69,27 @@ class BaseFlow(nn.Module, abc.ABC):
     ) -> list[torch.Tensor]:
         """Sample from the flow matching model."""
 
+    @abc.abstractmethod
+    def _setup_stage(self) -> None:
+        """Setup the stage."""
+
+    @abc.abstractmethod
+    def _order_noise(self, x_1: torch.Tensor, noise: torch.Tensor) -> torch.Tensor:
+        """Order noise to match x_1."""
+
     def _sample_time(self, batch_size: int, device: torch.device) -> torch.Tensor:
-        """Sample time uniformly from [0, 1]."""
+        """Sample global time t uniformly in [s_k, 1.0]."""
         return torch.rand(batch_size, device=device).view(-1, 1, 1)
 
-    def _add_transition_noise(self, x_clean: torch.Tensor) -> torch.Tensor:
-        """Add additive noise to the upsampled output."""
-        noise = torch.randn_like(x_clean) * self.noise_std
-        return x_clean + noise
+    def _sample_noise(self, shape: torch.Size | tuple[int, ...], device: torch.device) -> torch.Tensor:
+        """Sample n ~ N(0, 1/D^k * I) as per Eq. 6."""
+        return torch.randn(shape, device=device) * self.noise_scale
+
+    def _sample_alignment_noise(self, n_samples: int, n_points: int, device: torch.device) -> torch.Tensor:
+        """Sample n' ~ N(0, Sigma') as per Eq. 24/70."""
+        # Sigma' = (1-s_k)^2 / D^k * I  (assuming e_k always equals 1)
+        std = (1.0 - self.s_k) * self.noise_scale
+        return torch.randn(n_samples, n_points, 3, device=device) * std
 
 
 class FlowMatching(BaseFlow, abc.ABC):
@@ -82,7 +97,6 @@ class FlowMatching(BaseFlow, abc.ABC):
 
     def __init__(self, cfg_flow: FlowExperimentConfig):
         super().__init__(cfg_flow)
-        self.register_buffer('noise_std', torch.sqrt(torch.tensor(self.noise_variance)))
         self.time_embedding = get_time_embedding(
             cfg=cfg_flow.model.time_embedding,
             feature_dim=cfg_flow.model.feature_dim,
@@ -93,20 +107,21 @@ class FlowMatching(BaseFlow, abc.ABC):
         """Forward pass for training velocity prediction (MFM Algorithm 1)."""
         batch_size, _, _ = inputs.cloud.shape
         device = inputs.cloud.device
-        x_1 = self._get_target(inputs)
+        x_1_clean = self._get_target(inputs)
         x_0_clean = self._get_source(inputs)
         features = self._get_features(inputs)
         t = self._sample_time(batch_size, device=device)
         emb_features = self.time_embedding(t.view(batch_size, 1), features)
-        x_0 = self._add_transition_noise(x_0_clean)
+        n = self._sample_noise(x_1_clean.shape, device)
+        x_s = self.s_k * x_0_clean + (1.0 - self.s_k) * n
         if self.assign_noise:
-            x_0 = self._assign_noise(x_1, x_0)
+            x_s = self._order_noise(x_1_clean, x_s)
 
-        x_t = (1.0 - t) * x_0 + t * x_1
+        x_t = (1.0 - t) * x_s + t * x_1_clean
         v_pred = self.decoder(x_t, emb_features, self.n_output_points)
         out = Outputs()
         out.v_pred = v_pred
-        out.v_target = x_1 - x_0
+        out.v_target = x_1_clean - x_s
         return out
 
     @torch.no_grad()
@@ -122,27 +137,28 @@ class FlowMatching(BaseFlow, abc.ABC):
     ) -> list[torch.Tensor]:
         """Deterministic ODE Sampling (Euler Integration)."""
         if x_0 is None:
-            x_t = torch.randn(n_samples, n_points, 3, device=device) * self.noise_std
+            x_t = self._sample_noise((n_samples, n_points, 3), device)
         else:
-            x_t = x_0
+            if self.s_k > 0:
+                x_t = x_0 + self._sample_alignment_noise(n_samples, n_points, device)
+            else:
+                x_t = x_0
 
         x_list = [x_t]
         features = self._decode_latent(z1, z2, n_samples, device)
         for i in range(n_timesteps):
-            t_curr = i / n_timesteps
-            t_next = (i + 1) / n_timesteps
-            dt = t_next - t_curr
-            t = torch.full((n_samples,), t_curr, device=device).view(-1, 1)
-            emb_features = self.time_embedding(t, features)
+            t_curr_local = i / n_timesteps
+            t_next_local = (i + 1) / n_timesteps
+            dt_local = t_next_local - t_curr_local
+
+            t_curr_global = self.s_k + t_curr_local * (1.0 - self.s_k)
+            t_tensor = torch.full((n_samples,), t_curr_global, device=device).view(-1, 1)
+            emb_features = self.time_embedding(t_tensor, features)
             v_pred = self.decoder(x_t, emb_features, n_points)
-            x_t = x_t + v_pred * dt
+            x_t = x_t + v_pred * dt_local
             x_list.append(x_t)
 
         return x_list
-
-    @abc.abstractmethod
-    def _assign_noise(self, x_1: torch.Tensor, noise: torch.Tensor) -> torch.Tensor:
-        """Assign noise to x_1."""
 
     def _decode_latent(
         self, z1: torch.Tensor | None, z2: torch.Tensor | None, n_samples: int, device: torch.device
@@ -240,15 +256,17 @@ class ClusterPermutation:
 class Stage1Mixin:
     """Configuration mixin for Flow Stage 1."""
 
-    def _setup_stage(self):
+    def _setup_stage(self) -> None:
+        """Setup stage 1."""
         cfg = Experiment.get_config()
         self.n_training_points_training = cfg.data.n_input_points
         self.n_inference_output_points = cfg.data.n_target_points
         self.cluster_permutation = ClusterPermutation()
+        self.d_k = 1
         return
 
-    def _assign_noise(self, x_1: torch.Tensor, noise: torch.Tensor) -> torch.Tensor:
-        """Assign noise to x_1 cluster-wise (512 clusters of 4)."""
+    def _order_noise(self, x_1: torch.Tensor, noise: torch.Tensor) -> torch.Tensor:
+        """Order noise to match x_1 cluster-wise (512 clusters of 4)."""
         return self.cluster_permutation.cluster_wise_assign(x_1, noise, k=4)
 
     def _get_target(self, inputs: Inputs) -> torch.Tensor:
@@ -261,14 +279,16 @@ class Stage1Mixin:
 class Stage2Mixin:
     """Configuration mixin for Flow Stage 2."""
 
-    def _setup_stage(self):
+    def _setup_stage(self) -> None:
+        """Setup stage 2."""
         self.n_training_points_training = 512
         self.n_inference_output_points = 512
         self.cluster_permutation = ClusterPermutation()
+        self.d_k = 4
         return
 
-    def _assign_noise(self, x_1: torch.Tensor, noise: torch.Tensor) -> torch.Tensor:
-        """Assign noise to x_1 cluster-wise (128 clusters of 4)."""
+    def _order_noise(self, x_1: torch.Tensor, noise: torch.Tensor) -> torch.Tensor:
+        """Order noise to match x_1 cluster-wise (128 clusters of 4)."""
         return self.cluster_permutation.cluster_wise_assign(x_1, noise, k=4)
 
     def _get_target(self, inputs: Inputs) -> torch.Tensor:
@@ -281,9 +301,11 @@ class Stage2Mixin:
 class Stage3Mixin:
     """Configuration mixin for Flow Stage 3."""
 
-    def _setup_stage(self):
+    def _setup_stage(self) -> None:
+        """Setup stage 3."""
         self.n_training_points_training = 128
         self.n_inference_output_points = 128
+        self.d_k = 16
         return
 
     def _get_target(self, inputs: Inputs) -> torch.Tensor:
@@ -292,7 +314,8 @@ class Stage3Mixin:
     def _get_source(self, inputs: Inputs) -> torch.Tensor:
         return torch.zeros_like(inputs.cloud_128)
 
-    def _assign_noise(self, x_1: torch.Tensor, noise: torch.Tensor) -> torch.Tensor:
+    def _order_noise(self, x_1: torch.Tensor, noise: torch.Tensor) -> torch.Tensor:
+        """Order noise to match x_1 cluster-wise (16 clusters of 16)."""
         batch_size, n_points = x_1.shape[:2]
         device = x_1.device
         indices = get_bijective_assignment(x_1, noise)
@@ -306,7 +329,6 @@ class FlowStage1(Stage1Mixin, FlowMatching):
 
     def __init__(self, cfg_flow: FlowExperimentConfig):
         super().__init__(cfg_flow)
-        self._setup_stage()
         return
 
 
@@ -315,7 +337,6 @@ class FlowStage2(Stage2Mixin, FlowMatching):
 
     def __init__(self, cfg_flow: FlowExperimentConfig):
         super().__init__(cfg_flow)
-        self._setup_stage()
         return
 
 
@@ -324,7 +345,6 @@ class FlowStage3(Stage3Mixin, FlowMatching):
 
     def __init__(self, cfg_flow: FlowExperimentConfig):
         super().__init__(cfg_flow)
-        self._setup_stage()
         return
 
 
@@ -333,7 +353,6 @@ class CondFlowStage1(Stage1Mixin, CondFlowMatching):
 
     def __init__(self, cfg_flow: FlowExperimentConfig, autoencoder: BaseVAE):
         super().__init__(autoencoder, cfg_flow)
-        self._setup_stage()
         return
 
 
@@ -342,7 +361,6 @@ class CondFlowStage2(Stage2Mixin, CondFlowMatching):
 
     def __init__(self, cfg_flow: FlowExperimentConfig, autoencoder: BaseVAE):
         super().__init__(autoencoder, cfg_flow)
-        self._setup_stage()
         return
 
 
@@ -351,7 +369,6 @@ class CondFlowStage3(Stage3Mixin, CondFlowMatching):
 
     def __init__(self, cfg_flow: FlowExperimentConfig, autoencoder: BaseVAE):
         super().__init__(autoencoder, cfg_flow)
-        self._setup_stage()
         return
 
 
@@ -400,7 +417,6 @@ class FlowReconstruction(nn.Module):
                 ratio = n_points // x_current.shape[1]
                 if ratio > 1:
                     x_current = x_current.repeat_interleave(ratio, dim=1)
-                    x_current = stage._add_transition_noise(x_current)
 
             x_current = stage.sample(
                 n_samples=batch_size,

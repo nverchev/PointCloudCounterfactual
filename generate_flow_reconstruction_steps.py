@@ -73,7 +73,6 @@ def run_debug_reconstructions() -> None:
                 ratio = n_points // x_current.shape[1]
                 if ratio > 1:
                     x_current = x_current.repeat_interleave(ratio, dim=1)
-                    x_current = stage._add_transition_noise(x_current)
 
             step_list = stage.sample(
                 n_samples=1,
@@ -104,7 +103,6 @@ def run_debug_reconstructions() -> None:
         )
         ratio = 4
         x_current = x_current.repeat_interleave(ratio, dim=1)
-        x_current = stage1._add_transition_noise(x_current)
 
         all_partial_steps = stage1.sample(
             n_samples=1,
@@ -137,7 +135,6 @@ def run_debug_reconstructions() -> None:
         )
         ratio = 4
         x_current = x_current.repeat_interleave(ratio, dim=1)
-        x_current = stage2._add_transition_noise(x_current)
 
         steps_s2 = stage2.sample(
             n_samples=1,
@@ -151,7 +148,6 @@ def run_debug_reconstructions() -> None:
 
         # Transition to Stage 1
         x_current = steps_s2[-1].repeat_interleave(4, dim=1)
-        x_current = stage1._add_transition_noise(x_current)
         steps_s1 = stage1.sample(
             n_samples=1,
             n_timesteps=cfg.flow_stage1.objective.n_timesteps,

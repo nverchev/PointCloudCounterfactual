@@ -8,4 +8,3 @@ name: flow_stage1
 class_name: CondFlowMatching
 feature_dim: 1024
 assign_noise: true
-noise_variance: 0.0078125
