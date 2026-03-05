@@ -7,6 +7,7 @@ name: flow_stage1
 
 objective:
   n_timesteps: 30
+  time_sampling: uniform
 
 stage: 1
 s_k: 0.6666666666666666

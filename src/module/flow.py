@@ -13,7 +13,7 @@ from src.module.autoencoders import BaseVAE
 from src.module.decoders import get_decoder, BasePointDecoder
 from src.module.time import get_time_embedding
 from src.module.latent_decoders import get_latent_decoder
-from src.config.options import FlowModels
+from src.config.options import FlowModels, TimeSamplers
 from src.utils.neighbour_ops import cluster_wise_assign, get_bijective_assignment
 
 
@@ -39,6 +39,7 @@ class BaseFlow(nn.Module, abc.ABC):
         self.s_k: float = cfg_flow.s_k
         self.register_buffer('noise_scale', torch.tensor(1.0 / self.d_k**0.5))
         self.decoder = get_decoder(decoder_cfg, cfg_model.feature_dim)
+        self.time_sampling: TimeSamplers = cfg_flow.objective.time_sampling
         return
 
     @property
@@ -78,8 +79,12 @@ class BaseFlow(nn.Module, abc.ABC):
         """Order noise to match x_1."""
 
     def _sample_time(self, batch_size: int, device: torch.device) -> torch.Tensor:
-        """Sample global time t uniformly in [s_k, 1.0]."""
-        return torch.rand(batch_size, device=device).view(-1, 1, 1)
+        """Sample global time t in [0.0, 1.0] according to the sampling strategy."""
+        u = torch.rand(batch_size, device=device).view(-1, 1, 1)
+        if self.time_sampling == TimeSamplers.SquareRoot:
+            return torch.sqrt(u)
+
+        return u
 
     def _sample_noise(self, shape: torch.Size | tuple[int, ...], device: torch.device) -> torch.Tensor:
         """Sample n ~ N(0, 1/D^k * I) as per Eq. 6."""
@@ -139,23 +144,18 @@ class FlowMatching(BaseFlow, abc.ABC):
         if x_0 is None:
             x_t = self._sample_noise((n_samples, n_points, 3), device)
         else:
-            if self.s_k > 0:
-                x_t = x_0 + self._sample_alignment_noise(n_samples, n_points, device)
-            else:
-                x_t = x_0
+            x_t = x_0 + self._sample_alignment_noise(n_samples, n_points, device)
 
         x_list = [x_t]
         features = self._decode_latent(z1, z2, n_samples, device)
         for i in range(n_timesteps):
-            t_curr_local = i / n_timesteps
-            t_next_local = (i + 1) / n_timesteps
-            dt_local = t_next_local - t_curr_local
-
-            t_curr_global = self.s_k + t_curr_local * (1.0 - self.s_k)
-            t_tensor = torch.full((n_samples,), t_curr_global, device=device).view(-1, 1)
+            t_curr = i / n_timesteps
+            t_next = (i + 1) / n_timesteps
+            dt = t_next - t_curr
+            t_tensor = torch.full((n_samples,), t_curr, device=device).view(-1, 1)
             emb_features = self.time_embedding(t_tensor, features)
             v_pred = self.decoder(x_t, emb_features, n_points)
-            x_t = x_t + v_pred * dt_local
+            x_t = x_t + v_pred * dt
             x_list.append(x_t)
 
         return x_list

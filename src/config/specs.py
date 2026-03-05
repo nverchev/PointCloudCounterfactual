@@ -27,6 +27,7 @@ from src.config.options import (
     Classifiers,
     FlowModels,
     TimeEmbeddings,
+    TimeSamplers,
 )
 
 PositiveInt = Annotated[int, Field(ge=0)]
@@ -614,6 +615,7 @@ class FlowObjectiveConfig:
     """
 
     n_timesteps: StrictlyPositiveInt
+    time_sampling: TimeSamplers = TimeSamplers.Uniform
 
 
 @dataclass

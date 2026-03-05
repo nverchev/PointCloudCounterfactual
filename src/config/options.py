@@ -95,3 +95,10 @@ class Schedulers(enum.StrEnum):
     Constant = enum.auto()
     Cosine = enum.auto()
     Exponential = enum.auto()
+
+
+class TimeSamplers(enum.StrEnum):
+    """Time sampling classes."""
+
+    Uniform = enum.auto()
+    SquareRoot = enum.auto()
