@@ -85,11 +85,6 @@ def create_render_cf_flow() -> None:
         # Multi-stage flow sampling
         x_current = None
         for stage, n_timesteps, n_points in stages:
-            if x_current is not None:
-                ratio = n_points // x_current.shape[1]
-                if ratio > 1:
-                    x_current = x_current.repeat_interleave(ratio, dim=1)
-
             x_current = stage.sample(
                 n_samples=len(clouds),
                 n_timesteps=n_timesteps,

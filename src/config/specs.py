@@ -592,7 +592,6 @@ class FlowModelConfig:
         name (str): The name of the flow matching model
         class_name (FlowModels): The name of the flow matching model class
         assign_noise (bool): Whether to assign noise to data via linear assignment
-        noise_variance (float): The variance of the noise to be added to the data
     """
 
     name: str
@@ -602,7 +601,6 @@ class FlowModelConfig:
     time_embedding: TimeEmbeddingConfig
     latent_decoder: LatentDecoderConfig
     decoder: DecoderConfig
-    noise_variance: float = 1.0
     stage: int | None = None
 
 

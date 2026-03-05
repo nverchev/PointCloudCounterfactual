@@ -45,11 +45,6 @@ def generate_random_flow() -> None:
     for i, (stage, n_timesteps, n_points) in enumerate(stages):
         logging.info(f'Running Stage {3 - i} ({"Noise" if x_current is None else x_current.shape[1]} -> {n_points})...')
 
-        if x_current is not None:
-            ratio = n_points // x_current.shape[1]
-            if ratio > 1:
-                x_current = x_current.repeat_interleave(ratio, dim=1)
-
         step_list = stage.sample(
             n_samples=n_samples,
             n_timesteps=n_timesteps,

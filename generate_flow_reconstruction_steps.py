@@ -69,11 +69,6 @@ def run_debug_reconstructions() -> None:
         x_current = None
         all_full_steps = []
         for stage, n_timesteps, n_points in stages:
-            if x_current is not None:
-                ratio = n_points // x_current.shape[1]
-                if ratio > 1:
-                    x_current = x_current.repeat_interleave(ratio, dim=1)
-
             step_list = stage.sample(
                 n_samples=1,
                 n_timesteps=n_timesteps,
@@ -101,8 +96,6 @@ def run_debug_reconstructions() -> None:
             if torch.is_tensor(sample_i.cloud_512)
             else torch.from_numpy(sample_i.cloud_512).unsqueeze(0).to(device)
         )
-        ratio = 4
-        x_current = x_current.repeat_interleave(ratio, dim=1)
 
         all_partial_steps = stage1.sample(
             n_samples=1,
@@ -133,8 +126,6 @@ def run_debug_reconstructions() -> None:
             if torch.is_tensor(sample_i.cloud_128)
             else torch.from_numpy(sample_i.cloud_128).unsqueeze(0).to(device)
         )
-        ratio = 4
-        x_current = x_current.repeat_interleave(ratio, dim=1)
 
         steps_s2 = stage2.sample(
             n_samples=1,
@@ -147,7 +138,7 @@ def run_debug_reconstructions() -> None:
         )
 
         # Transition to Stage 1
-        x_current = steps_s2[-1].repeat_interleave(4, dim=1)
+        x_current = steps_s2[-1]
         steps_s1 = stage1.sample(
             n_samples=1,
             n_timesteps=cfg.flow_stage1.objective.n_timesteps,

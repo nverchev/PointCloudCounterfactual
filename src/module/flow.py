@@ -144,6 +144,10 @@ class FlowMatching(BaseFlow, abc.ABC):
         if x_0 is None:
             x_t = self._sample_noise((n_samples, n_points, 3), device)
         else:
+            if x_0.shape[1] < n_points:
+                ratio = n_points // x_0.shape[1]
+                x_0 = x_0.repeat_interleave(ratio, dim=1) * self.s_k
+
             x_t = x_0 + self._sample_alignment_noise(n_samples, n_points, device)
 
         x_list = [x_t]
@@ -156,8 +160,10 @@ class FlowMatching(BaseFlow, abc.ABC):
             emb_features = self.time_embedding(t_tensor, features)
             v_pred = self.decoder(x_t, emb_features, n_points)
             x_t = x_t + v_pred * dt
-            x_list.append(x_t)
+            if i % 10 == 0:
+                x_list.append(x_t)
 
+        x_list.append(x_t)
         return x_list
 
     def _decode_latent(
@@ -413,11 +419,6 @@ class FlowReconstruction(nn.Module):
 
         x_current: torch.Tensor | None = None
         for stage, n_timesteps, n_points in stages:
-            if x_current is not None:
-                ratio = n_points // x_current.shape[1]
-                if ratio > 1:
-                    x_current = x_current.repeat_interleave(ratio, dim=1)
-
             x_current = stage.sample(
                 n_samples=batch_size,
                 n_timesteps=n_timesteps,
