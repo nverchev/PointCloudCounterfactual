@@ -28,3 +28,4 @@ generate:
 plot:
     interactive: false  # use plotly to visualize the 3D point clouds, otherwise save them as images
     sample_indices: [0, 9, 16, 20, 25, 34, 39, 44, 46, 66, 91, 98]  # indices of the clouds to visualize
+    use_train: false  # extract indices from the train dataset instead of the validation/test dataset

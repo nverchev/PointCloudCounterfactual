@@ -37,7 +37,12 @@ def run_debug_reconstructions() -> None:
     device = ae.device
 
     # 2. Dataset
-    train_dataset = get_dataset(Partitions.train)
+    if cfg_user.plot.use_train:
+        partition = Partitions.train_val if cfg.final else Partitions.train
+    else:
+        partition = Partitions.test if cfg.final else Partitions.val
+
+    train_dataset = get_dataset(partition)
     class_names = train_dataset.class_names
 
     for i in cfg_user.plot.sample_indices:

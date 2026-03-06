@@ -26,7 +26,12 @@ def create_and_render_reconstructions() -> None:
     device = ema_module.device
 
     # 2. Collect Batch Data
-    test_dataset = get_dataset(Partitions.test if cfg.final else Partitions.val)
+    if cfg_user.plot.use_train:
+        partition = Partitions.train_val if cfg.final else Partitions.train
+    else:
+        partition = Partitions.test if cfg.final else Partitions.val
+
+    test_dataset = get_dataset(partition)
     class_names = test_dataset.class_names
 
     clouds = []

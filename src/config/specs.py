@@ -425,10 +425,12 @@ class PlottingOptions:
     Attributes:
         interactive (bool): Whether to enable 3D plotting when using pyvista
         sample_indices (list[PositiveInt]): A list with indices of the evaluation samples to plot
+        use_train (bool): Whether to extract indices from the train dataset
     """
 
     interactive: bool
     sample_indices: list[PositiveInt]
+    use_train: bool = False
 
 
 @dataclass
