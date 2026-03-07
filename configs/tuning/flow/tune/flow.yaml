@@ -1,0 +1,11 @@
+study_name:
+  flow
+
+n_trials: 100
+
+params:
+
+  stage.model.feature_dim:
+    suggest: suggest_categorical
+    settings:
+      choices: [512, 1024, 2048]

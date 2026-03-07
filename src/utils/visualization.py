@@ -60,7 +60,8 @@ def render_cloud(
         if not len(cloud):
             continue
 
-        cloud = norm_to_unit_sphere(cloud)
+        # cloud = norm_to_unit_sphere(cloud)
+        cloud = cloud / 3
         if colorscale == 'blue_red':
             i_norm = i / (len(clouds) - 1)
             color = (1 - i_norm) * BLUE + i_norm * RED

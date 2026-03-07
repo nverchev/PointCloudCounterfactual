@@ -14,7 +14,7 @@ params:
       max_length: 3
       suggest: suggest_categorical
       settings:
-        choices: [8, 16, 32]
+        choices: [16, 32, 64]
 
   autoencoder.model.decoder.conv_dims:
     suggest: suggest_list

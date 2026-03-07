@@ -111,8 +111,9 @@ class AE(AbstractAE):
 
     def __init__(self) -> None:
         super().__init__()
-        self.encoder = get_encoder()
-        self.decoder = get_decoder()
+        cfg_ae_model = Experiment.get_config().autoencoder.model
+        self.encoder = get_encoder(cfg_ae_model.encoder, cfg_ae_model.feature_dim)
+        self.decoder = get_decoder(cfg_ae_model.decoder, cfg_ae_model.feature_dim)
         return
 
     def forward(self, inputs: Inputs) -> Outputs:
@@ -147,20 +148,43 @@ class BaseVAE(AE):
         self.z1_dim: int = cfg_ae_model.z1_dim
         self.z2_dim: int = cfg_ae_model.z2_dim
         self.n_pseudo_inputs: int = cfg_ae_model.n_pseudo_inputs
-        self.latent_encoder = get_latent_encoder()
-        self.latent_decoder = get_latent_decoder()
-        self.z2_prior = ConditionalPrior()
-        self.z2_posterior = get_conditional_latent_encoder()
+        self.latent_encoder = get_latent_encoder(
+            cfg_ae_model.latent_encoder,
+            cfg_ae_model.feature_dim,
+            self.z1_dim,
+        )
+        self.latent_decoder = get_latent_decoder(
+            cfg_ae_model.latent_decoder,
+            self.z1_dim,
+            self.z2_dim,
+            cfg_ae_model.feature_dim,
+        )
+        self.z2_prior = ConditionalPrior(self.n_classes, self.z2_dim)
+        self.z2_posterior = get_conditional_latent_encoder(
+            cfg_ae_model.conditional_latent_encoder,
+            cfg_ae_model.feature_dim,
+            self.n_classes,
+            self.z2_dim,
+        )
         self.pseudo_manager: PseudoInputManager | None = PseudoInputManager() if self.n_pseudo_inputs > 0 else None
         return
 
     def encode(self, inputs: Inputs) -> Outputs:
         """Encode point cloud to latent variables."""
         out = super().encode(inputs)
+
+        # Z1 encoding
         out = self.encode_z1(out)
+
+        # probabilities for z2 conditioning
         out = self.get_probabilities(inputs, out)
+
+        # Z2 encoding
         out = self.encode_z2(out)
+
+        # sampling
         out = self.sample_posterior(out)
+
         return out
 
     def decode(self, out: Outputs, inputs: Inputs) -> Outputs:
@@ -276,7 +300,7 @@ class CounterfactualVAE(BaseVAE):
         return
 
     @override
-    def encode_z1(self, out: Outputs | None = None) -> Outputs:
+    def encode_z1(self, out: Outputs) -> Outputs:
         """Forward pass."""
         out = super().encode_z1(out)
         out.adv_logits = self.class_eraser(out.mu1)
@@ -301,13 +325,13 @@ class CounterfactualVAE(BaseVAE):
         return torch.distributions.Dirichlet(concentration=alpha).sample((batch_size,))
 
     @torch.inference_mode()
-    def generate_counterfactual(
+    def get_counterfactual_output(
         self,
         inputs: Inputs,
         target_dim: int,
         target_value: float = 1.0,
     ) -> Outputs:
-        """Generate counterfactual samples."""
+        """Get counterfactual latents and intermediate outputs."""
         # Encode
         out = Outputs()
         out.features = self.encoder(inputs.cloud)
@@ -325,6 +349,17 @@ class CounterfactualVAE(BaseVAE):
         out.z1 = out.mu1
         out.z2 = out.p_mu2 + out.d_mu2
 
+        return out
+
+    @torch.inference_mode()
+    def generate_counterfactual(
+        self,
+        inputs: Inputs,
+        target_dim: int,
+        target_value: float = 1.0,
+    ) -> Outputs:
+        """Generate counterfactual samples."""
+        out = self.get_counterfactual_output(inputs, target_dim, target_value)
         return self.decode(out, inputs)
 
     @staticmethod

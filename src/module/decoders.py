@@ -8,33 +8,30 @@ import torch.nn as nn
 import torch.nn.functional as F
 
 from src.config import ActClass, NormClass
-from src.config.experiment import Experiment
 from src.config.options import Decoders
-from src.data import OUT_CHAN
-from src.module.layers import PointsConvLayer, TransformerEncoder, PointsConvResBlock
+from src.config.specs import DecoderConfig
+from src.data import IN_CHAN, OUT_CHAN
+from src.module.layers import PointsConvLayer, TransformerDecoder, PointsConvResBlock
 from src.utils.neighbour_ops import graph_filtering
 
 
 class BasePointDecoder(nn.Module, metaclass=abc.ABCMeta):
     """Base class for point decoder."""
 
-    def __init__(self) -> None:
+    def __init__(self, cfg: DecoderConfig, feature_dim: int) -> None:
         super().__init__()
-        cfg_ae_model = Experiment.get_config().autoencoder.model
-        cfg_decoder = cfg_ae_model.decoder
-        self.map_dims: tuple[int, ...] = cfg_decoder.map_dims
-        self.conv_dims: tuple[int, ...] = cfg_decoder.conv_dims
-        self.n_heads: int = cfg_decoder.n_heads
-        self.feedforward_dim: int = cfg_decoder.feedforward_dim
-        self.n_transformer_layers: int = cfg_decoder.n_transformer_layers
-        self.transformer_dropout: float = cfg_decoder.transformer_dropout
-        self.feature_dim: int = cfg_ae_model.feature_dim
-        self.act_cls: ActClass = cfg_decoder.act_cls
-        self.norm_cls: NormClass = cfg_decoder.norm_cls
-        self.filtering: bool = cfg_decoder.filter
-        self.sample_dim: int = cfg_decoder.sample_dim
-        self.n_components: int = cfg_decoder.n_components
-        self.tau: float = cfg_decoder.tau
+        self.map_dims: tuple[int, ...] = cfg.map_dims
+        self.conv_dims: tuple[int, ...] = cfg.conv_dims
+        self.n_heads: int = cfg.n_heads
+        self.feedforward_dim: int = cfg.feedforward_dim
+        self.n_transformer_layers: int = cfg.n_transformer_layers
+        self.transformer_dropout: float = cfg.transformer_dropout
+        self.feature_dim: int = feature_dim
+        self.act_cls: ActClass = cfg.act_cls
+        self.norm_cls: NormClass = cfg.norm_cls
+        self.filtering: bool = cfg.filter
+        self.n_components: int = cfg.n_components
+        self.tau: float = cfg.tau
 
     @abc.abstractmethod
     def forward(self, initial_sampling: torch.Tensor, features: torch.Tensor, n_output_points: int) -> torch.Tensor:
@@ -46,12 +43,11 @@ class PCGen(BasePointDecoder):
 
     _null_tensor: torch.Tensor = torch.empty(0)
 
-    def __init__(self) -> None:
-        super().__init__()
-        decoder_cfg = Experiment.get_config().autoencoder.model.decoder
-        self.embedding_dim: int = decoder_cfg.embedding_dim
+    def __init__(self, cfg: DecoderConfig, feature_dim: int) -> None:
+        super().__init__(cfg, feature_dim)
+        self.embedding_dim: int = cfg.embedding_dim
         modules: list[nn.Module] = []
-        dim_pairs = itertools.pairwise([self.sample_dim, *self.map_dims])
+        dim_pairs = itertools.pairwise([IN_CHAN, *self.map_dims])
         for in_dim, out_dim in dim_pairs:
             modules.append(PointsConvLayer(in_dim, out_dim, act_cls=torch.nn.ReLU))
 
@@ -62,15 +58,17 @@ class PCGen(BasePointDecoder):
             act_cls=self.act_cls,
             norm_cls=self.norm_cls,
         )
-        self.transformer = TransformerEncoder(
-            embedding_dim=self.embedding_dim,
-            n_heads=self.n_heads,
-            feedforward_dim=self.feedforward_dim,
-            dropout_rate=self.transformer_dropout,
-            act_cls=self.act_cls,
-            n_layers=self.n_transformer_layers,
-            use_final_norm=True,
-        )
+        if self.n_transformer_layers > 0:
+            self.proj_initial_sampling = PointsConvLayer(IN_CHAN, self.embedding_dim)
+            self.transformer = TransformerDecoder(
+                embedding_dim=self.embedding_dim,
+                n_heads=self.n_heads,
+                feedforward_dim=self.feedforward_dim,
+                dropout_rate=self.transformer_dropout,
+                act_cls=self.act_cls,
+                n_layers=self.n_transformer_layers,
+                use_final_norm=True,
+            )
         self.out_conv = PointsConvLayer(
             self.embedding_dim, self.n_components * OUT_CHAN, use_trunc_init=True, n_groups_layer=self.n_components
         )
@@ -79,16 +77,18 @@ class PCGen(BasePointDecoder):
 
         return
 
-    def _initialize_sampling(self, batch: int, n_output_points: int, device: torch.device) -> torch.Tensor:
-        """Initialize and normalize the sampling points."""
-        return torch.randn(batch, self.sample_dim, n_output_points, device=device)
-
-    def _process_component_groups(self, x: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor]:
+    def _process_component_groups(
+        self, x: torch.Tensor, initial_sampling: torch.Tensor
+    ) -> tuple[torch.Tensor, torch.Tensor]:
         """Return component outputs and attention features."""
         x = self.conv_block(x)
-        x.transpose_(2, 1)
-        x = self.transformer(x)
-        x.transpose_(2, 1)
+        if self.n_transformer_layers > 0:
+            x.transpose_(2, 1)
+            x_init = self.proj_initial_sampling(initial_sampling)
+            x_init = x_init.transpose(2, 1)
+            x = self.transformer(x, x_init)
+            x.transpose_(2, 1)
+
         x_out = self.out_conv(x)
         return x, x_out
 
@@ -118,16 +118,11 @@ class PCGen(BasePointDecoder):
             features: features of dimension [Batch, feature_dim]
             n_output_points: Number of output points
         """
-        batch = features.size()[0]
-        device = features.device
-        if initial_sampling.numel():
-            x = initial_sampling
-        else:
-            x = self._initialize_sampling(batch, n_output_points, device)
+        initial_sampling = initial_sampling.transpose(2, 1)
 
-        x = self.map_sample(x)
+        x = self.map_sample(initial_sampling)
         x = self._join_operation(x, features)
-        x, x_out = self._process_component_groups(x)
+        x, x_out = self._process_component_groups(x, initial_sampling)
         x = self._apply_attention_mixing(x, x_out)
         if self.filtering:
             x = graph_filtering(x)
@@ -140,9 +135,61 @@ class PCGen(BasePointDecoder):
         return w.unsqueeze(2) * x
 
 
-def get_decoder() -> BasePointDecoder:
+class PCGenClusters(PCGen):
+    """PCGen with spatial clustering (mean of 4 contiguous points)."""
+
+    def __init__(self, cfg: DecoderConfig, feature_dim: int) -> None:
+        super().__init__(cfg, feature_dim)
+        modules: list[nn.Module] = []
+        dim_pairs = itertools.pairwise([2 * IN_CHAN, *self.map_dims])
+        for in_dim, out_dim in dim_pairs:
+            modules.append(PointsConvLayer(in_dim, out_dim, act_cls=torch.nn.ReLU))
+
+        modules.append(PointsConvLayer(self.map_dims[-1], self.feature_dim, act_cls=nn.Hardtanh))
+        self.map_sample = nn.Sequential(*modules)
+        return
+
+    def forward(self, initial_sampling: torch.Tensor, features: torch.Tensor, n_output_points: int) -> torch.Tensor:
+        """Forward pass for PCGenClusters."""
+        initial_sampling = initial_sampling.transpose(2, 1)
+        batch, chan, n_points = initial_sampling.shape
+        cluster_size, extra = divmod(n_points, 4)
+        assert extra == 0, 'Number of points must be divisible by 4'
+
+        clusters = initial_sampling.view(batch, chan, cluster_size, 4)
+        cluster_means = clusters.mean(dim=-1)
+        cluster_features = cluster_means.repeat_interleave(4, dim=2)
+        x_in = torch.cat([initial_sampling, cluster_features], dim=1)
+        x = self.map_sample(x_in)
+        x = self._join_operation(x, features)
+        x, x_out = self._process_component_groups(x, cluster_means)
+        x = self._apply_attention_mixing(x, x_out)
+        if self.filtering:
+            x = graph_filtering(x)
+
+        x.transpose_(2, 1)
+        return x
+
+    def _process_component_groups(
+        self, x: torch.Tensor, initial_sampling: torch.Tensor
+    ) -> tuple[torch.Tensor, torch.Tensor]:
+        """Return component outputs and attention features with pooled initial sampling."""
+        x = self.conv_block(x)
+        if self.n_transformer_layers > 0:
+            x.transpose_(2, 1)
+            x_init = self.proj_initial_sampling(initial_sampling)
+            x_init = x_init.transpose(2, 1)
+            x = self.transformer(x, x_init)
+            x.transpose_(2, 1)
+
+        x_out = self.out_conv(x)
+        return x, x_out
+
+
+def get_decoder(cfg: DecoderConfig, feature_dim: int) -> BasePointDecoder:
     """Get decoder according to the configuration."""
-    decoder_dict: dict[Decoders, BasePointDecoder] = {
-        Decoders.PCGen: PCGen(),
+    decoder_dict: dict[Decoders, type[BasePointDecoder]] = {
+        Decoders.PCGen: PCGen,
+        Decoders.PCGenClusters: PCGenClusters,
     }
-    return decoder_dict[Experiment.get_config().autoencoder.model.decoder.class_name]
+    return decoder_dict[cfg.class_name](cfg, feature_dim)

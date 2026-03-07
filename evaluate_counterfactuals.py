@@ -12,12 +12,12 @@ from drytorch import DataLoader, Model, Test
 from drytorch.core import protocols as p
 from drytorch.lib.objectives import Metric, compute_metrics
 
-from src.module import BaseClassifier, CounterfactualVAE, get_classifier, get_autoencoder
+from src.module import BaseClassifier, CounterfactualVAE, get_classifier
 from src.config import AllConfig, Experiment, get_trackers, hydra_main
 from src.data.derived_datasets import CounterfactualDataset, ReconstructedEvaluatedDataset
 from src.data import Inputs, Targets, Partitions, get_dataset
 from src.train.metrics_and_losses import get_classification_loss
-from src.train.models import EMAModel
+from src.train.models import load_extract_autoencoder_module
 
 
 def get_label_distribution(test_loader: p.LoaderProtocol[tuple[Inputs, Targets]], class_names: list[str]) -> Tensor:
@@ -235,10 +235,7 @@ def main(cfg: AllConfig) -> None:
         classifier = get_classifier()
         classifier_model = Model(classifier, name=cfg.classifier.model.name, device=cfg.user.device)
         classifier_model.load_state()
-        module = get_autoencoder()
-        model = EMAModel(module, name=cfg.autoencoder.model.name, device=cfg.user.device)
-        model.load_state()
-        ema_module = model.averaged_module
+        ema_module = load_extract_autoencoder_module()
         if not isinstance(ema_module, CounterfactualVAE):
             raise TypeError('EMA module is not a CounterfactualVAE.')
 

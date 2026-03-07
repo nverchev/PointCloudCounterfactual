@@ -1,5 +1,4 @@
-class_name: PCGen
-sample_dim: 3  # has to be fixed to 3 for flow matching
+class_name: PCGenClusters
 map_dims: [ 64]
 conv_dims: [ 512 ]
 n_components: 4
@@ -8,4 +7,4 @@ feedforward_dim: 1024
 n_transformer_layers: 3
 transformer_dropout: 0.0
 tau: 5
-filter: False
+filter: true

@@ -1,0 +1,13 @@
+defaults:
+  - train: default_train
+  - model: cond
+  - _self_
+
+name: flow_stage3
+
+objective:
+  n_timesteps: 30
+  time_sampling: SquareRoot
+
+stage: 3
+s_k: 0.0

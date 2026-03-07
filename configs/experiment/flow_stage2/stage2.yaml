@@ -1,0 +1,13 @@
+defaults:
+  - train: default_train
+  - model: standard
+  - _self_
+
+name: flow_stage2
+
+objective:
+  n_timesteps: 30
+  time_sampling: SquareRoot
+
+stage: 2
+s_k: 0.3333333333333333

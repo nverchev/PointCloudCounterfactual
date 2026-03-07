@@ -15,7 +15,7 @@ class ModelNet40Dataset(PointCloudDataBuilder):
     """This class creates the splits for the ModelNet Dataset"""
 
     folder_name_raw: str = 'modelnet40_hdf5_2048'
-    folder_name_processed: str = 'modelnet_h5'
+    folder_name_processed: str = 'modelnet_preprocessed'
     metadata_file: str = 'modelnet_classes.txt'
     url: str = 'https://gaimfs.ugent.be/Public/Dataset/modelnet40_hdf5_2048.zip'
     metadata: list[str]

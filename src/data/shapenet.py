@@ -16,7 +16,7 @@ class ShapeNetFlowDataset(PointCloudDataBuilder):
     """This class creates the splits for the ShapeNet Dataset."""
 
     folder_name_raw: str = 'ShapeNetCore.v2.PC15k'
-    folder_name_processed: str = 'shapenet_h5'
+    folder_name_processed: str = 'shapenet_preprocessed'
     metadata_file: str = 'shapenet_PointFlow_classes.json'
     url: str = 'https://gaimfs.ugent.be/Public/Dataset/ShapeNetCore.v2.PC15k.zip'
     metadata: dict[str, str]

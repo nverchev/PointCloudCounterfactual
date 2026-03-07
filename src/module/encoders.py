@@ -6,8 +6,9 @@ import itertools
 import torch
 import torch.nn as nn
 
-from src.config import ActClass, Experiment, NormClass
+from src.config import ActClass, NormClass
 from src.config.options import Encoders
+from src.config.specs import EncoderConfig
 from src.data import IN_CHAN
 from src.module.layers import (
     EdgeConvLayer,
@@ -18,15 +19,13 @@ from src.utils.neighbour_ops import get_graph_features, graph_max_pooling
 
 
 class BasePointEncoder(nn.Module, metaclass=abc.ABCMeta):
-    def __init__(self) -> None:
+    def __init__(self, cfg: EncoderConfig, feature_dim: int) -> None:
         super().__init__()
-        cfg = Experiment.get_config()
-        cfg_ae_model = cfg.autoencoder.model
-        self.n_neighbors: int = cfg_ae_model.encoder.n_neighbors
-        self.conv_dims: tuple[int, ...] = cfg_ae_model.encoder.conv_dims
-        self.feature_dim: int = cfg_ae_model.feature_dim
-        self.act_cls: ActClass = cfg_ae_model.encoder.act_cls
-        self.norm_cls: NormClass = cfg_ae_model.encoder.norm_cls
+        self.n_neighbors: int = cfg.n_neighbors
+        self.conv_dims: tuple[int, ...] = cfg.conv_dims
+        self.feature_dim: int = feature_dim
+        self.act_cls: ActClass = cfg.act_cls
+        self.norm_cls: NormClass = cfg.norm_cls
         return
 
     @abc.abstractmethod
@@ -37,8 +36,8 @@ class BasePointEncoder(nn.Module, metaclass=abc.ABCMeta):
 class PointNet(BasePointEncoder):
     """PointNet encoder."""
 
-    def __init__(self) -> None:
-        super().__init__()
+    def __init__(self, cfg: EncoderConfig, feature_dim: int) -> None:
+        super().__init__(cfg, feature_dim)
 
         modules: list[nn.Module] = []
         for in_dim, out_dim in itertools.pairwise((IN_CHAN, *self.conv_dims)):
@@ -64,8 +63,8 @@ class PointNet(BasePointEncoder):
 class LDGCNN(BasePointEncoder):
     """Lighter version of DGCNN where the graph is only calculated once."""
 
-    def __init__(self) -> None:
-        super().__init__()
+    def __init__(self, cfg: EncoderConfig, feature_dim: int) -> None:
+        super().__init__(cfg, feature_dim)
         self.edge_conv = EdgeConvLayer(2 * IN_CHAN, self.conv_dims[0], act_cls=self.act_cls, norm_cls=self.norm_cls)
         modules: list[nn.Module] = []
         for in_dim, out_dim in itertools.pairwise(self.conv_dims):
@@ -96,8 +95,8 @@ class LDGCNN(BasePointEncoder):
 class DGCNN(BasePointEncoder):
     """Dynamic Graph Convolutional Neural Network encoder."""
 
-    def __init__(self) -> None:
-        super().__init__()
+    def __init__(self, cfg: EncoderConfig, feature_dim: int) -> None:
+        super().__init__(cfg, feature_dim)
         modules: list[torch.nn.Module] = []
         for in_dim, out_dim in itertools.pairwise((IN_CHAN, *self.conv_dims)):
             modules.append(EdgeConvLayer(2 * in_dim, out_dim, act_cls=self.act_cls, norm_cls=self.norm_cls))
@@ -124,11 +123,11 @@ class DGCNN(BasePointEncoder):
         return x_max
 
 
-def get_encoder() -> BasePointEncoder:
+def get_encoder(cfg: EncoderConfig, feature_dim: int) -> BasePointEncoder:
     """Get encoder according to the configuration."""
     dict_encoder: dict[Encoders, type[BasePointEncoder]] = {
         Encoders.PointNet: PointNet,
         Encoders.LDGCNN: LDGCNN,
         Encoders.DGCNN: DGCNN,
     }
-    return dict_encoder[Experiment.get_config().autoencoder.model.encoder.class_name]()
+    return dict_encoder[cfg.class_name](cfg, feature_dim)

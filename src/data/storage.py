@@ -12,10 +12,9 @@ from src.data.structures import PCD
 def load_h5(path: pathlib.Path, wild_str: str) -> PCD:
     """Loads processed point cloud data from H5 files into a PCD container."""
     pcs_list: list[npt.NDArray[Any]] = []
+    pcs_2048_list: list[npt.NDArray[Any]] = []
     pcs_512_list: list[npt.NDArray[Any]] = []
     pcs_128_list: list[npt.NDArray[Any]] = []
-    pcs_512_up_list: list[npt.NDArray[Any]] = []
-    pcs_128_up_list: list[npt.NDArray[Any]] = []
     labels_list: list[npt.NDArray[Any]] = []
     std_list: list[npt.NDArray[Any]] = []
     h5_files = sorted(path.glob(wild_str))
@@ -24,27 +23,27 @@ def load_h5(path: pathlib.Path, wild_str: str) -> PCD:
 
     for h5_name in h5_files:
         with h5py.File(h5_name, 'r') as f:
-            required = ['pcs', 'pcs_512', 'pcs_128', 'pcs_512_up', 'pcs_128_up', 'labels', 'std']
+            required = ['pcd', 'pcd_512', 'pcd_128', 'labels', 'std']
             if any(data not in f for data in required):
                 raise KeyError(f'Missing data in {h5_name}. Please run preprocessing first.')
 
             # Load and cast to float32 immediately
-            pcs_list.append(extract_cloud_from_h5(f, 'pcs').astype(np.float32))
-            pcs_512_list.append(extract_cloud_from_h5(f, 'pcs_512').astype(np.float32))
-            pcs_128_list.append(extract_cloud_from_h5(f, 'pcs_128').astype(np.float32))
-            pcs_512_up_list.append(extract_cloud_from_h5(f, 'pcs_512_up').astype(np.float32))
-            pcs_128_up_list.append(extract_cloud_from_h5(f, 'pcs_128_up').astype(np.float32))
+            pcs_list.append(extract_cloud_from_h5(f, 'pcd').astype(np.float32))
+            if 'pcd_2048' in f:
+                pcs_2048_list.append(extract_cloud_from_h5(f, 'pcd_2048').astype(np.float32))
+
+            pcs_512_list.append(extract_cloud_from_h5(f, 'pcd_512').astype(np.float32))
+            pcs_128_list.append(extract_cloud_from_h5(f, 'pcd_128').astype(np.float32))
             labels_list.append(extract_labels_from_h5(f, 'labels').astype(np.int64))
             std_list.append(extract_labels_from_h5(f, 'std').astype(np.float32))
 
     return PCD(
-        pcs=np.concatenate(pcs_list, axis=0),
-        pcs_512=np.concatenate(pcs_512_list, axis=0),
-        pcs_128=np.concatenate(pcs_128_list, axis=0),
-        pcs_512_up=np.concatenate(pcs_512_up_list, axis=0),
-        pcs_128_up=np.concatenate(pcs_128_up_list, axis=0),
+        pcd=np.concatenate(pcs_list, axis=0),
+        pcd_512=np.concatenate(pcs_512_list, axis=0),
+        pcd_128=np.concatenate(pcs_128_list, axis=0),
         labels=np.concatenate(labels_list, axis=0).ravel(),
         std=np.concatenate(std_list, axis=0).ravel(),
+        pcd_2048=np.concatenate(pcs_2048_list, axis=0) if pcs_2048_list else None,
     )
 
 
@@ -69,11 +68,12 @@ def save_preprocessed_h5(h5_path: pathlib.Path, pcd: PCD) -> None:
 
     with h5py.File(h5_path, 'w') as f:
         # pcd attributes should already be numpy arrays from preprocess_point_clouds
-        f.create_dataset('pcs', data=pcd.pcs)
-        f.create_dataset('pcs_512', data=pcd.pcs_512)
-        f.create_dataset('pcs_128', data=pcd.pcs_128)
-        f.create_dataset('pcs_512_up', data=pcd.pcs_512_up)
-        f.create_dataset('pcs_128_up', data=pcd.pcs_128_up)
+        f.create_dataset('pcd', data=pcd.pcd)
+        if pcd.pcd_2048 is not None:
+            f.create_dataset('pcd_2048', data=pcd.pcd_2048)
+
+        f.create_dataset('pcd_512', data=pcd.pcd_512)
+        f.create_dataset('pcd_128', data=pcd.pcd_128)
         f.create_dataset('labels', data=pcd.labels)
         f.create_dataset('std', data=pcd.std)
 

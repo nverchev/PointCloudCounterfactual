@@ -20,10 +20,9 @@ class Inputs(NamedTuple):
     cloud: torch.Tensor
     initial_sampling: torch.Tensor = torch.empty(0)
     logits: torch.Tensor = torch.empty(0)
+    cloud_2048: torch.Tensor = torch.empty(0)
     cloud_512: torch.Tensor = torch.empty(0)
     cloud_128: torch.Tensor = torch.empty(0)
-    cloud_512_up: torch.Tensor = torch.empty(0)
-    cloud_128_up: torch.Tensor = torch.empty(0)
 
 
 class Targets(NamedTuple):
@@ -113,10 +112,9 @@ class Outputs:
 class PCD:
     """Container for point cloud data and its downsampled versions."""
 
-    pcs: npt.NDArray[Any]
-    pcs_512: npt.NDArray[Any]
-    pcs_128: npt.NDArray[Any]
-    pcs_512_up: npt.NDArray[Any]
-    pcs_128_up: npt.NDArray[Any]
+    pcd: npt.NDArray[Any]
+    pcd_512: npt.NDArray[Any]
+    pcd_128: npt.NDArray[Any]
     labels: npt.NDArray[Any]
     std: npt.NDArray[Any]
+    pcd_2048: npt.NDArray[Any] | None = None

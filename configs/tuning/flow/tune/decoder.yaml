@@ -1,0 +1,40 @@
+study_name:
+  decoder
+
+n_trials: 100
+
+params:
+
+  stage.model.decoder.map_dims:
+    suggest: suggest_list
+    settings:
+      min_length: 1
+      max_length: 3
+      suggest: suggest_categorical
+      settings:
+        choices: [32, 64]
+
+  stage.model.decoder.conv_dims:
+    suggest: suggest_list
+    settings:
+      min_length: 1
+      max_length: 3
+      suggest: suggest_categorical
+      settings:
+        choices: [256, 512, 1024]
+
+  stage.model.decoder.n_heads:
+    suggest: suggest_categorical
+    settings:
+      choices: [4, 8]
+
+  stage.model.decoder.n_transformer_layers:
+    suggest: suggest_int
+    settings:
+      low: 1
+      high: 3
+
+  stage.model.decoder.feedforward_dim:
+    suggest: suggest_categorical
+    settings:
+      choices: [512, 1024, 2048]

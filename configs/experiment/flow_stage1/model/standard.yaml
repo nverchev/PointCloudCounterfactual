@@ -1,0 +1,10 @@
+defaults:
+  - decoder: pcgen_clusters
+  - time_embedding: sinusoidal
+  - latent_decoder: linear
+  - _self_
+
+name: flow_stage1
+class_name: FlowMatching
+feature_dim: 1024
+assign_noise: true

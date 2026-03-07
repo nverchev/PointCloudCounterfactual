@@ -1,0 +1,11 @@
+study_name:
+  time_embedding
+
+n_trials: 100
+
+params:
+
+  stage.model.time_embedding.embedding_dim:
+    suggest: suggest_categorical
+    settings:
+      choices: [128, 256, 512]

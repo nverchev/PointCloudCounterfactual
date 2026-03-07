@@ -6,24 +6,20 @@ import torch
 import torch.nn as nn
 
 from src.config import ActClass, NormClass
-from src.config.experiment import Experiment
 from src.config.options import LatentEncoders, ConditionalLatentEncoders
+from src.config.specs import LatentEncoderConfig, ConditionalLatentEncoderConfig
 from src.module.layers import LinearLayer
 
 
 class BaseLatentEncoder(nn.Module, metaclass=abc.ABCMeta):
     """Base class for Latent space encoders in the autoencoder architecture."""
 
-    def __init__(self) -> None:
+    def __init__(self, cfg: LatentEncoderConfig, feature_dim: int, z1_dim: int) -> None:
         super().__init__()
-        cfg = Experiment.get_config()
-        cfg_ae = cfg.autoencoder
-        cfg_ae_model = cfg_ae.model
-        cfg_latent_encoder = cfg_ae_model.latent_encoder
-        self.feature_dim: int = cfg_ae_model.feature_dim
-        self.z1_dim: int = cfg_ae_model.z1_dim
-        self.act_cls: ActClass = cfg_latent_encoder.act_cls
-        self.norm_cls: NormClass = cfg_latent_encoder.norm_cls
+        self.feature_dim: int = feature_dim
+        self.z1_dim: int = z1_dim
+        self.act_cls: ActClass = cfg.act_cls
+        self.norm_cls: NormClass = cfg.norm_cls
         return
 
     @abc.abstractmethod
@@ -34,12 +30,10 @@ class BaseLatentEncoder(nn.Module, metaclass=abc.ABCMeta):
 class LinearLatentEncoder(BaseLatentEncoder):
     """Latent space encoder using linear architecture."""
 
-    def __init__(self) -> None:
-        super().__init__()
-        cfg = Experiment.get_config()
-        cfg_latent_encoder = cfg.autoencoder.model.latent_encoder
-        dropout_rate = cfg_latent_encoder.dropout_rate
-        mlp_dims = cfg_latent_encoder.mlp_dims
+    def __init__(self, cfg: LatentEncoderConfig, feature_dim: int, z1_dim: int) -> None:
+        super().__init__(cfg, feature_dim, z1_dim)
+        dropout_rate = cfg.dropout_rate
+        mlp_dims = cfg.mlp_dims
         layers = []
         input_dim = self.feature_dim
         for dim in mlp_dims:
@@ -60,12 +54,10 @@ class LinearLatentEncoder(BaseLatentEncoder):
 class ConditionalPrior(nn.Module):
     """Network for the conditional prior"""
 
-    def __init__(self) -> None:
+    def __init__(self, n_classes: int, z2_dim: int) -> None:
         super().__init__()
-        cfg = Experiment.get_config()
-        cfg_ae_model = cfg.autoencoder.model
-        self.n_classes: int = cfg.data.dataset.n_classes
-        self.z2_dim: int = cfg_ae_model.z2_dim
+        self.n_classes: int = n_classes
+        self.z2_dim: int = z2_dim
         self.prior = LinearLayer(self.n_classes, 2 * self.z2_dim)
         return
 
@@ -77,15 +69,12 @@ class ConditionalPrior(nn.Module):
 class BaseLatentConditionalEncoder(nn.Module, metaclass=abc.ABCMeta):
     """Network for the difference in mean and log-var between the conditional prior and posterior."""
 
-    def __init__(self) -> None:
+    def __init__(self, cfg: ConditionalLatentEncoderConfig, feature_dim: int, n_classes: int, z2_dim: int) -> None:
         super().__init__()
-        cfg = Experiment.get_config()
-        cfg_ae_model = cfg.autoencoder.model
-        cfg_posterior = cfg_ae_model.conditional_latent_encoder
-        self.feature_dim: int = cfg_ae_model.feature_dim
-        self.n_classes: int = cfg.data.dataset.n_classes
-        self.z2_dim: int = cfg_ae_model.z2_dim
-        self.act_cls: ActClass = cfg_posterior.act_cls
+        self.feature_dim: int = feature_dim
+        self.n_classes: int = n_classes
+        self.z2_dim: int = z2_dim
+        self.act_cls: ActClass = cfg.act_cls
         return
 
     @abc.abstractmethod
@@ -96,12 +85,10 @@ class BaseLatentConditionalEncoder(nn.Module, metaclass=abc.ABCMeta):
 class LinearLatentConditionalEncoder(BaseLatentConditionalEncoder):
     """Network for the difference in mean and log-var between the conditional prior and posterior."""
 
-    def __init__(self) -> None:
-        super().__init__()
-        cfg = Experiment.get_config()
-        cfg_posterior = cfg.autoencoder.model.conditional_latent_encoder
-        dropout_rate = cfg_posterior.dropout_rate
-        mlp_dims = cfg_posterior.mlp_dims
+    def __init__(self, cfg: ConditionalLatentEncoderConfig, feature_dim: int, n_classes: int, z2_dim: int) -> None:
+        super().__init__(cfg, feature_dim, n_classes, z2_dim)
+        dropout_rate = cfg.dropout_rate
+        mlp_dims = cfg.mlp_dims
         layers = []
         input_dim = self.feature_dim + self.n_classes
         for dim in mlp_dims:
@@ -120,17 +107,19 @@ class LinearLatentConditionalEncoder(BaseLatentConditionalEncoder):
         return self.mlp(torch.cat([probs, x], dim=1))
 
 
-def get_latent_encoder() -> BaseLatentEncoder:
+def get_latent_encoder(cfg: LatentEncoderConfig, feature_dim: int, z1_dim: int) -> BaseLatentEncoder:
     """Get the latent encoder according to the configuration."""
     decoder_dict: dict[LatentEncoders, type[BaseLatentEncoder]] = {
         LatentEncoders.Linear: LinearLatentEncoder,
     }
-    return decoder_dict[Experiment.get_config().autoencoder.model.latent_encoder.class_name]()
+    return decoder_dict[cfg.class_name](cfg, feature_dim, z1_dim)
 
 
-def get_conditional_latent_encoder() -> BaseLatentConditionalEncoder:
+def get_conditional_latent_encoder(
+    cfg: ConditionalLatentEncoderConfig, feature_dim: int, n_classes: int, z2_dim: int
+) -> BaseLatentConditionalEncoder:
     """Get the latent conditional encoder according to the configuration."""
     conditional_dict: dict[ConditionalLatentEncoders, type[BaseLatentConditionalEncoder]] = {
         ConditionalLatentEncoders.Linear: LinearLatentConditionalEncoder,
     }
-    return conditional_dict[Experiment.get_config().autoencoder.model.conditional_latent_encoder.class_name]()
+    return conditional_dict[cfg.class_name](cfg, feature_dim, n_classes, z2_dim)
