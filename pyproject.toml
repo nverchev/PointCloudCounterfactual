@@ -31,6 +31,9 @@ track_all = [
 ]
 finetune = ["optuna>=4.6.0"]
 visualize = ["pyvista>=0.46.4", "seaborn>=0.13.2"]
+tuning = [
+    "plotly>=6.6.0",
+]
 
 [dependency-groups]
 dev = ["basedpyright>=1.37.1", "pre-commit>=4.5.1", "ruff>=0.14.11"]

@@ -129,9 +129,15 @@ class AE(AbstractAE):
 
     def decode(self, out: Outputs, inputs: Inputs) -> Outputs:
         """Decode features to point cloud."""
-        x = self.decoder(inputs.initial_sampling, out.features, self.n_output_points)
+        batch_size = out.features.shape[0] if out.features is not None else inputs.cloud.shape[0]
+        initial_cloud = self._initialize_cloud(batch_size)
+        x = self.decoder(initial_cloud, out.features, self.n_output_points)
         out.recon = x
         return out
+
+    def _initialize_cloud(self, batch: int) -> torch.Tensor:
+        """Initialize and normalize the sampling points."""
+        return torch.randn(batch, self.n_output_points, 3, device=self.device)
 
 
 class BaseVAE(AE):
