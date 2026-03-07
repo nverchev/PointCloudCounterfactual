@@ -64,7 +64,7 @@ class BaseFlow(nn.Module, abc.ABC):
         n_timesteps: int,
         n_points: int,
         device: torch.device,
-        x_0: torch.Tensor | None = None,
+        x_prev: torch.Tensor | None = None,
         z1: torch.Tensor | None = None,
         z2: torch.Tensor | None = None,
     ) -> list[torch.Tensor]:
@@ -136,19 +136,22 @@ class FlowMatching(BaseFlow, abc.ABC):
         n_timesteps: int,
         n_points: int,
         device: torch.device,
-        x_0: torch.Tensor | None = None,
+        x_prev: torch.Tensor | None = None,
         z1: torch.Tensor | None = None,
         z2: torch.Tensor | None = None,
     ) -> list[torch.Tensor]:
         """Deterministic ODE Sampling (Euler Integration)."""
-        if x_0 is None:
+        if x_prev is None:
             x_t = self._sample_noise((n_samples, n_points, 3), device)
+            x_0_clean = torch.zeros_like(x_t)
         else:
-            if x_0.shape[1] < n_points:
-                ratio = n_points // x_0.shape[1]
-                x_0 = x_0.repeat_interleave(ratio, dim=1) * self.s_k
+            if x_prev.shape[1] < n_points:
+                ratio = n_points // x_prev.shape[1]
+                x_0_clean = x_prev.repeat_interleave(ratio, dim=1)
+            else:
+                x_0_clean = x_prev
 
-            x_t = x_0 + self._sample_alignment_noise(n_samples, n_points, device)
+            x_t = x_0_clean * self.s_k + self._sample_alignment_noise(n_samples, n_points, device)
 
         x_list = [x_t]
         features = self._decode_latent(z1, z2, n_samples, device)
@@ -228,7 +231,7 @@ class CondFlowMatching(FlowMatching):
         n_timesteps: int,
         n_points: int,
         device: torch.device,
-        x_0: torch.Tensor | None = None,
+        x_prev: torch.Tensor | None = None,
         z1: torch.Tensor | None = None,
         z2: torch.Tensor | None = None,
     ) -> list[torch.Tensor]:
@@ -238,7 +241,7 @@ class CondFlowMatching(FlowMatching):
             n_timesteps=n_timesteps,
             n_points=n_points,
             device=device,
-            x_0=x_0,
+            x_prev=x_prev,
             z1=z1,
             z2=z2,
         )
@@ -397,20 +400,18 @@ class FlowReconstruction(nn.Module):
         self.n_timesteps_s1: int = cfg.flow_stage1.objective.n_timesteps
         self.n_timesteps_s2: int = cfg.flow_stage2.objective.n_timesteps
         self.n_timesteps_s3: int = cfg.flow_stage3.objective.n_timesteps
+        return
 
     def forward(self, inputs: Inputs) -> Outputs:
         """Forward pass performing multi-stage reconstruction."""
         device = inputs.cloud.device
         batch_size = inputs.cloud.shape[0]
         n_final = inputs.cloud.shape[1]
-
-        # 1. Encode
         with torch.no_grad():
             ae_out = self.autoencoder.encode(inputs)
             z1 = ae_out.mu1
             z2 = ae_out.p_mu2 + ae_out.d_mu2
 
-        # Sequential sampling stages (Stage 3 -> Stage 2 -> Stage 1)
         stages = [
             (self.stage3, self.n_timesteps_s3, 128),
             (self.stage2, self.n_timesteps_s2, 512),
@@ -424,7 +425,7 @@ class FlowReconstruction(nn.Module):
                 n_timesteps=n_timesteps,
                 n_points=n_points,
                 device=device,
-                x_0=x_current,
+                x_prev=x_current,
                 z1=z1,
                 z2=z2,
             )[-1]

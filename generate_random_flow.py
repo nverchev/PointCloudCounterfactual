@@ -50,7 +50,7 @@ def generate_random_flow() -> None:
             n_timesteps=n_timesteps,
             n_points=n_points,
             device=device,
-            x_0=x_current,
+            x_prev=x_current,
             z1=z1,
             z2=z2,
         )

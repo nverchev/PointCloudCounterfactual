@@ -79,7 +79,7 @@ def run_debug_reconstructions() -> None:
                 n_timesteps=n_timesteps,
                 n_points=n_points,
                 device=device,
-                x_0=x_current,
+                x_prev=x_current,
                 z1=z1,
                 z2=z2,
             )
@@ -107,7 +107,7 @@ def run_debug_reconstructions() -> None:
             n_timesteps=cfg.flow_stage1.objective.n_timesteps,
             n_points=2048,
             device=device,
-            x_0=x_current,
+            x_prev=x_current,
             z1=z1,
             z2=z2,
         )
@@ -137,7 +137,7 @@ def run_debug_reconstructions() -> None:
             n_timesteps=cfg.flow_stage2.objective.n_timesteps,
             n_points=512,
             device=device,
-            x_0=x_current,
+            x_prev=x_current,
             z1=z1,
             z2=z2,
         )
@@ -149,7 +149,7 @@ def run_debug_reconstructions() -> None:
             n_timesteps=cfg.flow_stage1.objective.n_timesteps,
             n_points=2048,
             device=device,
-            x_0=x_current,
+            x_prev=x_current,
             z1=z1,
             z2=z2,
         )
