@@ -123,7 +123,7 @@ class FlowMatching(BaseFlow, abc.ABC):
             x_s = self._order_noise(x_1_clean, x_s)
 
         x_t = (1.0 - t) * x_s + t * x_1_clean
-        v_pred = self.decoder(x_t, emb_features, self.n_output_points)
+        v_pred = self.decoder(x_t, emb_features, self.n_output_points, x_0=x_0_clean)
         out = Outputs()
         out.v_pred = v_pred
         out.v_target = x_1_clean - x_s
@@ -161,7 +161,7 @@ class FlowMatching(BaseFlow, abc.ABC):
             dt = t_next - t_curr
             t_tensor = torch.full((n_samples,), t_curr, device=device).view(-1, 1)
             emb_features = self.time_embedding(t_tensor, features)
-            v_pred = self.decoder(x_t, emb_features, n_points)
+            v_pred = self.decoder(x_t, emb_features, n_points, x_0=x_0_clean)
             x_t = x_t + v_pred * dt
             if i % 10 == 0:
                 x_list.append(x_t)

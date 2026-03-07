@@ -34,7 +34,13 @@ class BasePointDecoder(nn.Module, metaclass=abc.ABCMeta):
         self.tau: float = cfg.tau
 
     @abc.abstractmethod
-    def forward(self, initial_sampling: torch.Tensor, features: torch.Tensor, n_output_points: int) -> torch.Tensor:
+    def forward(
+        self,
+        initial_sampling: torch.Tensor,
+        features: torch.Tensor,
+        n_output_points: int,
+        x_0: torch.Tensor | None = None,
+    ) -> torch.Tensor:
         """Forward pass."""
 
 
@@ -110,14 +116,14 @@ class PCGen(BasePointDecoder):
 
         return x
 
-    def forward(self, initial_sampling: torch.Tensor, features: torch.Tensor, n_output_points: int) -> torch.Tensor:
-        """Forward pass.
-
-        Args:
-            initial_sampling: Initial sampling points
-            features: features of dimension [Batch, feature_dim]
-            n_output_points: Number of output points
-        """
+    def forward(
+        self,
+        initial_sampling: torch.Tensor,
+        features: torch.Tensor,
+        n_output_points: int,
+        x_0: torch.Tensor | None = None,
+    ) -> torch.Tensor:
+        """Forward pass."""
         initial_sampling = initial_sampling.transpose(2, 1)
 
         x = self.map_sample(initial_sampling)
@@ -141,28 +147,47 @@ class PCGenClusters(PCGen):
     def __init__(self, cfg: DecoderConfig, feature_dim: int) -> None:
         super().__init__(cfg, feature_dim)
         modules: list[nn.Module] = []
-        dim_pairs = itertools.pairwise([2 * IN_CHAN, *self.map_dims])
+        dim_pairs = itertools.pairwise([3 * IN_CHAN, *self.map_dims])
         for in_dim, out_dim in dim_pairs:
             modules.append(PointsConvLayer(in_dim, out_dim, act_cls=torch.nn.ReLU))
 
         modules.append(PointsConvLayer(self.map_dims[-1], self.feature_dim, act_cls=nn.Hardtanh))
         self.map_sample = nn.Sequential(*modules)
+        if self.n_transformer_layers > 0:
+            self.proj_initial_sampling = PointsConvLayer(2 * IN_CHAN, self.embedding_dim)
+
         return
 
-    def forward(self, initial_sampling: torch.Tensor, features: torch.Tensor, n_output_points: int) -> torch.Tensor:
+    def forward(
+        self,
+        initial_sampling: torch.Tensor,
+        features: torch.Tensor,
+        n_output_points: int,
+        x_0: torch.Tensor | None = None,
+    ) -> torch.Tensor:
         """Forward pass for PCGenClusters."""
         initial_sampling = initial_sampling.transpose(2, 1)
         batch, chan, n_points = initial_sampling.shape
         cluster_size, extra = divmod(n_points, 4)
         assert extra == 0, 'Number of points must be divisible by 4'
 
+        if x_0 is None:
+            x_0 = torch.zeros_like(initial_sampling)
+        else:
+            x_0 = x_0.transpose(2, 1)
+
         clusters = initial_sampling.view(batch, chan, cluster_size, 4)
         cluster_means = clusters.mean(dim=-1)
         cluster_features = cluster_means.repeat_interleave(4, dim=2)
-        x_in = torch.cat([initial_sampling, cluster_features], dim=1)
+
+        x_in = torch.cat([initial_sampling, cluster_features, x_0], dim=1)
         x = self.map_sample(x_in)
         x = self._join_operation(x, features)
-        x, x_out = self._process_component_groups(x, cluster_means)
+
+        source_reduced = x_0[:, :, ::4]
+        transformer_init = torch.cat([cluster_means, source_reduced], dim=1)
+
+        x, x_out = self._process_component_groups(x, transformer_init)
         x = self._apply_attention_mixing(x, x_out)
         if self.filtering:
             x = graph_filtering(x)

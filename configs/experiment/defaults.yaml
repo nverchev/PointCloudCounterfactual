@@ -9,5 +9,5 @@ defaults:
   - data: default_data
   - _self_
 
-variation: development
+variation: use_previous_flow
 final: false
