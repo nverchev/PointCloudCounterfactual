@@ -74,7 +74,7 @@ def get_consistency_loss() -> LossBase[Outputs, Targets]:
     def _consistency_loss(out: Outputs, targets: Targets) -> torch.Tensor:
         return mse_loss(out.word_approx_recon, out.word_approx.detach()).mean(dim=1)
 
-    return Loss(_consistency_loss, name='Consistency')
+    return Loss(_consistency_loss, name='Self-Consistency')
 
 
 def get_recon_loss() -> LossBase[Outputs, Targets]:
