@@ -363,11 +363,13 @@ class ObjectiveAEConfig:
         n_inference_output_points (StrictlyPositiveInt): The number of inference points for evaluation
         recon_loss (ReconLosses): The denomination of the reconstruction loss
         c_embedding (PositiveFloat): The coefficient for the embedding loss
+        c_consistency (PositiveFloat): The coefficient for the self-consistency loss
     """
 
     n_inference_output_points: StrictlyPositiveInt
     recon_loss: ReconLosses
     c_embedding: PositiveFloat
+    c_consistency: PositiveFloat
 
 
 @dataclass
@@ -377,10 +379,12 @@ class ObjectiveWAEConfig:
     Attributes:
         c_kld1 (PositiveFloat): The Kullback-Leibler Divergence coefficient for the first latent variable
         c_kld2 (PositiveFloat): The Kullback-Leibler Divergence coefficient for the second latent variable
+        c_consistency (PositiveFloat): The coefficient for the self-consistency loss
     """
 
     c_kld1: PositiveFloat
     c_kld2: PositiveFloat
+    c_consistency: PositiveFloat
 
 
 @dataclass

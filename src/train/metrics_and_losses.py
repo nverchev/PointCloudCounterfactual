@@ -67,14 +67,14 @@ def get_chamfer_loss() -> LossBase[Outputs, Targets]:
     return Loss(_chamfer, name='Chamfer')
 
 
-def get_consistency_loss() -> LossBase[Outputs, Targets]:
+def get_consistency_loss(c_consistency: float) -> LossBase[Outputs, Targets]:
     """Calculate reconstruction loss based on configuration settings."""
     mse_loss = nn.MSELoss(reduction='none')
 
     def _consistency_loss(out: Outputs, targets: Targets) -> torch.Tensor:
         return mse_loss(out.word_approx_recon, out.word_approx.detach()).mean(dim=1)
 
-    return Loss(_consistency_loss, name='Self-Consistency')
+    return c_consistency * Loss(_consistency_loss, name='Self-Consistency')
 
 
 def get_recon_loss() -> LossBase[Outputs, Targets]:
@@ -82,10 +82,11 @@ def get_recon_loss() -> LossBase[Outputs, Targets]:
     cfg = Experiment.get_config()
     cfg_autoencoder = cfg.autoencoder
     recon_loss = cfg_autoencoder.objective.recon_loss
+    c_consistency = cfg_autoencoder.objective.c_consistency
     if recon_loss == ReconLosses.ChamferEMD and torch.cuda.is_available() and not cfg.user.cpu:
-        return get_emd_loss() + get_chamfer_loss() + get_consistency_loss()
+        return get_emd_loss() + get_chamfer_loss() + get_consistency_loss(c_consistency)
 
-    return get_chamfer_loss() + get_consistency_loss()
+    return get_chamfer_loss() + get_consistency_loss(c_consistency)
 
 
 def get_embed_loss() -> LossBase[Outputs, Targets]:
@@ -265,7 +266,8 @@ def get_classification_loss() -> LossBase[torch.Tensor, Targets]:
 
 def get_w_autoencoder_loss() -> LossBase[Outputs, WTargets]:
     """Get encoder loss combining NLL, KLD and adversarial losses."""
-    return get_mse_loss() + get_kld_loss() | get_w_accuracy()
+    c_consistency = Experiment.get_config().w_autoencoder.objective.c_consistency
+    return get_mse_loss() + get_kld_loss() + get_consistency_loss(c_consistency) | get_w_accuracy()
 
 
 def get_autoencoder_loss() -> LossBase[Outputs, Targets]:
