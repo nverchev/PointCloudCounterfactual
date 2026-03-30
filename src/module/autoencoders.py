@@ -61,7 +61,9 @@ class BaseAutoencoder(AbstractAutoEncoder):
     def forward(self, inputs: Inputs) -> Outputs:
         """Forward pass."""
         out = self.encode(inputs)
-        return self.decode(out, inputs)
+        out = self.decode(out, inputs)
+        out.word_approx_recon = self.encoder(out.recon)
+        return out
 
     def encode(self, inputs: Inputs) -> Outputs:
         """Encode point cloud to latent representation."""

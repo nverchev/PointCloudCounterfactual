@@ -67,15 +67,25 @@ def get_chamfer_loss() -> LossBase[Outputs, Targets]:
     return Loss(_chamfer, name='Chamfer')
 
 
+def get_consistency_loss() -> LossBase[Outputs, Targets]:
+    """Calculate reconstruction loss based on configuration settings."""
+    mse_loss = nn.MSELoss()
+
+    def _consistency_loss(out: Outputs, targets: Targets) -> torch.Tensor:
+        return mse_loss(out.word_approx_recon, out.word_approx)
+
+    return Loss(_consistency_loss, name='Consistency')
+
+
 def get_recon_loss() -> LossBase[Outputs, Targets]:
     """Calculate reconstruction loss based on configuration settings."""
     cfg = Experiment.get_config()
     cfg_autoencoder = cfg.autoencoder
     recon_loss = cfg_autoencoder.objective.recon_loss
     if recon_loss == ReconLosses.ChamferEMD and torch.cuda.is_available() and not cfg.user.cpu:
-        return get_emd_loss() + get_chamfer_loss()
+        return get_emd_loss() + get_chamfer_loss() + get_consistency_loss()
 
-    return get_chamfer_loss()
+    return get_chamfer_loss() + get_consistency_loss()
 
 
 def get_embed_loss() -> LossBase[Outputs, Targets]:

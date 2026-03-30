@@ -80,6 +80,7 @@ class Outputs:
     d_mu2: torch.Tensor
     d_log_var2: torch.Tensor
     probs: torch.Tensor
+    word_approx_recon: torch.Tensor
 
     def update(self, other: Self) -> None:
         """Update the state with another instance's one."""
