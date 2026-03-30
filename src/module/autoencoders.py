@@ -14,7 +14,7 @@ from src.module.decoders import get_decoder
 from src.module.encoders import get_encoder
 from src.module.quantize import VectorQuantizer
 from src.module.w_autoencoders import BaseWAutoEncoder, WAutoEncoder, CounterfactualWAutoEncoder
-from src.module.layers import TransferGrad
+from src.module.layers import TransferGrad, frozen_forward
 
 WA = TypeVar('WA', bound=BaseWAutoEncoder, covariant=True)
 
@@ -62,7 +62,7 @@ class BaseAutoencoder(AbstractAutoEncoder):
         """Forward pass."""
         out = self.encode(inputs)
         out = self.decode(out, inputs)
-        out.word_approx_recon = self.encoder(out.recon)
+        out.word_approx_recon = frozen_forward(self.encoder, out.recon)
         return out
 
     def encode(self, inputs: Inputs) -> Outputs:
