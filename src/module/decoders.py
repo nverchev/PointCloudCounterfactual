@@ -11,7 +11,7 @@ from src.config import ActClass, NormClass
 from src.config.experiment import Experiment
 from src.config.options import Decoders
 from src.data import OUT_CHAN
-from src.module.layers import PointsConvLayer, LinearLayer, TransformerDecoder, PointsConvResBlock
+from src.module.layers import PointsConvLayer, TransformerEncoder, PointsConvResBlock
 from src.utils.neighbour_ops import graph_filtering
 
 
@@ -58,32 +58,26 @@ class PCGen(BasePointDecoder):
 
         modules.append(PointsConvLayer(self.map_dims[-1], self.w_dim, act_cls=nn.Hardtanh))
         self.map_sample = nn.Sequential(*modules)
-        self.memory_positional_encoding = nn.Parameter(torch.randn(1, self.n_codes, self.proj_dim))
-        self.proj_w = LinearLayer(self.embedding_dim, self.proj_dim)
-        self.group_conv = nn.ModuleList()
-        self.group_transformer = nn.ModuleList()
-        self.group_final = nn.ModuleList()
-        for _ in range(self.n_components):
-            block = PointsConvResBlock(
-                [self.w_dim, *self.conv_dims, self.proj_dim],
-                act_cls=self.act_cls,
-                norm_cls=self.norm_cls,
-            )
-            self.group_conv.append(block)
-            transformer_decoder = TransformerDecoder(
+        self.conv_block = PointsConvResBlock(
+            [self.w_dim, *self.conv_dims, self.proj_dim],
+            act_cls=self.act_cls,
+            norm_cls=self.norm_cls,
+        )
+        if self.n_transformer_layers > 0:
+            self.transformer = TransformerEncoder(
                 embedding_dim=self.proj_dim,
                 n_heads=self.n_heads,
-                hidden_dim=self.feedforward_dim,
+                feedforward_dim=self.feedforward_dim,
                 dropout_rate=self.transformer_dropout,
                 act_cls=self.act_cls,
                 n_layers=self.n_transformer_layers,
                 use_final_norm=True,
             )
-            self.group_transformer.append(transformer_decoder)
-            self.group_final.append(PointsConvLayer(self.proj_dim, OUT_CHAN, use_trunc_init=True))
-
+        self.out_conv = PointsConvLayer(
+            self.proj_dim, self.n_components * OUT_CHAN, use_trunc_init=True, n_groups_layer=self.n_components
+        )
         if self.n_components > 1:
-            self.att = PointsConvLayer(self.proj_dim * self.n_components, self.n_components)
+            self.group_att = PointsConvLayer(self.proj_dim, self.n_components)
 
         return
 
@@ -96,39 +90,31 @@ class PCGen(BasePointDecoder):
 
         return torch.randn(batch, self.sample_dim, n_output_points, device=device)
 
-    def _process_component_groups(
-        self, x: torch.Tensor, memory: torch.Tensor
-    ) -> tuple[torch.Tensor, list[torch.Tensor]]:
-        """Process all component groups and return outputs and attention features."""
-        xs_list = []
-        group_atts = []
+    def _process_component_groups(self, x: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor]:
+        """Return component outputs and attention features."""
+        x = self.conv_block(x)
+        x.transpose_(2, 1)
+        x = self.transformer(x)
+        x.transpose_(2, 1)
 
-        for group in range(self.n_components):
-            x_group = self.group_conv[group](x)
-            # x_group = self.group_proj[group](x_group)
-            group_atts.append(x_group)
-            x_group = x_group.transpose(2, 1)
-            x_group = self.group_transformer[group](x_group, memory=memory)
-            x_group = x_group.transpose(2, 1)
-            x_group = self.group_final[group](x_group)
-            xs_list.append(x_group)
+        x_out = self.out_conv(x)
+        return x, x_out
 
-        xs = torch.stack(xs_list, dim=3)
-        return xs, group_atts
-
-    def _apply_attention_mixing(self, xs: torch.Tensor, group_atts: list[torch.Tensor]) -> torch.Tensor:
+    def _apply_attention_mixing(self, x: torch.Tensor, x_out: torch.Tensor) -> torch.Tensor:
         """Apply attention-based mixing across components if there are more than one, otherwise return the component."""
         if self.n_components > 1:
-            x_att = self.att(torch.cat(group_atts, dim=1).contiguous())
+            batch, _, n_output_points = x_out.shape
+            x_out = x_out.view(batch, self.n_components, OUT_CHAN, n_output_points)
+            x_att = self.group_att(x)
+            x_att = x_att.unsqueeze(2)
             if self.training:
                 x_att = F.gumbel_softmax(x_att, tau=self.tau, dim=1)
             else:
                 x_att = torch.softmax(x_att / self.tau, dim=1)
 
-            x_att = x_att.transpose(2, 1)
-            x = (xs * x_att.unsqueeze(1)).sum(3)
+            x = (x_out * x_att).sum(1)
         else:
-            x = xs.squeeze(3)
+            x = x_out
 
         return x
 
@@ -136,22 +122,11 @@ class PCGen(BasePointDecoder):
         """Forward pass."""
         batch = w.size()[0]
         device = w.device
-
-        # Initialize sampling points
         x = self._initialize_sampling(batch, n_output_points, device, initial_sampling)
-
-        # Map and join with latent code
         x = self.map_sample(x)
         x = self._join_operation(x, w)
-
-        # Process component groups
-        memory = self.proj_w(w.view(batch, self.n_codes, self.embedding_dim)) + self.memory_positional_encoding
-        xs, group_atts = self._process_component_groups(x, memory)
-
-        # Mix components with attention
-        x = self._apply_attention_mixing(xs, group_atts)
-
-        # Optional graph filtering
+        x, x_out = self._process_component_groups(x)
+        x = self._apply_attention_mixing(x, x_out)
         if self.filtering:
             x = graph_filtering(x)
 
