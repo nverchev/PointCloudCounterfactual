@@ -1,0 +1,9 @@
+name: classifier
+architecture:
+  n_neighbours: 20
+  hidden_dims: [64, 64, 128, 256]
+  embedding_dim: 512
+  mlp_dims: [512, 256]
+  dropout: 0.5
+  act_cls: SlopedLeakyReLU
+  bn_momentum: 0.1

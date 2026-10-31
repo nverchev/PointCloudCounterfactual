@@ -1,0 +1,8 @@
+defaults:
+  - architecture: architecture_vqvae
+  - _self_
+
+name: vqvae
+w_dim: 1024
+embedding_dim: 4
+book_size: 16

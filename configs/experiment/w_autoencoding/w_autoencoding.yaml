@@ -1,0 +1,4 @@
+defaults:
+  - model: counterfactual_vae
+  - train: train_counterfactual_vae
+  - _self_

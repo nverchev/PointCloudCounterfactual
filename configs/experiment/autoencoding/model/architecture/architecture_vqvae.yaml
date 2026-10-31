@@ -1,0 +1,13 @@
+encoder:
+  n_neighbours: 25
+  h_dims: [64, 64, 128, 256]
+  act_cls: SlopedLeakyReLU
+decoder:
+  sample_dim: 8
+  map_h_dims: [64]
+  conv_h_dims: [1024, 256, 16]
+  n_components: 8
+  act_cls: ReLU
+  attention_temperature: 5.0
+  filtering: true
+bn_momentum: 0.1

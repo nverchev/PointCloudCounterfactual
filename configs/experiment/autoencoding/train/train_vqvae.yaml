@@ -1,0 +1,16 @@
+defaults:
+  - learn: learn_vqvae
+  - _self_
+
+batch_size: 16
+n_epochs: 1000
+revive_every: 10
+revive_noise: 2.0
+loss:
+  c_chamfer: 2048.0  # 2048 = the number of points: as in PCGen, both distances are summed over them
+  c_emd: 2048.0
+  c_embedding: 2.0
+early_stopping:
+  active: false
+  window: 10
+  patience: 400

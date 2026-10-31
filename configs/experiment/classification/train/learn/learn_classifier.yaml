@@ -1,0 +1,14 @@
+optimizer: SGD
+lr: 0.01
+grad_op: null
+clip_criterion: null
+opt_settings:
+  weight_decay: 0.0
+scheduler:
+  function: cosine
+  restart_interval: 0
+  restart_fraction: 1.0
+  warmup_steps: 0
+  settings:
+    min_decay: 0.001
+    decay_steps: 45

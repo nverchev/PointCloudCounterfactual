@@ -1,0 +1,4 @@
+defaults:
+  - model: vqvae
+  - train: train_vqvae
+  - _self_

@@ -1,0 +1,3 @@
+name: modelnet
+n_classes: 2
+selected_classes: [desk, table]

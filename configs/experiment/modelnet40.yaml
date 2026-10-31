@@ -1,0 +1,12 @@
+# ModelNet40: the classifier on the full dataset, whose mistakes select the classes of the two subsets.
+defaults:
+  - classification: classification
+  - autoencoding: autoencoding
+  - w_autoencoding: w_autoencoding
+  - evaluation: evaluation
+  - data: data
+  - user: user
+  - _self_
+
+variation: thesis  # null = the current git branch
+final: false

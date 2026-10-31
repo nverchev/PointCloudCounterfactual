@@ -1,0 +1,4 @@
+defaults:
+  - model: dgcnn
+  - train: train_classifier
+  - _self_

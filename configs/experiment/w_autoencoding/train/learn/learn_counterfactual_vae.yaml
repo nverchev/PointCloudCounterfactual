@@ -1,0 +1,14 @@
+optimizer: AdamW
+lr: 0.002
+grad_op: null
+clip_criterion: null
+opt_settings:
+  weight_decay: 0.0
+scheduler:
+  function: cosine
+  restart_interval: 100
+  restart_fraction: 1.0
+  warmup_steps: 0
+  settings:
+    min_decay: 0.01
+    decay_steps: 100

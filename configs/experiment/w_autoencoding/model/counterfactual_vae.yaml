@@ -1,0 +1,11 @@
+name: counterfactual_vae
+z_u_dim: 16
+z_y_dim: 16
+temperature: 5.0
+architecture:
+  encoder_h_dims: [8]
+  decoder_h_dims: [64, 64]
+  prior_h_dims: [16]
+  dropout: 0.1
+  act_cls: SlopedLeakyReLU
+  bn_momentum: 0.1

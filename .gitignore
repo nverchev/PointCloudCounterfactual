@@ -1,0 +1,14 @@
+**/__pycache__
+*pyc
+/data/
+experiments*/
+optimization_db/
+outputs/
+.agent/
+.claude/
+.env
+.idea/
+.vscode/
+wandb
+external/pytorch_structural_losses/build/
+external/pytorch_structural_losses/structural_losses.egg-info/

@@ -1,0 +1,12 @@
+defaults:
+  - learn: learn_counterfactual_vae
+  - _self_
+
+batch_size: 56
+n_epochs: 500
+loss:
+  c_kld: 4.0
+early_stopping:
+  active: false
+  window: 50
+  patience: 50

@@ -1,0 +1,10 @@
+defaults:
+  - learn: learn_classifier
+  - _self_
+
+batch_size: 16
+n_epochs: 45
+early_stopping:
+  active: true
+  window: 5
+  patience: 10
